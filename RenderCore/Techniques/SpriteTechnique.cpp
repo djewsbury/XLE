@@ -45,6 +45,12 @@ namespace RenderCore { namespace Techniques
 			auto s = SplitSemanticAndIdx(p);
 			return s.second == lhs._semanticIdx && XlEqString(s.first, lhs._semantic);
 		}
+
+		static bool CompareSemantic(StringSection<> lhs, StringSection<> rhs)
+		{
+			auto lhsS = SplitSemanticAndIdx(lhs), rhsS = SplitSemanticAndIdx(rhs);
+			return lhsS.second == rhsS.second && XlEqString(lhsS.first, rhsS.first);
+		}
 		
 		static bool CompareSemantic(const WorkingAttribute& lhs, const GraphLanguage::NodeGraphSignature::Parameter& p)
 		{
@@ -59,14 +65,15 @@ namespace RenderCore { namespace Techniques
 		static WorkingAttribute MakeWorkingAttribute(const GraphLanguage::NodeGraphSignature::Parameter& p)
 		{
 			auto s = SplitSemanticAndIdx(p._semantic);
-			if (s.first.size() == p._semantic.size()) return { p._semantic, 0, p._type };
+			if (s.first.size() == p._semantic.size())  { assert(s.second == 0); }
 			return { s.first, s.second, p._type };
 		}
 
 		static bool UpdateActiveAttributesBackwards(
 			std::vector<WorkingAttribute>& result,
 			const GraphLanguage::NodeGraphSignature& signature,
-			IteratorRange<const WorkingAttribute*> postActiveAttributes)
+			IteratorRange<const WorkingAttribute*> postActiveAttributes,
+			bool suppressReadAndWriteNodes)
 		{
 			// If the entry point writes to any of the active attributes, we must activate it
 			// and propagate the new active attributes backwards
@@ -94,9 +101,7 @@ namespace RenderCore { namespace Techniques
 				return false;
 			}
 
-			// All attributes in "postActiveAttributes" go into result,
-			// except if they are written to. If they are both written to and read from,
-			// we will add then back in the next step
+			// All attributes in "postActiveAttributes" go into result, except if they are written to.
 			result.reserve(postActiveAttributes.size() + signature.GetParameters().size());
 			for (const auto& a:postActiveAttributes) {
 				auto i = std::find_if(signature.GetParameters().begin(), signature.GetParameters().end(),
@@ -109,8 +114,18 @@ namespace RenderCore { namespace Techniques
 				if  (p._direction != ParameterDirection::In) continue;
 				auto i = std::find_if(result.begin(), result.end(),
 					[&p](const auto& q) { return CompareSemantic(q, p); });
-				if (i == result.end())
+				if (i == result.end()) {
+
+					// If the patch *also writes* this same parameter, we exclude it here
+					// This is an attempt to avoid awkward scenarios were alternatives (such as ExpandClipSpacePosition) stack on top of each other
+					if (suppressReadAndWriteNodes) {
+						auto i2 = std::find_if(b2e(signature.GetParameters()),
+							[&p](const auto& q) { return q._direction == ParameterDirection::Out && CompareSemantic(q._semantic, p._semantic); });
+						if (i2 != signature.GetParameters().end()) continue;
+					}
+
 					result.emplace_back(MakeWorkingAttribute(p));
+				}
 			}
 
 			return true;
@@ -457,7 +472,6 @@ namespace RenderCore { namespace Techniques
 
 		static bool IsVSInputSystemAttributes(StringSection<> semantic, unsigned semanticIdx)
 		{
-			// SV_Position is always generated in the VS (and so can be removed from this point)
 			if (!XlBeginsWith(semantic, "SV_")) return false;
 			for (const auto& s:s_validVSInputSystemValues)
 				if (XlEqString(semantic, s.first))
@@ -478,7 +492,6 @@ namespace RenderCore { namespace Techniques
 
 		static bool IsGSInputSystemAttributes(StringSection<> semantic, unsigned semanticIdx)
 		{
-			// SV_Position is always generated in the VS (and so can be removed from this point)
 			if (!XlBeginsWith(semantic, "SV_")) return false;
 			for (const auto& s:s_validGSInputSystemValues)
 				if (XlEqString(semantic, s.first))
@@ -539,7 +552,7 @@ namespace RenderCore { namespace Techniques
 			void AddStep(std::string name, const GraphLanguage::NodeGraphSignature& signature, uint64_t originalPatchCode=0);		// add in reverse order
 			void AddFragmentOutput(const WorkingAttribute& a);
 
-			std::vector<WorkingAttribute> RebuildInputAttributes();
+			std::vector<WorkingAttribute> RebuildInputAttributes(bool internalShaderStage=false);
 			std::vector<WorkingAttribute> CalculateAvailableInputsAtStep(unsigned stepIdx);
 			unsigned CalculateInsertPosition(const GraphLanguage::NodeGraphSignature& signature);
 
@@ -570,14 +583,14 @@ namespace RenderCore { namespace Techniques
 			_fragmentOutput.emplace_back(a);
 		}
 
-		std::vector<WorkingAttribute> FragmentArranger::RebuildInputAttributes()
+		std::vector<WorkingAttribute> FragmentArranger::RebuildInputAttributes(bool internalShaderStage)
 		{
 			// Walk backwards through the patches, updating the list of active attributes as we go
 			// this is only actually required for filtering out the steps that are not required by downstream steps
 			std::vector<WorkingAttribute> activeAttributes = _fragmentOutput;
 			for (auto r=_steps.rbegin(); r!=_steps.rend(); ++r) {
 				auto postActiveAttributes = std::move(activeAttributes);
-				r->_enabled = UpdateActiveAttributesBackwards(activeAttributes, *r->_signature, postActiveAttributes);
+				r->_enabled = UpdateActiveAttributesBackwards(activeAttributes, *r->_signature, postActiveAttributes, internalShaderStage);
 			}
 			return activeAttributes;
 		}
@@ -640,7 +653,7 @@ namespace RenderCore { namespace Techniques
 				// protect against infinite loops
 				if (attemptCount++ > 32u) Throw(std::runtime_error("Suspected infinite loop awhile attempting to construct sprite pipeline"));
 
-				auto unprovidedAttributes = arranger.RebuildInputAttributes();
+				auto unprovidedAttributes = arranger.RebuildInputAttributes(true);
 				{
 					auto i = std::remove_if(unprovidedAttributes.begin(), unprovidedAttributes.end(), [&isProvidedFn](const auto& q) { return isProvidedFn(q._semantic, q._semanticIdx); });
 					unprovidedAttributes.erase(i, unprovidedAttributes.end());
@@ -849,12 +862,12 @@ void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : C
 
 #include "xleres/TechniqueLibrary/Framework/SystemUniforms.hlsl"
 
-void ExpandClipSpacePosition(
+void ExpandClipSpacePosition_RadRot(
 	out float4 pos0 : SV_Position0,
 	out float4 pos1 : SV_Position1,
 	out float4 pos2 : SV_Position2,
 	out float4 pos3 : SV_Position3,
-	float4 inputPos : SV_Position,
+	float4 inputPos : SV_Position,			// note that since SV_Position is written and read, there are some awkward scenarios were multiple alternatives of ExpandClipSpacePosition are stacked on top of each other
 	float radius : RADIUS,
 	float rotation : ROTATION)
 {
@@ -872,12 +885,12 @@ void ExpandClipSpacePosition(
 	pos3 = float4(inputPos.xy +  h+v, inputPos.zw);
 }
 
-void ExpandClipSpacePosition(
+void ExpandClipSpacePosition_Rad(
 	out float4 pos0 : SV_Position0,
 	out float4 pos1 : SV_Position1,
 	out float4 pos2 : SV_Position2,
 	out float4 pos3 : SV_Position3,
-	float4 inputPos : SV_Position,
+	float4 inputPos : SV_Position,			// note that since SV_Position is written and read, there are some awkward scenarios were multiple alternatives of ExpandClipSpacePosition are stacked on top of each other
 	float radius : RADIUS)
 {
 	const float h = radius * SysUniform_GetMinimalProjection()[0];
@@ -888,7 +901,7 @@ void ExpandClipSpacePosition(
 	pos3 = float4(inputPos.xy + float2( h, +v), inputPos.zw);
 }
 
-void ExpandClipSpacePosition(
+void ExpandClipSpacePosition_RadRotNormal(
 	out float4 pos0 : SV_Position0,
 	out float4 pos1 : SV_Position1,
 	out float4 pos2 : SV_Position2,
