@@ -63,6 +63,9 @@ namespace Formatters
 			_blobs.emplace_back(std::move(b));
 		}
 
+		template<typename Type>
+			void PushRawValue(const Type& type) { return PushRawValue(MakeOpaqueIteratorRange(type), ImpliedTyping::TypeOf<Type>()); }
+
 		void PushBindingEngineKeyedItem(uint64_t id, StringSection<> name)
 		{
 			Blob b { Formatters::FormatterBlob::KeyedItem };

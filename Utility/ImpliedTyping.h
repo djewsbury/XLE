@@ -183,6 +183,9 @@ namespace Utility
             bool _reverseEndian = false;
 
             operator VariantNonRetained() const;
+            operator bool() const { return _type._type != TypeCat::Void; };
+            IteratorRange<const void*> RawData() const;
+            const TypeDesc& Type() const { return _type; }
 
             template<typename DestType>
                 DestType RequireCastValue() const;
@@ -423,6 +426,13 @@ namespace Utility
                 assert(_largeBuffer.size() == size);
                 return VariantNonRetained { _type, MakeIteratorRange(_largeBuffer), _reverseEndian };
             }
+        }
+
+        inline IteratorRange<const void*> VariantRetained::RawData() const
+        {
+            auto size = _type.GetSize();
+            if (size <= sizeof(_smallBuffer)) return MakeIteratorRange(_smallBuffer, _smallBuffer+size);
+            else return MakeIteratorRange(_largeBuffer);
         }
 
         inline VariantRetained::VariantRetained(TypeDesc type, IteratorRange<const void*> data, bool reverseEndian)
