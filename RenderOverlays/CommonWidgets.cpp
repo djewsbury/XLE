@@ -606,7 +606,7 @@ namespace RenderOverlays { namespace CommonWidgets
 
 	void    Render(
 		IOverlayContext& context, const Rect& entryBoxArea, const std::shared_ptr<Font>& font, const TextEntry<>& textEntry,
-		ColorB textColor, ColorB caretColor, ColorB selectionColor)
+		ColorB textColor, ColorB caretColor, ColorB selectionColor, TextAlignment textAlign)
 	{
 		using namespace DebuggingDisplay;
 		Coord caretOffset = 0;
@@ -627,15 +627,22 @@ namespace RenderOverlays { namespace CommonWidgets
 				selEnd = (Coord)StringWidth(*font, MakeStringSection(textEntry._currentLine.begin(), textEntry._currentLine.begin() + firstPart));
 
 			if (selStart != selEnd) {
-				Rect rect(  Coord2(entryBoxArea._topLeft[0] + std::min(selStart, selEnd), entryBoxArea._topLeft[1]),
-							Coord2(entryBoxArea._topLeft[0] + std::max(selStart, selEnd), entryBoxArea._bottomRight[1]));
+				Rect rect;
+				if (textAlign == TextAlignment::BottomRight || textAlign == TextAlignment::Right || textAlign == TextAlignment::TopRight) {
+					auto fullWidth = (Coord)StringWidth<char>(*font, textEntry._currentLine);
+					rect = Rect(Coord2(entryBoxArea._bottomRight[0] - fullWidth + std::min(selStart, selEnd), entryBoxArea._topLeft[1]),
+								Coord2(entryBoxArea._bottomRight[0] - fullWidth + std::max(selStart, selEnd), entryBoxArea._bottomRight[1]));
+				} else {
+					rect = Rect(Coord2(entryBoxArea._topLeft[0] + std::min(selStart, selEnd), entryBoxArea._topLeft[1]),
+								Coord2(entryBoxArea._topLeft[0] + std::max(selStart, selEnd), entryBoxArea._bottomRight[1]));
+				}
 				FillRectangle(context, rect, selectionColor);
 			}
 
 			DrawText()
 				.Font(*font)
 				.Color(textColor)
-				.Alignment(TextAlignment::Left)
+				.Alignment(textAlign)
 				.Draw(context, entryBoxArea, textEntry._currentLine);
 
 		}

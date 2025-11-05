@@ -104,7 +104,8 @@ namespace RenderOverlays { namespace CommonWidgets
 
 	void    Render(
 		IOverlayContext& context, const Rect& entryBoxArea, const std::shared_ptr<Font>& font, const TextEntry<>& textEntry,
-		ColorB textColor = ColorB { 0xff, 0xff, 0xff }, ColorB caretColor = ColorB { 0xaf, 0xaf, 0xaf }, ColorB selectionColor = ColorB { 0x7f, 0x7f, 0x7f, 0x7f });
+		ColorB textColor = ColorB { 0xff, 0xff, 0xff }, ColorB caretColor = ColorB { 0xaf, 0xaf, 0xaf }, ColorB selectionColor = ColorB { 0x7f, 0x7f, 0x7f, 0x7f },
+		TextAlignment textAlign = TextAlignment::Left);
 
 	class HoveringLayer
 	{
