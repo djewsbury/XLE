@@ -83,6 +83,24 @@ namespace RenderCore { namespace LightingEngine
 		return std::make_shared<DataSourceFromResourceSynchronized>(std::move(threadContext), std::move(resource), std::move(depVal));
 	}
 
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_JustLoad(
+		StringSection<> src, RenderCore::Assets::TextureLoaderFlags::BitField loadFlags)
+	{
+		class Compiler_JustLoad : public Assets::ITextureCompiler
+		{
+		public:
+			std::string _src;
+			RenderCore::Assets::TextureLoaderFlags::BitField _bitField = 0;
+			std::string GetIntermediateName() const override { return (StringMeld<128>() << "convert-" << _src).AsString(); }
+			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override {
+				return Techniques::Services::GetInstance().CreateTextureDataSource(_src, _bitField);
+			}
+
+			Compiler_JustLoad(std::string src, RenderCore::Assets::TextureLoaderFlags::BitField bitField) : _src(src), _bitField(bitField) {}
+		};
+		return std::make_shared<Compiler_JustLoad>(src.AsString(), loadFlags);
+	}
+
 	static std::string s_equRectFilterName { "texture-compiler (EquirectFilter)" };
 	static std::string s_fromComputeShaderName { "texture-compiler (GenerateFromComputeShader)" };
 
@@ -1003,6 +1021,15 @@ namespace RenderCore { namespace LightingEngine
 			if (_shader.empty())
 				Throw(Formatters::FormatException("Expecting 'Shader' field in texture compiler file", fmttr.GetLocation()));
 		}
+
+		Compiler_ConversionComputeShader(std::string srcTexture, std::string shader, const TextureDesc& targetDesc)
+		: _shader(std::move(shader)), _sourceComponent(Assets::TextureCompilerSource{std::move(srcTexture)})
+		{
+			_width = targetDesc._width;
+			_height = targetDesc._height;
+			_arrayLayerCount = targetDesc._arrayCount;
+			_format = targetDesc._format;
+		}
 	};
 
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ComputeShader(
@@ -1028,6 +1055,14 @@ namespace RenderCore { namespace LightingEngine
 		std::string shader, const EquirectFilterParams& params)
 	{
 		return std::make_shared<Compiler_SamplingComputeShader>(width, height, arrayLayerCount, shader, params);
+	}
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ConversionComputeShader(
+		std::string srcTexture,
+		std::string shader,
+		const TextureDesc& targetDesc)
+	{
+		return std::make_shared<Compiler_ConversionComputeShader>(std::move(srcTexture), std::move(shader), targetDesc);
 	}
 
 	// Gives: at a given x,y position, what is the associated sample index?

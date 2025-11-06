@@ -293,7 +293,9 @@ namespace RenderCore { namespace Assets
 		std::memcpy(PtrAdd(destinationBlob->data(), ddsHeaderOffset), data.get(), srcSize);
 
 		return destinationBlob;
-	}
+	}	
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class BalancedNoiseTexture : public BufferUploads::IAsyncDataSource
 	{
@@ -360,8 +362,6 @@ namespace RenderCore { namespace Assets
 		unsigned _width, _height;
 		BalancedNoiseTexture(unsigned width, unsigned height) : _width(width), _height(height) {}
 	};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class Compiler_BalancedNoise : public ITextureCompiler
 	{
@@ -547,6 +547,15 @@ namespace RenderCore { namespace Assets
 		result._subCompiler = std::move(subCompiler);
 		result._intermediateName = Concatenate(result._subCompiler->GetIntermediateName(), "-", AsString(fmt));
 		result._postConvert = PostConvert{fmt};
+		return result;
+	}
+
+	TextureCompilationRequest MakeTextureCompilationRequest(std::shared_ptr<Assets::ITextureCompiler> subCompiler)
+	{
+		assert(subCompiler);
+		TextureCompilationRequest result;
+		result._subCompiler = std::move(subCompiler);
+		result._intermediateName = result._subCompiler->GetIntermediateName();
 		return result;
 	}
 

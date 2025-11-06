@@ -87,6 +87,7 @@ namespace RenderCore { namespace Assets
 		friend std::ostream& operator<<(std::ostream& str, const TextureCompilationRequest& req) { return str << req._intermediateName; }
 	};
 
+	TextureCompilationRequest MakeTextureCompilationRequest(std::shared_ptr<Assets::ITextureCompiler>);
 	TextureCompilationRequest MakeTextureCompilationRequest(std::shared_ptr<Assets::ITextureCompiler>, Format fmt);
 
 	class TextureCompilerRegistrar;

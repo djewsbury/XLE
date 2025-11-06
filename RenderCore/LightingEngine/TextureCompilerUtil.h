@@ -15,6 +15,7 @@ namespace Assets { struct DependentFileState; }
 namespace RenderCore { class TextureDesc; class IThreadContext; class IResource; }
 namespace RenderCore::Assets { class ITextureCompiler; struct TextureCompilerSource; }
 namespace AssetsNew { struct ScaffoldAndEntityName; class CompoundAssetUtil; }
+namespace RenderCore::Assets::TextureLoaderFlags { using BitField = unsigned; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -83,4 +84,11 @@ namespace RenderCore { namespace LightingEngine
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_LightingEngineCommon(
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer);
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ConversionComputeShader(
+		std::string srcTexture, std::string shader,
+		const TextureDesc& targetDesc);
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_JustLoad(
+		StringSection<>, RenderCore::Assets::TextureLoaderFlags::BitField = 0);
 }}
