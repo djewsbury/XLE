@@ -36,7 +36,7 @@ namespace GraphLanguage
 		const ::Assets::DirectorySearchRules& searchRules,
 		const ::Assets::DependencyValidation& dependencyValidation);
 
-	INodeGraphProvider::NodeGraph LoadGraphSyntaxFile(StringSection<> filename, StringSection<> entryPoint);
+	INodeGraphProvider::NodeGraph LoadGraphSyntaxFileSync(StringSection<> filename, StringSection<> entryPoint);
 
 	std::string GenerateGraphSyntax(const NodeGraph& graph, const NodeGraphSignature& interf, StringSection<> name);
 	std::string GenerateSignature(const NodeGraphSignature& sig, StringSection<char> name, bool useReturnType = true, bool includeTemplateParameters = false);

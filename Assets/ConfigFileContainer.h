@@ -12,7 +12,6 @@
 #include "AssetUtils.h"		// for DirectorySearchRules
 #include "Continuation.h"
 #include "../Formatters/TextFormatter.h"
-#include "../Utility/StringFormat.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/Streams/SerializationUtils.h"		// (included to ensure that AssetMixinTraits::HasDeserializationOperatorFromFormatter resolves correctly)
 #include <memory>

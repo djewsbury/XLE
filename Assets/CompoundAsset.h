@@ -234,9 +234,11 @@ namespace AssetsNew
 		auto splitName = MakeFileNameSplitter(indexer._identifier);
 		char resolvedFile[MaxPath];
 		indexer._searchRules.ResolveFile(resolvedFile, splitName.AllExceptParameters());
-		if (XlEqString(splitName.Extension(), "compound") || XlEqString(splitName.Extension(), "hlsl")) {
+		auto resolvedFileSplit = MakeFileNameSplitter(resolvedFile);		// have to redo this for the <.> case
+		if (XlEqString(resolvedFileSplit.Extension(), "compound") || XlEqString(resolvedFileSplit.Extension(), "hlsl")) {
 
 			// load via compound document path
+			assert(!splitName.Parameters().IsEmpty());
 			if (_assetHeap) {
 				auto scaffoldWithContext = StallWhilePending<ContextImbuedScaffold>(*_assetHeap, resolvedFile);
 				// copy actualize result, then unlock

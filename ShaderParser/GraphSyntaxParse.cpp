@@ -175,7 +175,7 @@ namespace GraphLanguage
 		return result;
 	}
 
-	INodeGraphProvider::NodeGraph LoadGraphSyntaxFile(StringSection<> filename, StringSection<> entryPoint)
+	INodeGraphProvider::NodeGraph LoadGraphSyntaxFileSync(StringSection<> filename, StringSection<> entryPoint)
 	{
 		auto& asset = ::Assets::Legacy::GetAsset<::Assets::RawFileAsset>(filename);
 		auto inputStr = MakeStringSection((const char*)asset.GetData().begin(), (const char*)asset.GetData().end());

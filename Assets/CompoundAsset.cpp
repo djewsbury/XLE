@@ -112,7 +112,13 @@ namespace AssetsNew
 
 		} else if (auto* contextAndIdentifier = std::get_if<ContextAndIdentifier>(&rootEntity)) {
 
+			char resolvedFile[MaxFilename];
 			auto splitName = MakeFileNameSplitter(contextAndIdentifier->_identifier);
+			if (XlEqString(splitName.AllExceptParameters(), "<.>")) {
+				contextAndIdentifier->_searchRules.ResolveFile(resolvedFile, splitName.AllExceptParameters());
+				splitName = MakeFileNameSplitter(resolvedFile);
+			}
+
 			return XlEqString(splitName.Extension(), "compound") || XlEqString(splitName.Extension(), "hlsl");
 
 		} else {
@@ -126,14 +132,21 @@ namespace AssetsNew
 	{
 		std::optional<ScaffoldAndEntityName> TryMakeScaffoldAndEntityNameSync(StringSection<> str, const ::Assets::DirectorySearchRules& searchRules)
 		{
+			char resolvedFile[MaxFilename]; bool alreadyResolved = false;
 			auto splitName = MakeFileNameSplitter(str);
-			if (!splitName.ParametersWithDivider().IsEmpty() && (XlEqString(splitName.Extension(), "compound") || XlEqString(splitName.Extension(), "hlsl"))) {
-				char buffer[MaxPath];
-				searchRules.ResolveFile(buffer, splitName.AllExceptParameters());
-				return ScaffoldAndEntityName { ::Assets::ActualizeAsset<::Assets::ContextImbuedAsset<std::shared_ptr<CompoundAssetScaffold>>>(buffer), Hash64(splitName.Parameters()) DEBUG_ONLY(, splitName.Parameters().AsString()) };
-			} else {
-				return {};
+			if (splitName.ParametersWithDivider().IsEmpty()) return {};
+
+			auto ext = splitName.Extension();
+			if (XlEqString(splitName.AllExceptParameters(), "<.>")) {
+				searchRules.ResolveFile(resolvedFile, splitName.AllExceptParameters()); alreadyResolved = true;
+				ext = MakeFileNameSplitter(resolvedFile).Extension();
 			}
+
+			if (XlEqString(ext, "compound") || XlEqString(ext, "hlsl")) {
+				if (!alreadyResolved) searchRules.ResolveFile(resolvedFile, splitName.AllExceptParameters());
+				return ScaffoldAndEntityName { ::Assets::ActualizeAsset<::Assets::ContextImbuedAsset<std::shared_ptr<CompoundAssetScaffold>>>(resolvedFile), Hash64(splitName.Parameters()) DEBUG_ONLY(, splitName.Parameters().AsString()) };
+			} else
+				return {};
 		}
 	}
 

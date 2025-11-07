@@ -99,7 +99,7 @@ namespace GraphLanguage
 		auto splitName = SplitArchiveName(name);
 		char resolvedName[MaxPath];
 		_pimpl->_searchRules.ResolveFile(resolvedName, splitName.first);
-		return LoadGraphSyntaxFile(resolvedName, splitName.second);
+		return LoadGraphSyntaxFileSync(resolvedName, splitName.second);
 	}
 
 	std::string BasicNodeGraphProvider::TryFindAttachedFile(StringSection<> name)
