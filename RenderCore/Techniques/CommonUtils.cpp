@@ -263,7 +263,7 @@ namespace RenderCore { namespace Techniques
 		if (constructionContext) {
 			return constructionContext->ConstructStaticGeometry(std::move(dataSource), bindFlags);
 		} else {
-			auto desc = CreateDesc(bindFlags, LinearBufferDesc::Create(dataSource->GetData().size()));
+			auto desc = CreateDesc(bindFlags, LinearBufferDesc::Create((unsigned)dataSource->GetData().size()));
 			auto& bufferUploads = Services::GetBufferUploads();
 			return std::move(bufferUploads.Begin(desc, std::move(dataSource), bindFlags)._future);
 		}

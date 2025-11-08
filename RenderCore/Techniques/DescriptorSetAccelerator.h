@@ -128,7 +128,7 @@ namespace RenderCore { namespace Techniques
 
 		void PushUniformUpdates(IDeformAcceleratorPool&, DeformAccelerator&, unsigned instance, const ParameterBox& parameters);
 		std::shared_ptr<DeformAccelerator> CreateDeformAccelerator(IDeformAcceleratorPool& pool);
-		DeformerToDescriptorSetBinding GetDeformerToDescriptorSetBinding(IDeformAcceleratorPool& pool);
+		std::shared_ptr<DeformerToDescriptorSetBinding> MakeDeformerToDescriptorSetBinding(IDeformAcceleratorPool& pool);
 
 		UniformDeformHelper(
 			const Assets::PredefinedDescriptorSetLayout& layout,

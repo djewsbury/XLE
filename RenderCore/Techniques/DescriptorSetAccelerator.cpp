@@ -582,9 +582,13 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	RenderCore::Techniques::DeformerToDescriptorSetBinding UniformDeformHelper::GetDeformerToDescriptorSetBinding(RenderCore::Techniques::IDeformAcceleratorPool& pool)
+	std::shared_ptr<RenderCore::Techniques::DeformerToDescriptorSetBinding> UniformDeformHelper::MakeDeformerToDescriptorSetBinding(RenderCore::Techniques::IDeformAcceleratorPool& pool)
 	{
-		return { _animatedSlots, pool.GetSemiPersistentPageResource() };
+		if (_animatedSlots.empty()) return nullptr;
+		auto result = std::make_shared<RenderCore::Techniques::DeformerToDescriptorSetBinding>();
+		result->_animatedSlots = _animatedSlots;
+		result->_dynamicPageResource = pool.GetSemiPersistentPageResource();
+		return result;
 	}
 
 	UniformDeformHelper::UniformDeformHelper(

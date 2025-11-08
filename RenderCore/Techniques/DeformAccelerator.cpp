@@ -39,6 +39,7 @@ namespace RenderCore { namespace Techniques
 
 		void AttachSemiPersistentUniforms(DeformAccelerator& deformAccelerator, unsigned size) override;
 		void SetSemiPersistentUniforms(DeformAccelerator& deformAccelerator, InstanceToken instance, IteratorRange<const void*>) override;
+		void ReleaseSemiPersistentBuffer(unsigned offset, unsigned size);
 
 		void SetVertexInputBarrier(IThreadContext&) const override;
 		void OnFrameBarrier() override;
@@ -51,6 +52,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<DeformersPacket> CreatePacket() override;
 
 		std::atomic<unsigned> _alivePacketCount = 0;
+		std::atomic<unsigned> _aliveDeformerCount = 0;
 
 		DeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>);
 		~DeformAcceleratorPool();
@@ -93,51 +95,153 @@ namespace RenderCore { namespace Techniques
 		unsigned _reservationPerInstance[AllocationType_Max] = {0,0,0};
 		std::vector<unsigned> _instanceToReadiedOffset[AllocationType_Max];
 		VertexBufferView _outputVBV;
-		unsigned _uniformBufferPageResourceBaseOffset = ~0u;
 		unsigned _semiPersistentUniformsSize = 0;
 
 		// for internal usage by the DeformAcceleratorPool
 		std::shared_ptr<IGeoDeformerConductor> _geoConductor;
 		std::shared_ptr<IUniformsDeformerConductor> _uniformsConductor;
 
-		#if defined(_DEBUG)
-			DeformAcceleratorPool* _containingPool = nullptr;
+		DeformAcceleratorPool* _containingPool = nullptr;		// required to release "semi-persistent" buffer
 
-			~DeformAccelerator()
-			{
-				// Don't destroy a deform accelerator while there is an active DeformersPacket; because this could 
-				// cause a dangling pointer within the packet's deformables list
-				assert(!_containingPool || !_containingPool->_alivePacketCount);
+		~DeformAccelerator()
+		{
+			// Don't destroy a deform accelerator while there is an active DeformersPacket; because this could 
+			// cause a dangling pointer within the packet's deformables list
+			assert(!_containingPool || !_containingPool->_alivePacketCount);
 
-				// problem -- we need to release the allocation in the semi-persistent buffer
-				if (_semiPersistentUniformsSize != 0)
-					for (auto o:_instanceToReadiedOffset[AllocationType_UniformBuffer])
-						assert(o == ~0u);
+			if (_containingPool) --_containingPool->_aliveDeformerCount;
+
+			// problem -- we need to release the allocation in the semi-persistent buffer
+			if (_semiPersistentUniformsSize != 0) {
+				assert(_containingPool);
+				for (auto o:_instanceToReadiedOffset[AllocationType_UniformBuffer])
+					_containingPool->ReleaseSemiPersistentBuffer(o, _semiPersistentUniformsSize);
 			}
-		#endif
+		}
+
+		DeformAccelerator() = default;
+		DeformAccelerator(DeformAccelerator&&) = delete;
+		DeformAccelerator& operator=(DeformAccelerator&&) = delete;
 	};
+	
+	struct GPUSyncedSinglePage
+	{
+		unsigned Allocate(unsigned size, unsigned alignment)
+		{
+			// todo -- we could consider only the particular cmd list associated with _asyncTracker (similar
+			// to how it's done with the buffer uploads staging page allocator)
+
+			unsigned crashPoint = _totalSize;
+			if (!_allocationsInfront.empty())
+				crashPoint = _allocationsInfront[0]._start;
+
+			unsigned preBufferForAlignment = CeilToMultiple(_movingPoint, alignment) - _movingPoint;
+			auto headRoom = crashPoint - _movingPoint;
+			if (headRoom < (size+preBufferForAlignment)) {
+				// If we run out of space, check to see how many allocations we can just write over
+				auto consumerMarker = _asyncTracker->GetConsumerMarker();
+				while (!_allocationsInfront.empty() && _allocationsInfront.begin()->_marker < consumerMarker)
+					_allocationsInfront.erase(_allocationsInfront.begin());
+				crashPoint = _allocationsInfront.empty() ? _totalSize : _allocationsInfront[0]._start;
+				headRoom = crashPoint - _movingPoint;
+
+				if (_allocationsInfront.empty()) {
+					// try to erase from _allocationsBehind, also
+					while (!_allocationsBehind.empty() && _allocationsBehind.begin()->_marker <= consumerMarker)
+						_allocationsBehind.erase(_allocationsBehind.begin());
+					crashPoint = _totalSize;
+					headRoom = crashPoint - _movingPoint;
+
+					// we can now choose to reset "_movingPoint" back to the start. But we should only
+					// do this if we still don't have enough room for the allocation
+					if (headRoom < (size+preBufferForAlignment)) {
+						_allocationsInfront = std::move(_allocationsBehind);
+						assert(_allocationsBehind.empty()); // Expecting all 'behind' allocations to be moved into 'infront'
+						_movingPoint = 0;
+						preBufferForAlignment = 0;      // always zero, since _movingPoint is zero
+						headRoom = (_allocationsInfront.empty() ? _totalSize : _allocationsInfront.front()._start) - _movingPoint;
+					}
+				}
+			}
+
+			if (headRoom < (size+preBufferForAlignment)) return ~0u;
+
+			auto result = _movingPoint;
+			// just merge into the previous allocation marker, if we can
+			if (!_allocationsBehind.empty() && (_allocationsBehind.end()-1)->_marker == ~0u) {
+				(_allocationsBehind.end()-1)->_end = result+size+preBufferForAlignment;
+			} else {
+				_allocationsBehind.push_back(Allocation {result, result+size+preBufferForAlignment, ~0u});
+			}
+			_movingPoint += size+preBufferForAlignment;
+			return result+preBufferForAlignment;
+		}
+
+		void Clear()
+		{
+			// All allocations are assigned to the current producer marker
+			auto producerMarker = _asyncTracker->GetProducerMarker();
+			for (auto r=_allocationsBehind.begin(); r!=_allocationsBehind.end(); ++r) {
+				if (r->_marker != ~0u) break;
+				r->_marker = producerMarker;
+			}
+			for (auto r=_allocationsInfront.begin(); r!=_allocationsInfront.end(); ++r) {
+				if (r->_marker != ~0u) break;
+				r->_marker = producerMarker;
+			}
+		}
+
+		GPUSyncedSinglePage(unsigned totalSize, std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> asyncTracker)
+		: _asyncTracker(std::move(asyncTracker)), _movingPoint(0), _totalSize(totalSize)
+		{}
+
+		struct Allocation { unsigned _start, _end, _marker; };
+		std::vector<Allocation> _allocationsBehind, _allocationsInfront;
+		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
+		unsigned _movingPoint, _totalSize;
+	};
+
+	// two modes for the GPUSyncedSinglePageResource
+	//		MAP_SEMI_PERSISTENT == 1 uses ResourceMap{} and writes directly to the device resource at first opportunity
+	//		MAP_SEMI_PERSISTENT == 0 uses BltEncoder to write synchronized with a thread context, and requires extra copies
+	#define MAP_SEMI_PERSISTENT 0
 
 	class GPUSyncedSinglePageResource
 	{
 	public:
 		std::shared_ptr<IResource> _resource;
-		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
+		std::shared_ptr<IResource> _stagingResource;
 		std::shared_ptr<IDevice> _device;
 		unsigned _alignment = 0;
 
-		struct PendingDeallocate
+		#if MAP_SEMI_PERSISTENT == 1
+			std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
+			struct PendingDeallocate
+			{
+				RenderCore::Metal_Vulkan::IAsyncTracker::Marker _usageMarker;
+				unsigned _start, _size;
+			};
+			std::vector<PendingDeallocate> _pendingDeallocates;
+		#else
+			GPUSyncedSinglePage _stagingResourceAllocator;
+		#endif
+
+		struct PendingTransfer
 		{
-			RenderCore::Metal_Vulkan::IAsyncTracker::Marker _usageMarker;
-			unsigned _start, _size;
+			unsigned _srcStart, _srcSize;
+			unsigned _dst;
 		};
-		std::vector<PendingDeallocate> _pendingDeallocates;
+		std::vector<PendingTransfer> _pendingTransfers[2];
 
 		SpanningHeap<unsigned> _spanningHeap;
+		Threading::Mutex _lock;
 
 		unsigned TryAllocateAndWrite(IteratorRange<const void*> data);
 		void Deallocate(unsigned offset, unsigned size);
+		void CompleteTransfers(IThreadContext&);
 		void OnFrameBarrier();
-		GPUSyncedSinglePageResource(std::shared_ptr<IDevice> device, const ResourceDesc& desc, std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> asyncTracker);
+
+		GPUSyncedSinglePageResource(std::shared_ptr<IDevice> device, const ResourceDesc& desc, unsigned stagingPageSize, std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> asyncTracker);
 		~GPUSyncedSinglePageResource();
 	};
 
@@ -149,9 +253,8 @@ namespace RenderCore { namespace Techniques
 		} else
 			newAccelerator = std::make_shared<DeformAccelerator>();
 		newAccelerator->_readiedInstances.resize(8, 0);
-		#if defined(_DEBUG)
-			newAccelerator->_containingPool = this;
-		#endif
+		++_aliveDeformerCount;
+		newAccelerator->_containingPool = this;
 
 		ScopedLock(_acceleratorsLock);
 		_accelerators.push_back(newAccelerator);
@@ -211,11 +314,11 @@ namespace RenderCore { namespace Techniques
 		auto& pool = *checked_cast<DeformAcceleratorPool*>(&ipool);
 
 		assert(pool._boundThread == std::this_thread::get_id());
+		pool._semiPersistentResource->CompleteTransfers(threadContext);
 		auto attachedStorage = pool._temporaryStorageManager->BeginCmdListReservation();
 
 		std::vector<std::shared_ptr<DeformAccelerator>> accelerators;
 		accelerators.resize(pool._accelerators.size());		// subframe heap candidate
-		unsigned activeAcceleratorCount=0;
 		unsigned reservationBytes[AllocationType_Max] = {0,0,0};
 		unsigned allocationAlignments[AllocationType_Max] = {1,1,1};
 		// unsigned maxInstanceCount = 0;
@@ -276,7 +379,7 @@ namespace RenderCore { namespace Techniques
 				if (op._flatInstances.empty()) continue;
 
 				for (unsigned c=0; c<AllocationType_Max; ++c)
-					reservationBytes[c] += CeilToMultiple(accelerator->_reservationPerInstance[c] * op._flatInstances.size(), allocationAlignments[c]);
+					reservationBytes[c] += CeilToMultiple(unsigned(accelerator->_reservationPerInstance[c] * op._flatInstances.size()), allocationAlignments[c]);
 
 				deformersAndInstances.push_back(op);
 			}
@@ -319,7 +422,7 @@ namespace RenderCore { namespace Techniques
 
 			for (auto& deformerAndInstances:deformersAndInstances) {
 				auto* accelerator = deformerAndInstances._accelerator;
-				unsigned instanceCount = deformerAndInstances._flatInstances.size();
+				unsigned instanceCount = (unsigned)deformerAndInstances._flatInstances.size();
 
 				std::shared_ptr<IResourceView> gpuBufferView;
 				if (accelerator->_reservationPerInstance[AllocationType_GPUVB] != 0) {
@@ -345,10 +448,7 @@ namespace RenderCore { namespace Techniques
 						PtrAdd(uniformBufferDst.begin(), movingOffsets[AllocationType_UniformBuffer]),
 						PtrAdd(uniformBufferDst.begin(), movingOffsets[AllocationType_UniformBuffer]+instanceCount*accelerator->_reservationPerInstance[AllocationType_UniformBuffer]));
 
-					accelerator->_uniformsConductor->Execute(
-						deformerAndInstances._flatInstances,
-						cbOutputRange);
-					accelerator->_uniformBufferPageResourceBaseOffset = uniformBufferPageOffset;
+					accelerator->_uniformsConductor->Execute(deformerAndInstances._flatInstances, cbOutputRange);
 				}
 
 				// set accelerator->_instanceToReadiedOffset & advance movingOffsets
@@ -359,7 +459,7 @@ namespace RenderCore { namespace Techniques
 						accelerator->_instanceToReadiedOffset[allType].resize(deformerAndInstances._maxEnabledInstance+1, ~0u);
 
 					for (auto i:deformerAndInstances._flatInstances) {
-						accelerator->_instanceToReadiedOffset[allType][i] = movingOffsets[allType];
+						accelerator->_instanceToReadiedOffset[allType][i] = uniformBufferPageOffset + movingOffsets[allType];
 						movingOffsets[allType] += accelerator->_reservationPerInstance[allType];
 					}
 
@@ -469,9 +569,8 @@ namespace RenderCore { namespace Techniques
 
 		unsigned GetUniformPageBufferOffset(DeformAccelerator& accelerator, unsigned instanceIdx)
 		{
-			assert(accelerator._uniformsConductor && accelerator._reservationPerInstance[AllocationType_UniformBuffer]);
-			assert(accelerator._uniformBufferPageResourceBaseOffset != ~0u);
-			return accelerator._uniformBufferPageResourceBaseOffset + accelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instanceIdx];
+			assert((accelerator._uniformsConductor && accelerator._reservationPerInstance[AllocationType_UniformBuffer]) || accelerator._semiPersistentUniformsSize);
+			return accelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instanceIdx];
 		}
 
 		void BarrierGeoDeformTemporaries(IThreadContext& threadContext, IResourceView& gpuTemporariesBufferView)
@@ -498,11 +597,16 @@ namespace RenderCore { namespace Techniques
 		assert(!deformAccelerator._uniformsConductor);
 		assert(deformAccelerator._semiPersistentUniformsSize != 0);
 		assert(data.size() == deformAccelerator._semiPersistentUniformsSize);
-		if (deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer].size() < instance)
+		if (deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer].size() <= instance)
 			deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer].resize(instance+1, ~0u);
 		if (deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instance] != ~0u)
 			_semiPersistentResource->Deallocate(deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instance], deformAccelerator._semiPersistentUniformsSize);
 		deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instance] = _semiPersistentResource->TryAllocateAndWrite(data);
+	}
+
+	void DeformAcceleratorPool::ReleaseSemiPersistentBuffer(unsigned offset, unsigned size)
+	{
+		_semiPersistentResource->Deallocate(offset, size);
 	}
 
 	std::shared_ptr<IResource> DeformAcceleratorPool::GetDynamicPageResource() const { return _cbPageResource; }
@@ -552,14 +656,15 @@ namespace RenderCore { namespace Techniques
 			_cbNamedPage = _temporaryStorageManager->CreateNamedPage(cbAllocationSize, BindFlag::ConstantBuffer);
 			_cbPageResource = _temporaryStorageManager->GetResourceForNamedPage(_cbNamedPage);
 		}
-		auto semiPersistentResourceDesc = CreateDesc(BindFlag::TransferDst|BindFlag::ConstantBuffer, LinearBufferDesc::Create(1024*1024));
-		_semiPersistentResource = std::make_unique<GPUSyncedSinglePageResource>(_device, semiPersistentResourceDesc, _asyncTracker);
+		auto semiPersistentResourceDesc = CreateDesc(BindFlag::TransferDst|BindFlag::ConstantBuffer, AllocationRules::HostVisibleSequentialWrite, LinearBufferDesc::Create(1024*1024));
+		_semiPersistentResource = std::make_unique<GPUSyncedSinglePageResource>(_device, semiPersistentResourceDesc, 128*1024, _asyncTracker);
 		_boundThread = std::this_thread::get_id();
 	}
 
 	DeformAcceleratorPool::~DeformAcceleratorPool() 
 	{
 		assert(!_alivePacketCount);
+		assert(!_aliveDeformerCount);		// deformers hold a raw pointer back to the pool; so they must be destroyed before the pool
 		_currentFrameAttachedStorage.clear();
 	}
 
@@ -578,44 +683,107 @@ namespace RenderCore { namespace Techniques
 
 	unsigned GPUSyncedSinglePageResource::TryAllocateAndWrite(IteratorRange<const void*> data)
 	{
-		auto size = data.size();
+		auto size = (unsigned)data.size();
 		size = CeilToMultiple(size, _alignment);
+
+		ScopedLock(_lock);
 		unsigned allocation = _spanningHeap.Allocate(size);
 		if (allocation == ~0u) return ~0u;		// out of heap space
 		assert((allocation%_alignment) == 0);	// should always be aligned because the block size is always a multiple of alignment
 
-		Metal::ResourceMap map{*_device, *_resource, Metal::ResourceMap::Mode::WriteDiscardPrevious, allocation, size};
-		std::memcpy(map.GetData().begin(), data.begin(), data.size());
+		#if MAP_SEMI_PERSISTENT == 1
+			const bool partialResourceMap = false;
+			if constexpr (partialResourceMap) {
+				// can't do this with Vulkan VMA resources
+				Metal::ResourceMap map{*_device, *_resource, Metal::ResourceMap::Mode::WriteDiscardPrevious, allocation, size};
+				std::memcpy(map.GetData().begin(), data.begin(), data.size());
+			} else {
+				Metal::ResourceMap map{*_device, *_resource, Metal::ResourceMap::Mode::WriteDiscardPrevious};
+				std::memcpy(PtrAdd(map.GetData().begin(), allocation), data.begin(), data.size());
+			}
+		#else
+			auto stagingOffset = _stagingResourceAllocator.Allocate(size, _alignment);
+			_pendingTransfers[0].emplace_back(PendingTransfer{stagingOffset, unsigned(data.size()), allocation});
+
+			// we actually have the "permanently mapped" flag, which should minimize overhead here
+			Metal::ResourceMap map{*_device, *_stagingResource, Metal::ResourceMap::Mode::WriteDiscardPrevious, stagingOffset, size};
+			std::memcpy(map.GetData().begin(), data.begin(), data.size());
+		#endif
+	
 		return allocation;
 	}
 
 	void GPUSyncedSinglePageResource::Deallocate(unsigned offset, unsigned size)
 	{
 		size = CeilToMultiple(size, _alignment);
+		#if MAP_SEMI_PERSISTENT == 1
+			_pendingDeallocates.emplace_back(PendingDeallocate{_asyncTracker->GetProducerMarker(), offset, size});
+		#else
+			ScopedLock(_lock);
+			_spanningHeap.Deallocate(offset, size);
+		#endif
+	}
+
+	void GPUSyncedSinglePageResource::CompleteTransfers(IThreadContext& threadContext)
+	{
+		#if MAP_SEMI_PERSISTENT == 0
+			// Note -- CompleteTransfers must always be called with the same threadContext
+			// it's not truly thread context aware
+			{
+				ScopedLock(_lock);
+				std::swap(_pendingTransfers[0], _pendingTransfers[1]);
+				_stagingResourceAllocator.Clear();
+			}
+
+			// _pendingTransfers[1] and _pendingTransferBuffer[1] are only used here,
+			// so don't need to be locked. 
+			auto blitEncoder = Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder();
+			for (auto& transfer:_pendingTransfers[1]) {
+				// we may want a variation that can queue multiple transfers in a single step for this
+				blitEncoder.Copy(
+					CopyPartial_Dest{*_resource, transfer._dst},
+					CopyPartial_Src{*_stagingResource, transfer._srcStart, transfer._srcStart+transfer._srcSize});
+			}
+			_pendingTransfers[1].clear();
+		#endif
 	}
 
 	void GPUSyncedSinglePageResource::OnFrameBarrier()
 	{
-		unsigned consumerMarker = _asyncTracker->GetConsumerMarker();
-		auto w = _pendingDeallocates.begin();
-		for (auto i=_pendingDeallocates.begin(); i!=_pendingDeallocates.end(); ++i) {
-			if (i->_usageMarker < consumerMarker) {
-				_spanningHeap.Deallocate(i->_start, i->_size);
-			} else {
-				*w++ = *i++;
+		#if MAP_SEMI_PERSISTENT == 1
+			unsigned consumerMarker = _asyncTracker->GetConsumerMarker();
+			auto w = _pendingDeallocates.begin();
+			for (auto i=_pendingDeallocates.begin(); i!=_pendingDeallocates.end(); ++i) {
+				if (i->_usageMarker < consumerMarker) {
+					_spanningHeap.Deallocate(i->_start, i->_size);
+				} else {
+					*w++ = *i++;
+				}
 			}
-		}
-		_pendingDeallocates.erase(w, _pendingDeallocates.end());
+			_pendingDeallocates.erase(w, _pendingDeallocates.end());
+		#endif
 	}
 
-	GPUSyncedSinglePageResource::GPUSyncedSinglePageResource(std::shared_ptr<IDevice> device, const ResourceDesc& desc, std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> asyncTracker)
-	: _asyncTracker(std::move(asyncTracker))
-	, _device(std::move(device))
+	GPUSyncedSinglePageResource::GPUSyncedSinglePageResource(std::shared_ptr<IDevice> device, const ResourceDesc& desc, unsigned stagingPageSize, std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> asyncTracker)
+	: _device(std::move(device)), _stagingResourceAllocator(stagingPageSize, asyncTracker)
 	{
+		#if MAP_SEMI_PERSISTENT == 1
+			_asyncTracker = std::move(asyncTracker);
+		#endif
+
 		_alignment = _device->GetDeviceLimits()._constantBufferOffsetAlignment;
+		_alignment = std::max(_alignment, 1u);
 		assert(desc._type == ResourceDesc::Type::LinearBuffer);
 		_resource = _device->CreateResource(desc, "single-page-resource");
 		_spanningHeap = SpanningHeap<unsigned>(desc._linearBufferDesc._sizeInBytes);
+
+		#if MAP_SEMI_PERSISTENT == 0
+			_stagingResource = _device->CreateResource(
+				CreateDesc(
+					BindFlag::TransferSrc, AllocationRules::HostVisibleSequentialWrite | AllocationRules::PermanentlyMapped | AllocationRules::DisableAutoCacheCoherency | AllocationRules::DedicatedPage,
+					LinearBufferDesc::Create(stagingPageSize)),
+				"staging-page");
+		#endif
 	}
 
 	GPUSyncedSinglePageResource::~GPUSyncedSinglePageResource()

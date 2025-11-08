@@ -7,9 +7,7 @@
 #include "IBufferUploads.h"
 #include "../IDevice.h"
 #include "../Metal/Forward.h"        // for GFXAPI_TARGET
-#include "../../Utility/IntrusivePtr.h"
 #include "../../Utility/HeapUtils.h"
-#include <utility>
 
 namespace Utility { struct RepositionStep; }
 namespace RenderCore { namespace Metal_Vulkan { class IAsyncTracker; } }
