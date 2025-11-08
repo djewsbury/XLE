@@ -16,40 +16,45 @@ namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t;
 namespace RenderCore { namespace Techniques
 {
 	class DeformAccelerator;
-	class IDeformGeoAttachment;
-	class IDeformUniformsAttachment;
+	class IGeoDeformerConductor;
+	class IUniformsDeformerConductor;
 	class IPipelineLayoutDelegate;
 	class IDrawablesPool;
 	class DeformersPacket;
+
+	using InstanceToken = unsigned;
 
 	class IDeformAcceleratorPool
 	{
 	public:
 		virtual std::shared_ptr<DeformAccelerator> CreateDeformAccelerator() = 0;
-		virtual void Attach(
-			DeformAccelerator& deformAccelerator,
-			std::shared_ptr<IDeformGeoAttachment> deformAttachment) = 0;
-
-		virtual void Attach(
-			DeformAccelerator& deformAccelerator,
-			std::shared_ptr<IDeformUniformsAttachment> deformAttachment) = 0;
-
-		virtual std::shared_ptr<IDeformGeoAttachment> GetDeformGeoAttachment(DeformAccelerator& deformAccelerator) = 0;
-		virtual std::shared_ptr<IDeformUniformsAttachment> GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator) = 0;
+		virtual std::shared_ptr<DeformersPacket> CreatePacket() = 0;
 
 		virtual void SetVertexInputBarrier(IThreadContext&) const = 0;
 		virtual void OnFrameBarrier() = 0;
 
-		virtual std::shared_ptr<IResource> GetDynamicPageResource() const = 0;
+		virtual void Attach(
+			DeformAccelerator& deformAccelerator,
+			std::shared_ptr<IGeoDeformerConductor> deformAttachment) = 0;
 
-		uint64_t GetGUID() const { return _guid; }
-		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
-		virtual const std::shared_ptr<IPipelineLayoutDelegate>& GetCompiledLayoutPool() const = 0;
+		virtual void Attach(
+			DeformAccelerator& deformAccelerator,
+			std::shared_ptr<IUniformsDeformerConductor> deformAttachment) = 0;
+
+		virtual std::shared_ptr<IGeoDeformerConductor> GetGeoDeformerConductor(DeformAccelerator& deformAccelerator) = 0;
+		virtual std::shared_ptr<IUniformsDeformerConductor> GetUniformsDeformerConductor(DeformAccelerator& deformAccelerator) = 0;
+
+		virtual void AttachSemiPersistentUniforms(DeformAccelerator& deformAccelerator, unsigned size) = 0;
+		virtual void SetSemiPersistentUniforms(DeformAccelerator& deformAccelerator, InstanceToken instance, IteratorRange<const void*>) = 0;
+
+		virtual std::shared_ptr<IResource> GetDynamicPageResource() const = 0;
+		virtual std::shared_ptr<IResource> GetSemiPersistentPageResource() const = 0;
 
 		struct ReadyInstancesMetrics;
 		virtual ReadyInstancesMetrics GetMetrics() const = 0;
 
-		virtual std::shared_ptr<DeformersPacket> CreatePacket() = 0;
+		uint64_t GetGUID() const { return _guid; }
+		virtual const std::shared_ptr<IDevice>& GetDevice() const = 0;
 
 		IDeformAcceleratorPool();
 		virtual ~IDeformAcceleratorPool();
@@ -68,11 +73,11 @@ namespace RenderCore { namespace Techniques
 		struct Deformable
 		{
 			DeformAccelerator* _deformAccelerator;		// note that deformers should not be destroyed while any packet is alive, to prevent dangling pointers here
-			unsigned _instance;
+			InstanceToken _instance;
 		};
 		Deformable& Allocate();
 
-		void Queue(DeformAccelerator& da, unsigned instance) { Allocate() = Deformable{&da, instance}; }
+		void Queue(DeformAccelerator& da, InstanceToken instance) { Allocate() = Deformable{&da, instance}; }
 
 		DeformersPacket();
 		~DeformersPacket();
@@ -85,11 +90,11 @@ namespace RenderCore { namespace Techniques
 		friend class DeformAcceleratorPool;
 	};
 
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<IPipelineLayoutDelegate>);
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>);
 
 	class IGeoDeformer;
 	struct DeformerToRendererBinding;
-	class IDeformGeoAttachment
+	class IGeoDeformerConductor
 	{
 	public:
 		///@{ interface for clients for providing animation state data & initializing renderers
@@ -103,17 +108,17 @@ namespace RenderCore { namespace Techniques
 		virtual void ReserveBytesRequired(unsigned instanceCount, unsigned& gpuBufferBytes, unsigned& cpuBufferBytes) = 0;
 		virtual void Execute(
 			IThreadContext& threadContext, 
-			IteratorRange<const unsigned*> instanceIdx, 
+			IteratorRange<const InstanceToken*> instanceIdx, 
 			IResourceView& dstVB,
 			IteratorRange<void*> cpuBufferOutputRange,
 			IDeformAcceleratorPool::ReadyInstancesMetrics& metrics) = 0;
 		///@}
-		virtual ~IDeformGeoAttachment();
+		virtual ~IGeoDeformerConductor();
 	};
 
 	struct UniformDeformerToRendererBinding;
 	struct AnimatedUniform;
-	class IDeformUniformsAttachment
+	class IUniformsDeformerConductor
 	{
 	public:
 		///@{ interface for clients for providing animation state data & initializing renderers
@@ -125,11 +130,11 @@ namespace RenderCore { namespace Techniques
 		///@{ interface used by IDeformAcceleratorPool to manage this attachment
 		virtual void ReserveBytesRequired(unsigned instanceCount, unsigned& gpuBufferBytes, unsigned& cpuBufferBytes) = 0;
 		virtual void Execute(
-			IteratorRange<const unsigned*> instanceIdx,
+			IteratorRange<const InstanceToken*> instanceIdx,
 			IteratorRange<void*> dst) = 0;
 		///@}
 
-		virtual ~IDeformUniformsAttachment();
+		virtual ~IUniformsDeformerConductor();
 	};
 
 	struct IDeformAcceleratorPool::ReadyInstancesMetrics

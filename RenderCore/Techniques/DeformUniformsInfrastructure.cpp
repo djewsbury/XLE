@@ -77,7 +77,7 @@ namespace RenderCore { namespace Techniques
 				MakeIteratorRange(PtrAdd(srcValues.begin(), p._srcOffset), srcValues.end()), p._srcFormat);
 	}
 
-	class DeformUniformsAttachment : public IDeformUniformsAttachment
+	class UniformsDeformerConductor : public IUniformsDeformerConductor
 	{
 	public:
 		virtual void Execute(
@@ -130,16 +130,16 @@ namespace RenderCore { namespace Techniques
 			return _inputValuesLayout;
 		}
 
-		DeformUniformsAttachment(
+		UniformsDeformerConductor(
 			AnimatedUniformBufferHelper&& mainUniformHelper,
 			IteratorRange<const AnimatedUniform*> inputValuesLayout,
 			IteratorRange<const void*> defaultInputValues,
 			UniformDeformerToRendererBinding&& rendererBinding)
 		: _mainUniformHelper(mainUniformHelper)
 		, _instanceInputStride(defaultInputValues.size())
+		, _defaultInputValues((const uint8_t*)defaultInputValues.begin(), (const uint8_t*)defaultInputValues.end())
 		, _inputValuesLayout{inputValuesLayout.begin(), inputValuesLayout.end()}
 		, _rendererBinding(std::move(rendererBinding))
-		, _defaultInputValues((const uint8_t*)defaultInputValues.begin(), (const uint8_t*)defaultInputValues.end())
 		{
 			_instanceOutputStride = (unsigned)_mainUniformHelper._baseContents.size();
 
@@ -157,7 +157,7 @@ namespace RenderCore { namespace Techniques
 		UniformDeformerToRendererBinding _rendererBinding;
 	};
 
-	void ConfigureDeformUniformsAttachment(
+	void ConfigureUniformsDeformerConductor(
 		DeformerConstruction& deformerConstruction,
 		const Assets::ModelRendererConstruction& rendererConstruction,
 		RenderCore::Techniques::IPipelineLayoutDelegate& compiledLayoutPool,
@@ -260,7 +260,7 @@ namespace RenderCore { namespace Techniques
 				c.second._baseContents.begin(), c.second._baseContents.end());
 		}
 
-		auto attachment = std::make_shared<DeformUniformsAttachment>(
+		auto attachment = std::make_shared<UniformsDeformerConductor>(
 			std::move(finalBufferHelper),
 			animatedUniforms,
 			defaultInstanceData,
@@ -268,44 +268,5 @@ namespace RenderCore { namespace Techniques
 
 		deformerConstruction.Add(std::move(attachment));
 	}
-
-#if 0
-	struct DynamicPageResourceHelper
-	{
-		RenderCore::Metal_Vulkan::TemporaryStorageResourceMap _dynamicPageResourceWorkingAllocation;
-		unsigned _dynamicPageResourceAlignment = 16u;
-		unsigned _dynamicPageMovingGPUOffset = 0, _dynamicPageMovingGPUEnd = 0;
-		IDeformAcceleratorPool* _deformAccelerators = nullptr;
-
-		void AllocateSpace(unsigned sizeBytes)
-		{
-			// if it fits in the existing block, go with that; otherwise allocate a new block
-			unsigned preAlign = CeilToMultiple((size_t)_dynamicPageMovingGPUOffset, _dynamicPageResourceAlignment) - (size_t)_dynamicPageMovingGPUOffset;
-			if ((_dynamicPageMovingGPUOffset+preAlign+sizeBytes) > _dynamicPageMovingGPUEnd) {
-				const unsigned defaultBlockSize = 16*1024;
-				assert(_deformAccelerators);
-				_dynamicPageResourceWorkingAllocation = AllocateFromDynamicPageResource(*_deformAccelerators, std::max(sizeBytes, defaultBlockSize));
-				_dynamicPageMovingGPUOffset = 0;
-				_dynamicPageMovingGPUEnd = _dynamicPageMovingGPUOffset + _dynamicPageResourceWorkingAllocation.GetData().size();
-				preAlign = 0;
-			}
-
-			// deal with alignments and allocate our space from the allocated block
-			IteratorRange<void*> dynamicPageBufferSpace;
-			dynamicPageBufferSpace.first = PtrAdd(_dynamicPageResourceWorkingAllocation.GetData().begin(), _dynamicPageMovingGPUOffset+preAlign);
-			dynamicPageBufferSpace.second = PtrAdd(dynamicPageBufferSpace.first, sizeBytes);
-			unsigned dynamicOffset = _dynamicPageResourceWorkingAllocation.GetBeginAndEndInResource().first+_dynamicPageMovingGPUOffset+preAlign;
-			assert((dynamicOffset % _dynamicPageResourceAlignment) == 0);
-			_dynamicPageMovingGPUOffset += preAlign+sizeBytes;
-		}
-
-		DynamicPageResourceHelper(IDeformAcceleratorPool& deformAccelerators)
-		{
-			_dynamicPageResourceAlignment = deformAccelerators.GetDynamicPageResourceAlignment();
-			_deformAccelerators = &deformAccelerators;
-		}
-	};
-#endif
-
 }}
 

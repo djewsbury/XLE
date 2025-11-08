@@ -437,7 +437,7 @@ namespace RenderCore { namespace Techniques
 				const std::shared_ptr<Assets::CompiledMaterialSet>& materialScaffold,
 				unsigned elementIdx, uint64_t materialGuid, std::string&& materialName,
 				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
-				const IDeformUniformsAttachment* parametersDeformInfrastructure)
+				const IUniformsDeformerConductor* parametersDeformInfrastructure)
 			{
 				std::shared_ptr<DeformerToDescriptorSetBinding> deformBinding;
 				if (parametersDeformInfrastructure && deformAcceleratorPool) {
@@ -585,12 +585,12 @@ namespace RenderCore { namespace Techniques
 			_pendingDepVals.push_back(modelScaffold->GetDependencyValidation());
 			_pendingDepVals.push_back(materialScaffold->GetDependencyValidation());
 
-			RenderCore::Techniques::IDeformGeoAttachment* geoDeformerInfrastructure = nullptr;
-			RenderCore::Techniques::IDeformUniformsAttachment* deformParametersAttachment = nullptr;
+			RenderCore::Techniques::IGeoDeformerConductor* geoDeformerInfrastructure = nullptr;
+			RenderCore::Techniques::IUniformsDeformerConductor* deformParametersAttachment = nullptr;
 			DeformerToRendererBinding deformerBinding;
 			if (deformAcceleratorPool && deformAccelerator) { 
-				deformParametersAttachment = deformAcceleratorPool->GetDeformUniformsAttachment(*deformAccelerator).get();
-				geoDeformerInfrastructure = deformAcceleratorPool->GetDeformGeoAttachment(*deformAccelerator).get();
+				deformParametersAttachment = deformAcceleratorPool->GetUniformsDeformerConductor(*deformAccelerator).get();
+				geoDeformerInfrastructure = deformAcceleratorPool->GetGeoDeformerConductor(*deformAccelerator).get();
 				if (geoDeformerInfrastructure)
 					deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();
 			}

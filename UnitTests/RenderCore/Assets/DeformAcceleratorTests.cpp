@@ -440,7 +440,7 @@ namespace UnitTests
 			cpuConfigure->Configure(*deformerConstruction);
 			StallWhilePending(*deformerConstruction);
 
-			auto cpuGeoDeformAttachment = Techniques::CreateDeformGeoAttachment(*testHelper->_device, *rendererConstruction, *deformerConstruction);
+			auto cpuGeoDeformAttachment = Techniques::CreateGeoDeformerConductor(*testHelper->_device, *rendererConstruction, *deformerConstruction);
 			REQUIRE(cpuGeoDeformAttachment);
 
 			auto cpuRendererBinding = cpuGeoDeformAttachment->GetDeformerToRendererBinding();
@@ -457,7 +457,7 @@ namespace UnitTests
 			gpuConfigure->Configure(*deformerConstruction);
 			StallWhilePending(*deformerConstruction);
 			
-			auto gpuGeoDeformAttachment = Techniques::CreateDeformGeoAttachment(*testHelper->_device, *rendererConstruction, *deformerConstruction);
+			auto gpuGeoDeformAttachment = Techniques::CreateGeoDeformerConductor(*testHelper->_device, *rendererConstruction, *deformerConstruction);
 			REQUIRE(gpuGeoDeformAttachment);
 
 			auto rendererBinding2 = gpuGeoDeformAttachment->GetDeformerToRendererBinding();

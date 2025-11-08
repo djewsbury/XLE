@@ -78,7 +78,7 @@ namespace RenderCore { namespace Techniques
 		return result;
 	}
 
-	void DeformerConstruction::Add(std::shared_ptr<IDeformUniformsAttachment> deformer)
+	void DeformerConstruction::Add(std::shared_ptr<IUniformsDeformerConductor> deformer)
 	{
 		assert(!_sealed);
 		assert(!_storedUniformsEntry._deformer);
@@ -121,7 +121,7 @@ namespace RenderCore { namespace Techniques
 					strongThis->_deformerMarkers[c] = nullptr;
 				}
 
-				strongThis->_completedGeoAttachment = CreateDeformGeoAttachment(
+				strongThis->_completedGeoAttachment = CreateGeoDeformerConductor(
 					*strongThis->_device, *strongThis->_rendererConstruction, *strongThis);
 
 				return std::move(strongThis);

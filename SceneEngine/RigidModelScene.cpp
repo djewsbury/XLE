@@ -276,9 +276,9 @@ namespace SceneEngine
 
 						TRY {
 							std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
-							std::shared_ptr<RenderCore::Techniques::IDeformGeoAttachment> geoDeformer;
+							std::shared_ptr<RenderCore::Techniques::IGeoDeformerConductor> geoDeformer;
 							if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
-								geoDeformer = RenderCore::Techniques::CreateDeformGeoAttachment(
+								geoDeformer = RenderCore::Techniques::CreateGeoDeformerConductor(
 									*pipelineAcceleratorPool->GetDevice(), *completedConstruction, *completedDeformerConstruction);
 								deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
 								deformAcceleratorPool->Attach(*deformAccelerator, geoDeformer);

@@ -612,10 +612,10 @@ namespace RenderCore { namespace Techniques
 		_depVal = _drawableConstructor->GetDependencyValidation();
 
 		using namespace RenderCore::Assets;
-		std::shared_ptr<IDeformGeoAttachment> geoDeformerInfrastructure;
+		std::shared_ptr<IGeoDeformerConductor> geoDeformerInfrastructure;
 		if (deformAccelerator && deformAcceleratorPool) {  // need both or neither
 			_deformAccelerator = std::move(deformAccelerator);
-			geoDeformerInfrastructure = std::dynamic_pointer_cast<IDeformGeoAttachment>(deformAcceleratorPool->GetDeformGeoAttachment(*_deformAccelerator));
+			geoDeformerInfrastructure = std::dynamic_pointer_cast<IGeoDeformerConductor>(deformAcceleratorPool->GetGeoDeformerConductor(*_deformAccelerator));
 		}
 
 		if (!uniformBufferDelegates.empty()) {
@@ -761,7 +761,7 @@ namespace RenderCore { namespace Techniques
 					}
 					
 					if (deformAccelerator) {
-						auto* geoInfrastructure = deformAcceleratorPool->GetDeformGeoAttachment(*deformAccelerator).get();
+						auto* geoInfrastructure = deformAcceleratorPool->GetGeoDeformerConductor(*deformAccelerator).get();
 						if (geoInfrastructure)
 							helper->_deformAcceleratorInitFuture = geoInfrastructure->GetInitializationFuture();
 					}
@@ -982,7 +982,7 @@ namespace RenderCore { namespace Techniques
 
 	RendererSkeletonInterface::RendererSkeletonInterface(
 		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-		IDeformGeoAttachment& geoDeformerInfrastructure,
+		IGeoDeformerConductor& geoDeformerInfrastructure,
 		::Assets::DependencyValidation depVal)
 	: _depVal(depVal)
 	{
@@ -1025,9 +1025,9 @@ namespace RenderCore { namespace Techniques
 				if (!skeleton)
 					Throw(std::runtime_error("Cannot bind skeleton interface to ModelRendererConstruction, because no skeleton with provided either as an embedded skeleton, or as an external skeleton"));
 				
-				IDeformGeoAttachment* geoDeform = nullptr;
+				IGeoDeformerConductor* geoDeform = nullptr;
 				if (deformAccelerator && deformAcceleratorPool)
-					geoDeform = deformAcceleratorPool->GetDeformGeoAttachment(*deformAccelerator).get();
+					geoDeform = deformAcceleratorPool->GetGeoDeformerConductor(*deformAccelerator).get();
 				if (!geoDeform)
 					Throw(std::runtime_error("Cannot bind skeleton interface to ModelRendererConstruction, because there is no geo deformer attached to the given deform accelerator"));
 				

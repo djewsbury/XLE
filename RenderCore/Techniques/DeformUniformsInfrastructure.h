@@ -20,7 +20,7 @@ namespace RenderCore { namespace Techniques
 		unsigned _instanceValuesOffset;		// offset 
 	};
 	
-	void ConfigureDeformUniformsAttachment(
+	void ConfigureUniformsDeformerConductor(
 		DeformerConstruction& deformerConstruction,
 		const Assets::ModelRendererConstruction& rendererConstruction,
 		RenderCore::Techniques::IPipelineLayoutDelegate& compiledLayoutPool,

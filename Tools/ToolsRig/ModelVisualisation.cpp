@@ -65,7 +65,7 @@ namespace ToolsRig
 	{
 		auto* deformAcc = renderer.GetDeformAccelerator().get();
 		if (!deformAcc) return nullptr;
-		auto* deformerInfrastructure = deformAccelerators.GetDeformGeoAttachment(*deformAcc).get();
+		auto* deformerInfrastructure = deformAccelerators.GetGeoDeformerConductor(*deformAcc).get();
 		if (deformerInfrastructure)
 			return std::make_shared<RendererSkeletonInterface>(smOutputInterface, *deformerInfrastructure);
 		return nullptr;

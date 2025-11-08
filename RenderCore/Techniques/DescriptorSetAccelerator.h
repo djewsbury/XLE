@@ -6,6 +6,7 @@
 
 #include "../UniformsStream.h"
 #include "../Types.h"
+#include "../Utility/ParameterBox.h"
 #include <vector>
 #include <memory>
 #include <future>
@@ -65,7 +66,7 @@ namespace RenderCore { namespace Techniques
 		using DescSetSlotAndPageOffset = std::pair<unsigned, unsigned>;
 		std::vector<DescSetSlotAndPageOffset> _animatedSlots;
 		std::shared_ptr<IResource> _dynamicPageResource;
-		const uint64_t GetHash() const;
+		uint64_t GetHash() const;
 	};
 
 	namespace Internal { struct DescriptorSetInProgress; }
@@ -105,6 +106,35 @@ namespace RenderCore { namespace Techniques
 		PipelineType _pipelineType = PipelineType::Graphics;
 		bool _generateBindingInfo = false;
 		std::shared_ptr<Internal::DescriptorSetInProgress> _working;
+	};
+
+	class IDeformAcceleratorPool;
+	class DeformAccelerator;
+
+	struct UniformDeformHelper
+	{
+	public:
+		std::vector<DeformerToDescriptorSetBinding::DescSetSlotAndPageOffset> _animatedSlots;
+
+		struct UniformBuffer
+		{
+			IteratorRange<const void*> _dataRange;
+			unsigned _slot;
+			std::shared_ptr<RenderCore::Assets::PredefinedCBLayout> _layout;
+			ParameterBox _materialValues;
+		};
+		std::vector<UniformBuffer> _dynamicUniformBuffers;
+		size_t _dynamicUniformBuffersTotalSize;
+
+		void PushUniformUpdates(IDeformAcceleratorPool&, DeformAccelerator&, unsigned instance, const ParameterBox& parameters);
+		std::shared_ptr<DeformAccelerator> CreateDeformAccelerator(IDeformAcceleratorPool& pool);
+		DeformerToDescriptorSetBinding GetDeformerToDescriptorSetBinding(IDeformAcceleratorPool& pool);
+
+		UniformDeformHelper(
+			const Assets::PredefinedDescriptorSetLayout& layout,
+			IteratorRange<Assets::ScaffoldCmdIterator> materialMachine);
+		UniformDeformHelper();
+		~UniformDeformHelper();
 	};
 
 	uint64_t HashMaterialMachine(IteratorRange<Assets::ScaffoldCmdIterator> materialMachine);

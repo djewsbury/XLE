@@ -28,7 +28,7 @@ namespace RenderCore { namespace Techniques
 		void BarrierGeoDeformTemporaries(IThreadContext& threadContext, IResourceView& gpuTemporariesBufferView);
 	}
 
-	class DeformGeoInfrastructure : public IDeformGeoAttachment
+	class GeoDeformerConductor : public IGeoDeformerConductor
 	{
 	public:
 		std::vector<std::shared_ptr<IGeoDeformer>> _deformOps;
@@ -121,12 +121,12 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	std::shared_ptr<IDeformGeoAttachment> CreateDeformGeoAttachment(
+	std::shared_ptr<IGeoDeformerConductor> CreateGeoDeformerConductor(
 		IDevice& device,
 		const Assets::ModelRendererConstruction& rendererConstruction,
 		const DeformerConstruction& deformerConstruction)
 	{
-		auto result = std::make_shared<DeformGeoInfrastructure>();
+		auto result = std::make_shared<GeoDeformerConductor>();
 		
 		////////////////////////////////////////////////////////////////////////////////////
 		// Build deform streams
@@ -322,7 +322,7 @@ namespace RenderCore { namespace Techniques
 						return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
-			[weakResult=std::weak_ptr<DeformGeoInfrastructure>{result}, gpuStaticDataCompletionListFuture]() {
+			[weakResult=std::weak_ptr<GeoDeformerConductor>{result}, gpuStaticDataCompletionListFuture]() {
 				// fill in _completionList, now the future is complete
 				auto l = weakResult.lock();
 				if (l) {

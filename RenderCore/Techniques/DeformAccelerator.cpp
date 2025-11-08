@@ -20,34 +20,39 @@
 
 namespace RenderCore { namespace Techniques
 {
+	class GPUSyncedSinglePageResource;
+
 	class DeformAcceleratorPool : public IDeformAcceleratorPool
 	{
 	public:
 		std::shared_ptr<DeformAccelerator> CreateDeformAccelerator() override;
 		void Attach(
 			DeformAccelerator& deformAccelerator,
-			std::shared_ptr<IDeformGeoAttachment> deformAttachment) override;
+			std::shared_ptr<IGeoDeformerConductor> deformAttachment) override;
 
 		virtual void Attach(
 			DeformAccelerator& deformAccelerator,
-			std::shared_ptr<IDeformUniformsAttachment> deformAttachment) override;
+			std::shared_ptr<IUniformsDeformerConductor> deformAttachment) override;
 
-		std::shared_ptr<IDeformGeoAttachment> GetDeformGeoAttachment(DeformAccelerator& deformAccelerator) override;
-		std::shared_ptr<IDeformUniformsAttachment> GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator) override;
+		std::shared_ptr<IGeoDeformerConductor> GetGeoDeformerConductor(DeformAccelerator& deformAccelerator) override;
+		std::shared_ptr<IUniformsDeformerConductor> GetUniformsDeformerConductor(DeformAccelerator& deformAccelerator) override;
+
+		void AttachSemiPersistentUniforms(DeformAccelerator& deformAccelerator, unsigned size) override;
+		void SetSemiPersistentUniforms(DeformAccelerator& deformAccelerator, InstanceToken instance, IteratorRange<const void*>) override;
 
 		void SetVertexInputBarrier(IThreadContext&) const override;
 		void OnFrameBarrier() override;
 		ReadyInstancesMetrics GetMetrics() const override;
 		const std::shared_ptr<IDevice>& GetDevice() const override;
-		const std::shared_ptr<IPipelineLayoutDelegate>& GetCompiledLayoutPool() const override;
 
 		std::shared_ptr<IResource> GetDynamicPageResource() const override;
+		std::shared_ptr<IResource> GetSemiPersistentPageResource() const override;
 
 		std::shared_ptr<DeformersPacket> CreatePacket() override;
 
 		std::atomic<unsigned> _alivePacketCount = 0;
 
-		DeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>, std::shared_ptr<IPipelineLayoutDelegate>);
+		DeformAcceleratorPool(std::shared_ptr<IDevice>, std::shared_ptr<IDrawablesPool>);
 		~DeformAcceleratorPool();
 
 	private:
@@ -57,7 +62,6 @@ namespace RenderCore { namespace Techniques
 		std::unique_ptr<RenderCore::Metal_Vulkan::TemporaryStorageManager> _temporaryStorageManager;
 		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
 		std::vector<RenderCore::Metal_Vulkan::CmdListAttachedStorage> _currentFrameAttachedStorage;
-		std::shared_ptr<IPipelineLayoutDelegate> _compiledLayoutPool;
 		mutable bool _pendingVertexInputBarrier = false;
 
 		RenderCore::Metal_Vulkan::NamedPage _cbNamedPage = ~0u;
@@ -71,6 +75,8 @@ namespace RenderCore { namespace Techniques
 
 		friend class DeformersPacket;
 		std::deque<DeformersPacket*> _reusablePackets;
+
+		std::unique_ptr<GPUSyncedSinglePageResource> _semiPersistentResource;
 
 		friend void Deform(IThreadContext&, IDeformAcceleratorPool&, DeformersPacket&);
 
@@ -87,40 +93,52 @@ namespace RenderCore { namespace Techniques
 		unsigned _reservationPerInstance[AllocationType_Max] = {0,0,0};
 		std::vector<unsigned> _instanceToReadiedOffset[AllocationType_Max];
 		VertexBufferView _outputVBV;
-		unsigned _uniformBufferPageResourceBaseOffset = ~0;
+		unsigned _uniformBufferPageResourceBaseOffset = ~0u;
+		unsigned _semiPersistentUniformsSize = 0;
 
-		std::shared_ptr<IDeformGeoAttachment> _attachment;
-		std::shared_ptr<IDeformUniformsAttachment> _parametersAttachment;
+		// for internal usage by the DeformAcceleratorPool
+		std::shared_ptr<IGeoDeformerConductor> _geoConductor;
+		std::shared_ptr<IUniformsDeformerConductor> _uniformsConductor;
 
 		#if defined(_DEBUG)
 			DeformAcceleratorPool* _containingPool = nullptr;
-		#endif
 
-		void Execute(
-			IThreadContext& threadContext, 
-			IteratorRange<const unsigned*> instanceIdx, 
-			IResourceView& dstVB,
-			IteratorRange<void*> cpuBufferOutputRange,
-			IDeformAcceleratorPool::ReadyInstancesMetrics& metrics)
-		{
-			_attachment->Execute(threadContext, instanceIdx, dstVB, cpuBufferOutputRange, metrics);
-		}
-
-		void ExecuteParameters(
-			IteratorRange<const unsigned*> instanceIdx, 
-			IteratorRange<void*> dst)
-		{
-			_parametersAttachment->Execute(instanceIdx, dst);
-		}
-
-		~DeformAccelerator()
-		{
-			#if defined(_DEBUG)
+			~DeformAccelerator()
+			{
 				// Don't destroy a deform accelerator while there is an active DeformersPacket; because this could 
 				// cause a dangling pointer within the packet's deformables list
 				assert(!_containingPool || !_containingPool->_alivePacketCount);
-			#endif
-		}
+
+				// problem -- we need to release the allocation in the semi-persistent buffer
+				if (_semiPersistentUniformsSize != 0)
+					for (auto o:_instanceToReadiedOffset[AllocationType_UniformBuffer])
+						assert(o == ~0u);
+			}
+		#endif
+	};
+
+	class GPUSyncedSinglePageResource
+	{
+	public:
+		std::shared_ptr<IResource> _resource;
+		std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> _asyncTracker;
+		std::shared_ptr<IDevice> _device;
+		unsigned _alignment = 0;
+
+		struct PendingDeallocate
+		{
+			RenderCore::Metal_Vulkan::IAsyncTracker::Marker _usageMarker;
+			unsigned _start, _size;
+		};
+		std::vector<PendingDeallocate> _pendingDeallocates;
+
+		SpanningHeap<unsigned> _spanningHeap;
+
+		unsigned TryAllocateAndWrite(IteratorRange<const void*> data);
+		void Deallocate(unsigned offset, unsigned size);
+		void OnFrameBarrier();
+		GPUSyncedSinglePageResource(std::shared_ptr<IDevice> device, const ResourceDesc& desc, std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> asyncTracker);
+		~GPUSyncedSinglePageResource();
 	};
 
 	std::shared_ptr<DeformAccelerator> DeformAcceleratorPool::CreateDeformAccelerator()
@@ -142,46 +160,47 @@ namespace RenderCore { namespace Techniques
 
 	void DeformAcceleratorPool::Attach(
 		DeformAccelerator& accelerator,
-		std::shared_ptr<IDeformGeoAttachment> deformAttachment)
+		std::shared_ptr<IGeoDeformerConductor> deformAttachment)
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
 		#endif
-		assert(!accelerator._attachment);		// we can't attach geometry deformers more than once to a given deform accelerator
+		assert(!accelerator._geoConductor);		// we can't attach geometry deformers more than once to a given deform accelerator
 		assert(deformAttachment);
-		accelerator._attachment = std::move(deformAttachment);
+		accelerator._geoConductor = std::move(deformAttachment);
 
 		unsigned reservationGPU = 0, reservationCPU = 0;
-		accelerator._attachment->ReserveBytesRequired(1, reservationGPU, reservationCPU);
+		accelerator._geoConductor->ReserveBytesRequired(1, reservationGPU, reservationCPU);
 		accelerator._reservationPerInstance[AllocationType_GPUVB] = reservationGPU;
 		accelerator._reservationPerInstance[AllocationType_CPUVB] = reservationCPU;
 	}
 
 	void DeformAcceleratorPool::Attach(
 		DeformAccelerator& accelerator,
-		std::shared_ptr<IDeformUniformsAttachment> deformAttachment)
+		std::shared_ptr<IUniformsDeformerConductor> deformAttachment)
 	{
 		#if defined(_DEBUG)
 			assert(accelerator._containingPool == this);
 		#endif
-		assert(!accelerator._parametersAttachment);		// we can't attach geometry deformers more than once to a given deform accelerator
+		assert(!accelerator._uniformsConductor);		// we can't attach geometry deformers more than once to a given deform accelerator
 		assert(deformAttachment);
-		accelerator._parametersAttachment = std::move(deformAttachment);
+		assert(accelerator._semiPersistentUniformsSize == 0);		// don't attach both semi persistent uniforms and a uniforms conductor
+		accelerator._uniformsConductor = std::move(deformAttachment);
 
 		unsigned reservationGPU = 0, reservationCPU = 0;
-		accelerator._parametersAttachment->ReserveBytesRequired(1, reservationGPU, reservationCPU);
+		accelerator._uniformsConductor->ReserveBytesRequired(1, reservationGPU, reservationCPU);
 		accelerator._reservationPerInstance[AllocationType_UniformBuffer] = reservationGPU;
 		assert(reservationCPU == 0);
 	}
 
-	std::shared_ptr<IDeformGeoAttachment> DeformAcceleratorPool::GetDeformGeoAttachment(DeformAccelerator& deformAccelerator)
+	std::shared_ptr<IGeoDeformerConductor> DeformAcceleratorPool::GetGeoDeformerConductor(DeformAccelerator& deformAccelerator)
 	{
-		return deformAccelerator._attachment;
+		return deformAccelerator._geoConductor;
 	}
 
-	std::shared_ptr<IDeformUniformsAttachment> DeformAcceleratorPool::GetDeformUniformsAttachment(DeformAccelerator& deformAccelerator)
+	std::shared_ptr<IUniformsDeformerConductor> DeformAcceleratorPool::GetUniformsDeformerConductor(DeformAccelerator& deformAccelerator)
 	{
-		return deformAccelerator._parametersAttachment;
+		return deformAccelerator._uniformsConductor;
 	}
 
 	void Deform(
@@ -309,24 +328,24 @@ namespace RenderCore { namespace Techniques
 					atLeastOneGPUOperator = true;
 				}
 
-				if (accelerator->_attachment) {
+				if (accelerator->_geoConductor) {
 					auto cpuOutputRange = MakeIteratorRange(
 						PtrAdd(cpuDst.begin(), movingOffsets[AllocationType_CPUVB]),
 						PtrAdd(cpuDst.begin(), movingOffsets[AllocationType_CPUVB]+instanceCount*accelerator->_reservationPerInstance[AllocationType_CPUVB]));
 
-					accelerator->Execute(
+					accelerator->_geoConductor->Execute(
 						threadContext, 
 						deformerAndInstances._flatInstances,
 						*gpuBufferView, cpuOutputRange,
 						pool._readyInstancesMetrics);
 				}
 
-				if (accelerator->_parametersAttachment) {
+				if (accelerator->_uniformsConductor) {
 					auto cbOutputRange = MakeIteratorRange(
 						PtrAdd(uniformBufferDst.begin(), movingOffsets[AllocationType_UniformBuffer]),
 						PtrAdd(uniformBufferDst.begin(), movingOffsets[AllocationType_UniformBuffer]+instanceCount*accelerator->_reservationPerInstance[AllocationType_UniformBuffer]));
 
-					accelerator->ExecuteParameters(
+					accelerator->_uniformsConductor->Execute(
 						deformerAndInstances._flatInstances,
 						cbOutputRange);
 					accelerator->_uniformBufferPageResourceBaseOffset = uniformBufferPageOffset;
@@ -450,7 +469,7 @@ namespace RenderCore { namespace Techniques
 
 		unsigned GetUniformPageBufferOffset(DeformAccelerator& accelerator, unsigned instanceIdx)
 		{
-			assert(accelerator._parametersAttachment && accelerator._reservationPerInstance[AllocationType_UniformBuffer]);
+			assert(accelerator._uniformsConductor && accelerator._reservationPerInstance[AllocationType_UniformBuffer]);
 			assert(accelerator._uniformBufferPageResourceBaseOffset != ~0u);
 			return accelerator._uniformBufferPageResourceBaseOffset + accelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instanceIdx];
 		}
@@ -463,11 +482,31 @@ namespace RenderCore { namespace Techniques
 				Metal::BarrierResourceUsage::ComputeShaderRead());
 		}
 	}
-	
-	std::shared_ptr<IResource> DeformAcceleratorPool::GetDynamicPageResource() const
+
+	void DeformAcceleratorPool::AttachSemiPersistentUniforms(DeformAccelerator& deformAccelerator, unsigned size)
 	{
-		return _cbPageResource;
+		assert(deformAccelerator._containingPool == this);
+		assert(!deformAccelerator._uniformsConductor);		// don't attach both a uniforms conductor and semi-persistent uniforms
+		assert(deformAccelerator._semiPersistentUniformsSize == 0);
+		assert(size);
+		deformAccelerator._semiPersistentUniformsSize = size;
 	}
+
+	void DeformAcceleratorPool::SetSemiPersistentUniforms(DeformAccelerator& deformAccelerator, InstanceToken instance, IteratorRange<const void*> data)
+	{
+		assert(deformAccelerator._containingPool == this);
+		assert(!deformAccelerator._uniformsConductor);
+		assert(deformAccelerator._semiPersistentUniformsSize != 0);
+		assert(data.size() == deformAccelerator._semiPersistentUniformsSize);
+		if (deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer].size() < instance)
+			deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer].resize(instance+1, ~0u);
+		if (deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instance] != ~0u)
+			_semiPersistentResource->Deallocate(deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instance], deformAccelerator._semiPersistentUniformsSize);
+		deformAccelerator._instanceToReadiedOffset[AllocationType_UniformBuffer][instance] = _semiPersistentResource->TryAllocateAndWrite(data);
+	}
+
+	std::shared_ptr<IResource> DeformAcceleratorPool::GetDynamicPageResource() const { return _cbPageResource; }
+	std::shared_ptr<IResource> DeformAcceleratorPool::GetSemiPersistentPageResource() const { return _semiPersistentResource->_resource; }
 
 	inline void DeformAcceleratorPool::OnFrameBarrier()
 	{
@@ -492,6 +531,7 @@ namespace RenderCore { namespace Techniques
 		_currentFrameAttachedStorage.clear();
 
 		_temporaryStorageManager->FlushDestroys();
+		_semiPersistentResource->OnFrameBarrier();
 
 		_lastFrameReadyInstancesMetrics = _readyInstancesMetrics;
 		_readyInstancesMetrics = {};
@@ -499,11 +539,9 @@ namespace RenderCore { namespace Techniques
 
 	auto DeformAcceleratorPool::GetMetrics() const -> ReadyInstancesMetrics { return _lastFrameReadyInstancesMetrics; }
 	const std::shared_ptr<IDevice>& DeformAcceleratorPool::GetDevice() const { return _device; }
-	const std::shared_ptr<IPipelineLayoutDelegate>& DeformAcceleratorPool::GetCompiledLayoutPool() const { return _compiledLayoutPool; }
 
-	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineLayoutDelegate> compiledLayoutPool)
+	DeformAcceleratorPool::DeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool)
 	: _device(std::move(device))
-	, _compiledLayoutPool(std::move(compiledLayoutPool))
 	, _drawablesPool(std::move(drawablesPool))
 	{
 		auto* deviceVulkan = (RenderCore::IDeviceVulkan*)_device->QueryInterface(TypeHashCode<RenderCore::IDeviceVulkan>);
@@ -514,6 +552,8 @@ namespace RenderCore { namespace Techniques
 			_cbNamedPage = _temporaryStorageManager->CreateNamedPage(cbAllocationSize, BindFlag::ConstantBuffer);
 			_cbPageResource = _temporaryStorageManager->GetResourceForNamedPage(_cbNamedPage);
 		}
+		auto semiPersistentResourceDesc = CreateDesc(BindFlag::TransferDst|BindFlag::ConstantBuffer, LinearBufferDesc::Create(1024*1024));
+		_semiPersistentResource = std::make_unique<GPUSyncedSinglePageResource>(_device, semiPersistentResourceDesc, _asyncTracker);
 		_boundThread = std::this_thread::get_id();
 	}
 
@@ -536,11 +576,56 @@ namespace RenderCore { namespace Techniques
 	DeformersPacket::DeformersPacket() { _pool = nullptr; }
 	DeformersPacket::~DeformersPacket() { assert(!_pool); }
 
-	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool, std::shared_ptr<IPipelineLayoutDelegate> compiledLayoutPool)
+	unsigned GPUSyncedSinglePageResource::TryAllocateAndWrite(IteratorRange<const void*> data)
 	{
-		return std::make_shared<DeformAcceleratorPool>(std::move(device), std::move(drawablesPool), std::move(compiledLayoutPool));
+		auto size = data.size();
+		size = CeilToMultiple(size, _alignment);
+		unsigned allocation = _spanningHeap.Allocate(size);
+		if (allocation == ~0u) return ~0u;		// out of heap space
+		assert((allocation%_alignment) == 0);	// should always be aligned because the block size is always a multiple of alignment
+
+		Metal::ResourceMap map{*_device, *_resource, Metal::ResourceMap::Mode::WriteDiscardPrevious, allocation, size};
+		std::memcpy(map.GetData().begin(), data.begin(), data.size());
+		return allocation;
 	}
 
-	IDeformGeoAttachment::~IDeformGeoAttachment() = default;
-	IDeformUniformsAttachment::~IDeformUniformsAttachment() = default;
+	void GPUSyncedSinglePageResource::Deallocate(unsigned offset, unsigned size)
+	{
+		size = CeilToMultiple(size, _alignment);
+	}
+
+	void GPUSyncedSinglePageResource::OnFrameBarrier()
+	{
+		unsigned consumerMarker = _asyncTracker->GetConsumerMarker();
+		auto w = _pendingDeallocates.begin();
+		for (auto i=_pendingDeallocates.begin(); i!=_pendingDeallocates.end(); ++i) {
+			if (i->_usageMarker < consumerMarker) {
+				_spanningHeap.Deallocate(i->_start, i->_size);
+			} else {
+				*w++ = *i++;
+			}
+		}
+		_pendingDeallocates.erase(w, _pendingDeallocates.end());
+	}
+
+	GPUSyncedSinglePageResource::GPUSyncedSinglePageResource(std::shared_ptr<IDevice> device, const ResourceDesc& desc, std::shared_ptr<RenderCore::Metal_Vulkan::IAsyncTracker> asyncTracker)
+	: _asyncTracker(std::move(asyncTracker))
+	, _device(std::move(device))
+	{
+		_alignment = _device->GetDeviceLimits()._constantBufferOffsetAlignment;
+		assert(desc._type == ResourceDesc::Type::LinearBuffer);
+		_resource = _device->CreateResource(desc, "single-page-resource");
+		_spanningHeap = SpanningHeap<unsigned>(desc._linearBufferDesc._sizeInBytes);
+	}
+
+	GPUSyncedSinglePageResource::~GPUSyncedSinglePageResource()
+	{}
+
+	std::shared_ptr<IDeformAcceleratorPool> CreateDeformAcceleratorPool(std::shared_ptr<IDevice> device, std::shared_ptr<IDrawablesPool> drawablesPool)
+	{
+		return std::make_shared<DeformAcceleratorPool>(std::move(device), std::move(drawablesPool));
+	}
+
+	IGeoDeformerConductor::~IGeoDeformerConductor() = default;
+	IUniformsDeformerConductor::~IUniformsDeformerConductor() = default;
 }}

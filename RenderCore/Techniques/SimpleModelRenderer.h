@@ -30,7 +30,7 @@ namespace RenderCore { namespace Techniques
 	class DescriptorSetAccelerator;
 	class IDeformAcceleratorPool;
 	class DeformAccelerator;
-	class IDeformGeoAttachment;
+	class IGeoDeformerConductor;
 	class IGeoDeformer;
 	class ISkinDeformer;
 	class IUniformBufferDelegate;
@@ -191,7 +191,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const std::shared_ptr<IGeoDeformer>*> skinDeformers);
 		RendererSkeletonInterface(
 			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
-			IDeformGeoAttachment& geoDeformerInfrastructure,
+			IGeoDeformerConductor& geoDeformerInfrastructure,
 			::Assets::DependencyValidation depVal = {});
 		~RendererSkeletonInterface();
 

@@ -5,14 +5,12 @@
 #include "DescriptorSetAccelerator.h"
 #include "DeferredShaderResource.h"
 #include "TechniqueUtils.h"
-#include "CommonResources.h"
-#include "DeformUniformsInfrastructure.h"
 #include "Services.h"
 #include "ResourceConstructionContext.h"
+#include "DeformAccelerator.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
 #include "../Assets/PredefinedCBLayout.h"
 #include "../Assets/MaterialMachine.h"
-#include "../Assets/AssetUtils.h"
 #include "../IDevice.h"
 #include "../UniformsStream.h"
 #include "../StateDesc.h"
@@ -23,7 +21,6 @@
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
-#include "../../Assets/BlockSerializer.h"
 #include "../../Utility/ParameterBox.h"
 #include "../../Utility/BitUtils.h"
 
@@ -554,10 +551,81 @@ namespace RenderCore { namespace Techniques
 		return ConstructImmediately(layout, updatedUSI, updatedUS, name);
 	}
 
-	const uint64_t DeformerToDescriptorSetBinding::GetHash() const
+	uint64_t DeformerToDescriptorSetBinding::GetHash() const
 	{
 		return Hash64(MakeIteratorRange(_animatedSlots), _dynamicPageResource->GetGUID());
 	}
+
+	void UniformDeformHelper::PushUniformUpdates(RenderCore::Techniques::IDeformAcceleratorPool& pool, RenderCore::Techniques::DeformAccelerator& accelerator, unsigned instance, const ParameterBox& parameters)
+	{
+		assert(_dynamicUniformBuffersTotalSize);
+
+		// We have to rebuild the uniform buffer contents based with the given parameters
+		VLA(uint8_t, buffer, _dynamicUniformBuffersTotalSize);
+		for (const auto& cb:_dynamicUniformBuffers) {
+			assert(size_t(cb._dataRange.second) <= _dynamicUniformBuffersTotalSize);
+			auto dest = MakeIteratorRange(buffer+ptrdiff_t(cb._dataRange.first), buffer+ptrdiff_t(cb._dataRange.second));
+			ParameterBox mergedParameters = cb._materialValues;
+			mergedParameters.MergeIn(parameters);
+			cb._layout->BuildCB(dest, parameters, RenderCore::Techniques::GetDefaultShaderLanguage());
+		}
+
+		// now set it as the "semi-persistent" uniforms for this instance
+		pool.SetSemiPersistentUniforms(accelerator, instance, MakeIteratorRange(buffer, buffer+_dynamicUniformBuffersTotalSize));
+	}
+
+	std::shared_ptr<RenderCore::Techniques::DeformAccelerator> UniformDeformHelper::CreateDeformAccelerator(RenderCore::Techniques::IDeformAcceleratorPool& pool)
+	{
+		if (!_dynamicUniformBuffersTotalSize) return nullptr;
+		auto result = pool.CreateDeformAccelerator();
+		pool.AttachSemiPersistentUniforms(*result, (unsigned)_dynamicUniformBuffersTotalSize);
+		return result;
+	}
+
+	RenderCore::Techniques::DeformerToDescriptorSetBinding UniformDeformHelper::GetDeformerToDescriptorSetBinding(RenderCore::Techniques::IDeformAcceleratorPool& pool)
+	{
+		return { _animatedSlots, pool.GetSemiPersistentPageResource() };
+	}
+
+	UniformDeformHelper::UniformDeformHelper(
+		const Assets::PredefinedDescriptorSetLayout& layout,
+		IteratorRange<Assets::ScaffoldCmdIterator> materialMachine)
+	{
+		_dynamicUniformBuffersTotalSize = 0;
+
+		auto lang = GetDefaultShaderLanguage();
+		Internal::InterpretMaterialMachineHelper machineHelper{materialMachine};
+		for (const auto& s:layout._slots) {
+			if (s._type != DescriptorType::UniformBufferDynamicOffset) continue;
+
+			assert(s._arrayElementCount <= 1);
+			if (s._cbIdx == ~0u) continue;
+
+			auto& cb = layout._constantBuffers[s._cbIdx];
+			auto size = cb->GetSize(lang);
+			UniformBuffer uniformBuffer;
+			uniformBuffer._dataRange = {(const void*)_dynamicUniformBuffersTotalSize, (const void*)(_dynamicUniformBuffersTotalSize+size)};
+			uniformBuffer._slot = s._slotIdx;
+			uniformBuffer._layout = cb;
+			if (machineHelper._constantBindings) {
+				for (auto& u:cb->_elements) {
+					auto t = machineHelper._constantBindings->GetParameterType(u._hash);
+					auto v = machineHelper._constantBindings->GetParameterRawValue(u._hash);
+					if (t._type != ImpliedTyping::TypeCat::Void && v.size())
+						uniformBuffer._materialValues.SetParameter(u._hash, v, t);
+				}
+			}
+			_dynamicUniformBuffers.emplace_back(std::move(uniformBuffer));
+			_dynamicUniformBuffersTotalSize += size;
+		}
+
+		_animatedSlots.reserve(_dynamicUniformBuffers.size());
+		for (const auto& u:_dynamicUniformBuffers)
+			_animatedSlots.emplace_back(u._slot, (unsigned)(size_t)u._dataRange.first);
+	}
+
+	UniformDeformHelper::UniformDeformHelper() = default;
+	UniformDeformHelper::~UniformDeformHelper() = default;
 
 	ActualizedDescriptorSet::ActualizedDescriptorSet() = default;
 	ActualizedDescriptorSet::ActualizedDescriptorSet(ActualizedDescriptorSet&&) = default;

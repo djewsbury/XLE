@@ -15,7 +15,7 @@ namespace RenderCore { namespace Techniques
 	class DeformerConstruction;
 	struct DeformerInputBinding;
 
-	std::shared_ptr<IDeformGeoAttachment> CreateDeformGeoAttachment(
+	std::shared_ptr<IGeoDeformerConductor> CreateGeoDeformerConductor(
 		IDevice& device,
 		const RenderCore::Assets::ModelRendererConstruction&,
 		const DeformerConstruction&);

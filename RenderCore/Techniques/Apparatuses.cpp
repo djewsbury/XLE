@@ -79,7 +79,7 @@ namespace RenderCore { namespace Techniques
 		auto layoutDelegate = CreatePipelineLayoutDelegate(MAIN_PIPELINE ":GraphicsMain", NOPATCHES_MATERIAL_DS ":Material");		// note -- there are stalls within this function
 		const PipelineAcceleratorPoolFlags::BitField poolFlags = 0;
 		_pipelineAccelerators = CreatePipelineAcceleratorPool(device, _drawablesPool, pipelineCollection, layoutDelegate, poolFlags);
-		_deformAccelerators = CreateDeformAcceleratorPool(device, _drawablesPool, layoutDelegate);
+		_deformAccelerators = CreateDeformAcceleratorPool(device, _drawablesPool);
 		
 		_systemUniformsDelegate = std::make_shared<SystemUniformsDelegate>(*_device);
 

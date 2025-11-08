@@ -352,7 +352,7 @@ namespace SceneEngine
 				auto completedConstruction, auto completedDeformerConstruction) mutable {
 
 				std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
-				std::shared_ptr<RenderCore::Techniques::IDeformGeoAttachment> geoAttachment;
+				std::shared_ptr<RenderCore::Techniques::IGeoDeformerConductor> geoAttachment;
 				if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
 					deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
 					geoAttachment = completedDeformerConstruction->GetGeoAttachment();
@@ -406,7 +406,7 @@ namespace SceneEngine
 				CharacterSceneInternal::Animator result;
 
 				if (renderer._deformAccelerator) {
-					auto* geoDeformers = deformAcceleratorPool->GetDeformGeoAttachment(*renderer._deformAccelerator).get();
+					auto* geoDeformers = deformAcceleratorPool->GetGeoDeformerConductor(*renderer._deformAccelerator).get();
 					if (geoDeformers) {
 						result._deformerSkeletonInterface = std::make_shared<RenderCore::Techniques::RendererSkeletonInterface>(
 							renderer.GetSkeletonMachine().GetOutputInterface(),

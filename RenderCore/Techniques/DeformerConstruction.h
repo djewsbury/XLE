@@ -46,7 +46,7 @@ namespace RenderCore { namespace Techniques
 			unsigned geoIdx);
 
 		void Add(
-			std::shared_ptr<IDeformUniformsAttachment> deformer);
+			std::shared_ptr<IUniformsDeformerConductor> deformer);
 
 		Assets::ModelRendererConstruction& GetModelRendererConstruction() const;
 
@@ -59,8 +59,8 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<GeoEntry> GetGeoEntries() const;
 
-		std::shared_ptr<IDeformUniformsAttachment> GetUniformsAttachment() const;
-		std::shared_ptr<IDeformGeoAttachment> GetGeoAttachment() const;
+		std::shared_ptr<IUniformsDeformerConductor> GetUniformsAttachment() const;
+		std::shared_ptr<IGeoDeformerConductor> GetGeoAttachment() const;
 
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise);
 		bool IsEmpty() const;
@@ -86,11 +86,11 @@ namespace RenderCore { namespace Techniques
 
 		struct StoredUniformsEntry
 		{
-			std::shared_ptr<IDeformUniformsAttachment> _deformer = nullptr;
+			std::shared_ptr<IUniformsDeformerConductor> _deformer = nullptr;
 		};
 		StoredUniformsEntry _storedUniformsEntry;
 
-		std::shared_ptr<IDeformGeoAttachment> _completedGeoAttachment;
+		std::shared_ptr<IGeoDeformerConductor> _completedGeoAttachment;
 	};
 
 	// caller should wait on the renderer construction before calling DeserializeDeformerConstruction();
@@ -116,13 +116,13 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	inline std::shared_ptr<IDeformUniformsAttachment> DeformerConstruction::GetUniformsAttachment() const
+	inline std::shared_ptr<IUniformsDeformerConductor> DeformerConstruction::GetUniformsAttachment() const
 	{
 		// must have called FulfillWhenNotPending and waited on it before calling this
 		return _storedUniformsEntry._deformer;
 	}
 
-	inline std::shared_ptr<IDeformGeoAttachment> DeformerConstruction::GetGeoAttachment() const
+	inline std::shared_ptr<IGeoDeformerConductor> DeformerConstruction::GetGeoAttachment() const
 	{
 		// must have called FulfillWhenNotPending and waited on it before calling this
 		assert(_sealed);
