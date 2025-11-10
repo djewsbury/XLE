@@ -71,7 +71,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		SerializationOperator(
 			serializer, 
 			RenderCore::Assets::IndexData
-				{ _indexFormat, unsigned(blocks._ib._offset), unsigned(blocks._ib._size) });
+				{ _indexFormat, unsigned(blocks._topologicalIb._offset), unsigned(blocks._topologicalIb._size) });
 		
 		auto adjustedDrawCalls = _mainDrawCalls;
 		for (auto& a:adjustedDrawCalls) {
