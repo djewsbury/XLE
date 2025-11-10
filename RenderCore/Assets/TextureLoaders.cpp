@@ -426,7 +426,11 @@ namespace RenderCore { namespace Assets
 								hresult = LoadFromWICMemory(file.GetData().begin(), file.GetSize(), WIC_FLAGS_NONE, &that->_texMetadata, that->_image);
 								
 								// Erase SRGB/linear flag (because the WIC loader won't assign that -- but DDS loader will)
-								that->_texMetadata.format = (DXGI_FORMAT)AsTypelessFormat((Format)that->_texMetadata.format);
+								// But only do this for 8-bit formats, because we need to retain float/unorm/uint type suffixes for high precision inputs
+								// (such as a png with 16 bit depth color -- rare, but possible)
+								auto compType = GetComponentType((Format)that->_texMetadata.format);
+								if (GetComponentPrecision((Format)that->_texMetadata.format) == 8 && (compType == FormatComponentType::UNorm || compType == FormatComponentType::UNorm_SRGB))
+									that->_texMetadata.format = (DXGI_FORMAT)AsTypelessFormat((Format)that->_texMetadata.format);
 							}
 
 							if (!SUCCEEDED(hresult))
@@ -444,8 +448,11 @@ namespace RenderCore { namespace Assets
 								that->_image = std::move(newImage);
 								that->_texMetadata = that->_image.GetMetadata();
 
-								if (fmt != TexFmt::DDS)
-									that->_texMetadata.format = (DXGI_FORMAT)AsTypelessFormat((Format)that->_texMetadata.format);
+								if (fmt != TexFmt::DDS) {
+									auto compType = GetComponentType((Format)that->_texMetadata.format);
+									if (GetComponentPrecision((Format)that->_texMetadata.format) == 8 && (compType == FormatComponentType::UNorm || compType == FormatComponentType::UNorm_SRGB))
+										that->_texMetadata.format = (DXGI_FORMAT)AsTypelessFormat((Format)that->_texMetadata.format);
+								}
 							}
 
 							that->_hasBeenInitialized = true;
