@@ -147,7 +147,7 @@ namespace RenderCore { namespace Techniques
 
 				if (_allocationsInfront.empty()) {
 					// try to erase from _allocationsBehind, also
-					while (!_allocationsBehind.empty() && _allocationsBehind.begin()->_marker <= consumerMarker)
+					while (!_allocationsBehind.empty() && _allocationsBehind.begin()->_marker < consumerMarker)
 						_allocationsBehind.erase(_allocationsBehind.begin());
 					crashPoint = _totalSize;
 					headRoom = crashPoint - _movingPoint;
@@ -181,11 +181,11 @@ namespace RenderCore { namespace Techniques
 		{
 			// All allocations are assigned to the current producer marker
 			auto producerMarker = _asyncTracker->GetProducerMarker();
-			for (auto r=_allocationsBehind.begin(); r!=_allocationsBehind.end(); ++r) {
+			for (auto r=_allocationsBehind.rbegin(); r!=_allocationsBehind.rend(); ++r) {
 				if (r->_marker != ~0u) break;
 				r->_marker = producerMarker;
 			}
-			for (auto r=_allocationsInfront.begin(); r!=_allocationsInfront.end(); ++r) {
+			for (auto r=_allocationsInfront.rbegin(); r!=_allocationsInfront.rend(); ++r) {
 				if (r->_marker != ~0u) break;
 				r->_marker = producerMarker;
 			}
