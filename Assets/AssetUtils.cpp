@@ -138,13 +138,16 @@ namespace Assets
 
     void DirectorySearchRules::ResolveFile(ResChar destination[], unsigned destinationCount, StringSection<ResChar> baseName) const
     {
-		if (XlEqString(baseName, "<.>")) {
+        auto splitter = MakeFileNameSplitter(baseName);
+		if (XlEqString(splitter.AllExceptParameters(), "<.>")) {
 			if (_baseFileOffset != ~0u) {
                 const ResChar* b = _bufferOverflow.empty() ? _buffer : _bufferOverflow.data();
 				XlCopyString(destination, destinationCount, &b[_baseFileOffset]);
 			} else {
 				XlCopyString(destination, destinationCount, baseName);
 			}
+            if (auto p = splitter.ParametersWithDivider(); !p.IsEmpty())
+                XlCatString(destination, destinationCount, p);
 			return;
 		}
 
@@ -155,7 +158,6 @@ namespace Assets
 
         ResChar tempBuffer[MaxPath];
 
-        auto splitter = MakeFileNameSplitter(baseName);
         bool baseFileExist = false;
         if (!splitter.ParametersWithDivider().IsEmpty()) {
             XlCopyString(tempBuffer, splitter.AllExceptParameters());
