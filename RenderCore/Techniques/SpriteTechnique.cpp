@@ -413,7 +413,7 @@ namespace RenderCore { namespace Techniques
 			if (!XlBeginsWith(semantic, "SV_")) return false;
 			for (const auto& q:s_validVSInputSystemValues)
 				if (XlEqString(semantic, q.first)) {
-					writer.WriteInputParameter(semantic.AsString(), semanticIdx, q.second);
+					writer.WriteInputParameter(semantic, semanticIdx, q.second);
 					return true;
 				}
 			return false;
@@ -433,7 +433,7 @@ namespace RenderCore { namespace Techniques
 			if (!XlBeginsWith(semantic, "SV_")) return false;
 			for (const auto& q:s_validGSInputSystemValues)
 				if (XlEqString(semantic, q.first)) {
-					writer.WriteInputParameter(semantic.AsString(), semanticIdx, q.second);
+					writer.WriteInputParameter(semantic, semanticIdx, q.second);
 					return true;
 				}
 			return false;
@@ -478,7 +478,7 @@ namespace RenderCore { namespace Techniques
 			if (!XlBeginsWith(semantic, "SV_")) return false;
 			for (const auto& q:s_validPSInputSystemValues)
 				if (XlEqString(semantic, q.first)) {
-					writer.WriteInputParameter(semantic.AsString(), semanticIdx, q.second);
+					writer.WriteInputParameter(semantic, semanticIdx, q.second);
 					return true;
 				}
 			return false;
