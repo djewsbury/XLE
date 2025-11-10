@@ -153,8 +153,7 @@ namespace RenderCore { namespace Techniques
 			void WriteGSPredicateCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
 
 			GraphLanguage::NodeGraphSignature WriteFragment(std::stringstream& str, StringSection<> name);
-			GraphLanguage::NodeGraphSignature WriteGSFragment_Sprite(std::stringstream& str, StringSection<> name);
-			GraphLanguage::NodeGraphSignature WriteGSFragment_Triangle(std::stringstream& str, StringSection<> name);
+			GraphLanguage::NodeGraphSignature WriteGSFragment(std::stringstream& str, StringSection<> name, unsigned vertexCount);
 
 			bool HasAttributeFor(StringSection<> semantic, unsigned semanticIdx);
 
@@ -313,7 +312,7 @@ namespace RenderCore { namespace Techniques
 		static const char* s_VSToGS = "VS_TO_GS";
 		static const char* s_GSToPS = "GS_TO_PS";
 
-		GraphLanguage::NodeGraphSignature FragmentWriter::WriteGSFragment_Sprite(std::stringstream& str, StringSection<> name)
+		GraphLanguage::NodeGraphSignature FragmentWriter::WriteGSFragment(std::stringstream& str, StringSection<> name, unsigned vertexCount)
 		{
 			// (note -- some SV_ values might still need to be direct function parameters?)
 			str << "struct " << name << "_" << s_VSToGS << std::endl << "{" << std::endl;
@@ -330,13 +329,13 @@ namespace RenderCore { namespace Techniques
 			}
 			str << "};" << std::endl << std::endl;
 
-			str << "[maxvertexcount(4)]" << std::endl;
+			str << "[maxvertexcount(" << vertexCount << ")]" << std::endl;
 			str << "\tvoid " << name << "(point " << name << "_" << s_VSToGS << " input[1], inout TriangleStream<" << name << "_" << s_GSToPS << "> outputStream)" << std::endl;
 			str << "{" << std::endl;
 			str << _body.str();
 
 			// write the code that should move values from the working attributes into the output vertices
-			for (unsigned vIdx=0; vIdx<4; ++vIdx) {
+			for (unsigned vIdx=0; vIdx<vertexCount; ++vIdx) {
 				str << "\t" << name << "_" << s_GSToPS << " output" << vIdx << ";" << std::endl;
 				for (const auto& p:_signature.GetParameters()) {
 					if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
@@ -351,56 +350,6 @@ namespace RenderCore { namespace Techniques
 							[s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
 					if (i != _workingAttributes.end()) {
 						WriteCastOrAssignExpression(str, *i, p._type);
-					} else {
-						WriteDefaultValueExpression(str, p._type);
-					}
-					str << ";" << std::endl;
-				}
-				str << "\toutputStream.Append(output" << vIdx << ");" << std::endl;
-			}
-
-			str << "}" << std::endl;
-			return _signature;
-		}
-
-		GraphLanguage::NodeGraphSignature FragmentWriter::WriteGSFragment_Triangle(std::stringstream& str, StringSection<> name)
-		{
-			// (note -- some SV_ values might still need to be direct function parameters?)
-			str << "struct " << name << "_" << s_VSToGS << std::endl << "{" << std::endl;
-			for (const auto& p:_signature.GetParameters()) {
-				if (p._direction != GraphLanguage::ParameterDirection::In) continue;
-				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
-			}
-			str << "};" << std::endl << std::endl;
-
-			str << "struct " << name << "_" << s_GSToPS << std::endl << "{" << std::endl;
-			for (const auto& p:_signature.GetParameters()) {
-				if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
-				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
-			}
-			str << "};" << std::endl << std::endl;
-
-			str << "[maxvertexcount(3)]" << std::endl;
-			str << "\tvoid " << name << "(triangle " << name << "_" << s_VSToGS << " input[3], inout TriangleStream<" << name << "_" << s_GSToPS << "> outputStream)" << std::endl;
-			str << "{" << std::endl;
-			str << _body.str();
-
-			// write the code that should move values from the working attributes into the output vertices
-			for (unsigned vIdx=0; vIdx<3; ++vIdx) {
-				str << "\t" << name << "_" << s_GSToPS << " output" << vIdx << ";" << std::endl;
-				for (const auto& p:_signature.GetParameters()) {
-					if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
-					str << "\t" << "output" << vIdx << "." << p._name << " = ";
-					// look for the working parameter that matches the semantic (consider cases where we have separate values for each vertex
-					auto s = SplitSemanticAndIdx(p._semantic);
-					assert(s.second == 0);		// funny things happen if this is not zero
-					auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
-						[s, vIdx](const auto& q) { return q._semanticIdx == vIdx && XlEqString(s.first, q._semantic); });
-					if (i == _workingAttributes.end() && vIdx != 0)
-						i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
-							[s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
-					if (i != _workingAttributes.end()) {
-						WriteCastOrAssignExpression(str, *i, p._type, vIdx);
 					} else {
 						WriteDefaultValueExpression(str, p._type);
 					}
@@ -951,6 +900,7 @@ void WriteBarycentricCoords(
 		for (const auto& patch:vsSystemPatchesParse._functions) vsSystemPatches.emplace_back(PatchDelegateInput{patch.first.AsString(), &patch.second});
 		for (const auto& patch:gsSystemPatchesParse._functions) gsSystemPatches.emplace_back(PatchDelegateInput{patch.first.AsString(), &patch.second});
 
+		const unsigned gsPrimitiveVertexCount = 4;
 		std::vector<Internal::FragmentArranger::Step> psSteps, gsSteps, vsSteps;
 		{
 			{
@@ -986,10 +936,8 @@ void WriteBarycentricCoords(
 
 			{
 				Internal::FragmentArranger arranger;
-				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", 0, "float4"});
-				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", 1, "float4"});
-				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", 2, "float4"});
-				arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", 3, "float4"});
+				for (unsigned c=0; c<gsPrimitiveVertexCount; ++c)
+					arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", c, "float4"});
 				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
 
 				for (unsigned ep=0; ep<patches.size(); ++ep)
@@ -1094,7 +1042,7 @@ void WriteBarycentricCoords(
 
 			// GS signature isn't strictly the signature of a particular function, but contains the members of the
 			// vertex input and output structures
-			gsSignature = writerHelper.WriteGSFragment_Sprite(gs, "GSEntry");
+			gsSignature = writerHelper.WriteGSFragment(gs, "GSEntry", gsPrimitiveVertexCount);
 		}
 
 		{
@@ -1317,7 +1265,7 @@ void WriteBarycentricCoords(
 
 				// GS signature isn't strictly the signature of a particular function, but contains the members of the
 				// vertex input and output structures
-				gsSignature = writerHelper.WriteGSFragment_Triangle(gs, "GSEntry");		// assuming triangles
+				gsSignature = writerHelper.WriteGSFragment(gs, "GSEntry", 3);		// assuming triangles
 			}
 		}
 
