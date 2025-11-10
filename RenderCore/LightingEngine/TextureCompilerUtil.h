@@ -44,6 +44,9 @@ namespace RenderCore { namespace LightingEngine
 		unsigned idealCmdListCostMS = 1500,
 		unsigned maxSamplesPerCmdList = ~0u);
 
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_GenerateFromComputeShader(
+		std::string shader, const TextureDesc& targetDesc);
+
 	std::shared_ptr<BufferUploads::IAsyncDataSource> ConversionComputeShader(
 		StringSection<> shader,
 		BufferUploads::IAsyncDataSource& dataSrc,

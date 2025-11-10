@@ -600,6 +600,67 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
+	std::shared_ptr<BufferUploads::IAsyncDataSource> GenerateFromComputeShader(
+		StringSection<> shader,
+		const TextureDesc& targetDesc)
+	{
+		auto threadContext = Techniques::GetThreadContext();
+		
+		UniformsStreamInterface usi;
+		usi.BindResourceView(0, "Output"_h);
+		usi.BindImmediateData(0, "ControlUniforms"_h);
+
+ 		auto computeOpFuture = Techniques::CreateComputeOperator(
+			std::make_shared<Techniques::PipelineCollection>(threadContext->GetDevice()),
+			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
+
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
+		Metal::CompleteInitialization(metalContext, {outputRes.get()});
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
+			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
+
+		computeOpFuture->StallWhilePending();
+		auto computeOp = computeOpFuture->Actualize();
+
+		// run the actual compute shader once per output pixel
+		for (unsigned mip=0; mip<targetDesc._mipCount; ++mip) {
+			auto mipDesc = CalculateMipMapDesc(targetDesc, mip);
+			for (unsigned a=0; a<ActualArrayLayerCount(targetDesc); ++a) {
+				TextureViewDesc view;
+				view._mipRange = {mip, 1};
+				view._arrayLayerRange = {a, 1};
+				auto outputView = outputRes->CreateTextureView(BindFlag::UnorderedAccess, view);
+				IResourceView* resViews[] = { outputView.get() };
+
+				struct ControlUniforms
+				{
+					unsigned _mipIndex, _mipCount, _arrayLayerIndex, _arrayLayerCount;
+				} controlUniforms {
+					mip, targetDesc._mipCount, a, ActualArrayLayerCount(targetDesc)
+				};
+				const UniformsStream::ImmediateData immData[] = { MakeOpaqueIteratorRange(controlUniforms) };
+				UniformsStream us;
+				us._resourceViews = MakeIteratorRange(resViews);
+				us._immediateData = MakeIteratorRange(immData);
+				
+				computeOp->Dispatch(*threadContext, (mipDesc._width+8-1)/8, (mipDesc._height+8-1)/8, 1, &usi, us);
+			}
+		}
+
+		// We need a barrier before the transfer in DataSourceFromResourceSynchronized
+		Metal::BarrierHelper{metalContext}.Add(*outputRes, BindFlag::UnorderedAccess, BindFlag::TransferSrc);
+
+		auto result = std::make_shared<DataSourceFromResourceSynchronized>(threadContext, outputRes, computeOp->GetDependencyValidation());
+		// Release the command buffer pool, because Vulkan requires pumping the command buffer destroys regularly,
+		// and we may not be doing that in this thread for awhile
+		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>)) {
+			threadContext->CommitCommands();
+			threadContextVulkan->ReleaseCommandBufferPool();
+		}
+		return result;
+	}
+
 	std::shared_ptr<BufferUploads::IAsyncDataSource> ConversionComputeShader(
 		StringSection<> shader,
 		BufferUploads::IAsyncDataSource& dataSrc,
@@ -939,7 +1000,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override
 		{
 			if (context._opContext) {
-				context._opContext->SetDescription(Concatenate("Generating texture from {color:66d0a4}compute shader{color:}: ", ColouriseFilename(_shader)));
+				context._opContext->SetDescription(Concatenate("Generating texture from {color:66d0a4}sampling compute shader{color:}: ", ColouriseFilename(_shader)));
 				context._opContext->SetMessage((StringMeld<256>() << _width << "x" << _height).AsString());
 			}
 
@@ -950,6 +1011,19 @@ namespace RenderCore { namespace LightingEngine
 				1, _arrayLayerCount);
 			assert(!_shader.empty());
 			return LightingEngine::GenerateFromSamplingComputeShader(_shader, targetDesc, _params._sampleCount, _params._idealCmdListCostMS, _params._maxSamplesPerCmdList);
+		}
+
+		void MergeInWithFilenameResolve(const Compiler_SamplingComputeShader& src, const ::Assets::DirectorySearchRules& searchRules)
+		{
+			_width = src._width; _height = src._height;
+			_arrayLayerCount = src._arrayLayerCount;
+			_params = src._params;
+			
+			if (!src._shader.empty()) {
+				char buffer[MaxPath];
+				searchRules.ResolveFile(buffer, src._shader);
+				_shader = buffer;
+			}
 		}
 
 		Compiler_SamplingComputeShader(Formatters::TextInputFormatter<>& fmttr)
@@ -972,6 +1046,59 @@ namespace RenderCore { namespace LightingEngine
 		: _width(width), _height(height), _arrayLayerCount(arrayLayerCount)
 		, _shader(std::move(shader)), _params(params)
 		{}
+
+		Compiler_SamplingComputeShader() = default;
+	};
+
+	class Compiler_GenerateFromComputeShader : public Assets::ITextureCompiler
+	{
+	public:
+		TextureDesc _target = TextureDesc::Plain2D(512, 512, Format::R32G32B32A32_FLOAT);
+		std::string _shader;
+
+		std::string GetIntermediateName() const override { return (StringMeld<128>() << _shader << "-" << _target._width << "x" << _target._height << "x" << _target._arrayCount << "-" << AsString(_target._format)).AsString(); }
+		std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override
+		{
+			if (context._opContext) {
+				context._opContext->SetDescription(Concatenate("Generating texture from {color:66d0a4}compute shader{color:}: ", ColouriseFilename(_shader)));
+				context._opContext->SetMessage((StringMeld<256>() << _target._width << "x" << _target._height).AsString());
+			}
+
+			assert(!_shader.empty());
+			return LightingEngine::GenerateFromComputeShader(_shader, _target);
+		}
+
+		void MergeInWithFilenameResolve(const Compiler_GenerateFromComputeShader& src, const ::Assets::DirectorySearchRules& searchRules)
+		{
+			_target = src._target;
+			if (!src._shader.empty()) {
+				char buffer[MaxPath];
+				searchRules.ResolveFile(buffer, src._shader);
+				_shader = buffer;
+			}
+		}
+
+		Compiler_GenerateFromComputeShader(Formatters::TextInputFormatter<>& fmttr)
+		{
+			StringSection<> kn;
+			while (fmttr.TryKeyedItem(kn)) {
+				if (XlEqString(kn, "Width")) _target._width = Formatters::RequireCastValue<decltype(_target._width)>(fmttr);
+				else if (XlEqString(kn, "Height")) _target._height = Formatters::RequireCastValue<decltype(_target._height)>(fmttr);
+				else if (XlEqString(kn, "Format")) _target._format = Formatters::RequireEnum<RenderCore::Format, RenderCore::AsFormat>(fmttr);
+				else if (XlEqString(kn, "ArrayLayerCount")) _target._arrayCount = Formatters::RequireCastValue<decltype(_target._arrayCount)>(fmttr);
+				else if (XlEqString(kn, "Shader")) _shader = Formatters::RequireStringValue(fmttr).AsString();
+				else Formatters::SkipValueOrElement(fmttr);
+			}
+
+			if (_shader.empty())
+				Throw(Formatters::FormatException("Expecting 'Shader' field in texture compiler file", fmttr.GetLocation()));
+		}
+
+		Compiler_GenerateFromComputeShader(std::string shader, const TextureDesc& target)
+		: _shader(std::move(shader)), _target(target)
+		{}
+
+		Compiler_GenerateFromComputeShader() = default;
 	};
 
 	class Compiler_ConversionComputeShader : public Assets::ITextureCompiler
@@ -1003,6 +1130,24 @@ namespace RenderCore { namespace LightingEngine
 			return LightingEngine::ConversionComputeShader(_shader, *srcPkt, targetDesc);
 		}
 
+		void MergeInWithFilenameResolve(const Compiler_ConversionComputeShader& src, const ::Assets::DirectorySearchRules& searchRules)
+		{
+			_width = src._width; _height = src._height;
+			_arrayLayerCount = src._arrayLayerCount;
+			_format = src._format;
+
+			char buffer[MaxPath];
+			if (!src._shader.empty()) {
+				searchRules.ResolveFile(buffer, src._shader);
+				_shader = buffer;
+			}
+
+			if (!src._sourceComponent._srcFile.empty()) {
+				searchRules.ResolveFile(buffer, src._sourceComponent._srcFile);
+				_sourceComponent._srcFile = buffer;
+			}
+		}
+
 		Compiler_ConversionComputeShader(Formatters::TextInputFormatter<>& fmttr)
 		{
 			StringSection<> kn;
@@ -1030,6 +1175,8 @@ namespace RenderCore { namespace LightingEngine
 			_arrayLayerCount = targetDesc._arrayCount;
 			_format = targetDesc._format;
 		}
+
+		Compiler_ConversionComputeShader() = default;
 	};
 
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ComputeShader(
@@ -1040,6 +1187,9 @@ namespace RenderCore { namespace LightingEngine
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "SamplingComputeShader"_h))
 			return Actualize<std::shared_ptr<Compiler_SamplingComputeShader>>(*util, "SamplingComputeShader"_h, indexer).get();
+
+		if (scaffold->HasComponent(indexer._entityNameHash, "GenerateFromComputeShader"_h))
+			return Actualize<std::shared_ptr<Compiler_GenerateFromComputeShader>>(*util, "GenerateFromComputeShader"_h, indexer).get();
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "ConversionComputeShader"_h) && scaffold->HasComponent(indexer._entityNameHash, "Source"_h)) {
 			auto result = Actualize<std::shared_ptr<Compiler_ConversionComputeShader>>(*util, "ConversionComputeShader"_h, indexer).get();
@@ -1055,6 +1205,12 @@ namespace RenderCore { namespace LightingEngine
 		std::string shader, const EquirectFilterParams& params)
 	{
 		return std::make_shared<Compiler_SamplingComputeShader>(width, height, arrayLayerCount, shader, params);
+	}
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_GenerateFromComputeShader(
+		std::string shader, const TextureDesc& targetDesc)
+	{
+		return std::make_shared<Compiler_GenerateFromComputeShader>(shader, targetDesc);
 	}
 
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ConversionComputeShader(
