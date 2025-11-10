@@ -463,7 +463,8 @@ namespace RenderCore { namespace Techniques
 		static bool GSCanProvideAttribute(IteratorRange<const PatchDelegateInput*> patches, StringSection<> semantic, unsigned semanticIdx)
 		{
 			for (unsigned ep=0; ep<patches.size(); ++ep)
-				if (patches[ep]._implementsHash == "SV_SpriteGS"_h || patches[ep]._implementsHash == "SV_AutoGS"_h)
+				if (patches[ep]._implementsHash == "SV_SpriteGS"_h || patches[ep]._implementsHash == "SV_SpriteGS4"_h || patches[ep]._implementsHash == "SV_SpriteGS6"_h || patches[ep]._implementsHash == "SV_SpriteGS8"_h
+					|| patches[ep]._implementsHash == "SV_AutoGS"_h)
 					for (const auto&p:patches[ep]._signature->GetParameters()) {
 						if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
 						if (CompareSemantic({semantic, semanticIdx}, SplitSemanticAndIdx(p._semantic)))
@@ -900,7 +901,7 @@ void WriteBarycentricCoords(
 		for (const auto& patch:vsSystemPatchesParse._functions) vsSystemPatches.emplace_back(PatchDelegateInput{patch.first.AsString(), &patch.second});
 		for (const auto& patch:gsSystemPatchesParse._functions) gsSystemPatches.emplace_back(PatchDelegateInput{patch.first.AsString(), &patch.second});
 
-		const unsigned gsPrimitiveVertexCount = 4;
+		unsigned gsPrimitiveVertexCount = 4;
 		std::vector<Internal::FragmentArranger::Step> psSteps, gsSteps, vsSteps;
 		{
 			{
@@ -936,17 +937,25 @@ void WriteBarycentricCoords(
 
 			{
 				Internal::FragmentArranger arranger;
-				for (unsigned c=0; c<gsPrimitiveVertexCount; ++c)
-					arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", c, "float4"});
-				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
-
 				for (unsigned ep=0; ep<patches.size(); ++ep)
 					if (patches[ep]._implementsHash == "SV_SpriteGSPredicate"_h)
 						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
 
-				for (unsigned ep=0; ep<patches.size(); ++ep)
-					if (patches[ep]._implementsHash == "SV_SpriteGS"_h)
+				for (unsigned ep=0; ep<patches.size(); ++ep) {
+					if (patches[ep]._implementsHash == "SV_SpriteGS"_h || patches[ep]._implementsHash == "SV_SpriteGS4"_h) {
 						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
+					} else if (patches[ep]._implementsHash == "SV_SpriteGS6"_h) {
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
+						gsPrimitiveVertexCount = 6;
+					} else if (patches[ep]._implementsHash == "SV_SpriteGS8"_h) {
+						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
+						gsPrimitiveVertexCount = 8;
+					}
+				}
+
+				for (unsigned c=0; c<gsPrimitiveVertexCount; ++c)
+					arranger.AddFragmentOutput(Internal::WorkingAttribute{"SV_Position", c, "float4"});
+				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
 
 				Internal::ConnectSystemPatches(
 					arranger, gsSystemPatches,
