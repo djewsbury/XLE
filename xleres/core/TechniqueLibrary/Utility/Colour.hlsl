@@ -130,4 +130,35 @@ float3 RGB2HSV( float3 rgb )
 	return float3( Hprime * 60, C/M, M );
 }
 
+	///////////////////////////////////////////////////
+
+float util_cbrtf( float x ) { return sign(x)*pow(abs(x), 1.0f/3.0f); }
+
+float3 ToHueInterpolationSpace(float3 srgbLinear)
+{
+	// oklab inspired color mixing
+	// see: https://www.shadertoy.com/view/ttcyRS
+	// https://bottosson.github.io/posts/oklab/
+	// we go into a non-linear space compatible with oklab and interpolate there
+
+	float l = 0.4122214708f * srgbLinear.x + 0.5363325363f * srgbLinear.y + 0.0514459929f * srgbLinear.z;
+	float m = 0.2119034982f * srgbLinear.x + 0.6806995451f * srgbLinear.y + 0.1073969566f * srgbLinear.z;
+	float s = 0.0883024619f * srgbLinear.x + 0.2817188376f * srgbLinear.y + 0.6299787005f * srgbLinear.z;
+
+	return float3( util_cbrtf(l), util_cbrtf(m), util_cbrtf(s) );
+}
+
+float3 FromHueInterpolationSpace(float3 lms)
+{
+	float l = lms.x*lms.x*lms.x;
+	float m = lms.y*lms.y*lms.y;
+	float s = lms.z*lms.z*lms.z;
+
+	// linear SRGB result
+	return float3(
+		+4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s,
+		-1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s,
+		-0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s );
+}
+
 #endif
