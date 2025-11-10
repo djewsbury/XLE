@@ -456,7 +456,7 @@ void MessageUser(StringSection<> text, StringSection<> title)
 
 bool CopyToSystemClipboard(StringSection<> text)
 {
-#if 0
+#if 1
     // See https://learn.microsoft.com/en-us/windows/win32/dataxchg/using-the-clipboard
     if (!OpenClipboard(nullptr))
         return false; 
