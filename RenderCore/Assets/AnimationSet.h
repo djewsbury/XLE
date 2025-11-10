@@ -30,6 +30,14 @@ namespace RenderCore { namespace Assets
 	const char* AsString(AnimSamplerComponent value);
 	const char* AsString(CurveInterpolationType value);
 
+	struct AnimationSetOutputPart
+	{
+		uint64_t _name;
+		AnimSamplerComponent _component;
+		AnimSamplerType _samplerType;
+	};
+	using AnimationSetOutputInterface = IteratorRange<const AnimationSetOutputPart*>;
+
 	#pragma pack(push)
 	#pragma pack(1)
 
@@ -102,14 +110,7 @@ namespace RenderCore { namespace Assets
 		IteratorRange<const void*> GetConstantData() const { return MakeIteratorRange(_constantData); }
 		IteratorRange<const RawAnimationCurve*>	GetCurves() const { return MakeIteratorRange(_curves); }
 
-		struct OutputPart
-		{
-			uint64_t _name;
-			AnimSamplerComponent _component;
-			AnimSamplerType _samplerType;
-		};
-		using OutputInterface = IteratorRange<const OutputPart*>;
-		OutputInterface	GetOutputInterface() const { return MakeIteratorRange(_outputInterface); }
+		AnimationSetOutputInterface	GetOutputInterface() const { return MakeIteratorRange(_outputInterface); }
 
 		AnimationSet();
 		~AnimationSet();
@@ -124,7 +125,7 @@ namespace RenderCore { namespace Assets
 		SerializableVector<uint8_t>				_constantData;
 		SerializableVector<AnimationBlock>		_animationBlocks;
 		SerializableVector<AnimationAndName>	_animations;
-		SerializableVector<OutputPart>			_outputInterface;
+		SerializableVector<AnimationSetOutputPart> _outputInterface;
 		SerializableVector<RawAnimationCurve>	_curves;
 
 		SerializableVector<unsigned>			_stringNameBlockOffsets;

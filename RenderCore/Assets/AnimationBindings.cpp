@@ -9,8 +9,8 @@
 namespace RenderCore { namespace Assets
 {
 	AnimationSetBinding::AnimationSetBinding(
-		const AnimationSet::OutputInterface&		output,
-		const SkeletonMachine&    					input)
+		const AnimationSetOutputInterface&		output,
+		const SkeletonMachine&    				input)
 	{
 		_specializedSkeletonMachine = SpecializeTransformationMachine(
 			_animBindingRules, _parameterDefaultsBlock, 
@@ -340,7 +340,7 @@ namespace RenderCore { namespace Assets
 		/* out */ std::vector<AnimationSet::ParameterBindingRules>& parameterBindingRules,
 		/* out */ std::vector<uint8_t>&			parameterDefaultsBlock,
 		IteratorRange<const uint32_t*>			commandStream,
-		const AnimationSet::OutputInterface&	animSetOutput)
+		const AnimationSetOutputInterface&		animSetOutput)
 	{
 		// Given a generate input transformation command list, generate a specialized version that
 		// can read and use the animated parameter output as given
