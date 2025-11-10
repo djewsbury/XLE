@@ -55,6 +55,9 @@ namespace RenderCore { namespace Assets
 
 	IteratorRange<const uint64_t*>  ModelScaffold::FindCommandStreamInputInterface() const
 	{
+		// The code below assumes we have a command stream called '0'. Without this, SimpleModelRenderer will not initialize skeleton bindings correctly
+		assert(!_commandStreams.empty() && _commandStreams.begin()->first == 0);
+
 		for (auto cmd:CommandStream())
 			if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::InputInterface)
 				return cmd.RawData().Cast<const uint64_t*>();

@@ -32,6 +32,8 @@ namespace RenderCore { namespace Assets
 					auto newElement = result.AddElement();
 					if (modelCommand._model.empty())
 						Throw(std::runtime_error("Missing model name in DrawModel command"));
+					if (!modelCommand._compilationConfiguration.empty())
+						newElement.SetCompilationConfiguration(modelCommand._compilationConfiguration);
 					newElement.SetModelAndMaterials(modelCommand._model, modelCommand._material);
 					if (modelCommand._scale || modelCommand._translation) {
 						auto modelToObject = AsFloat4x4(
@@ -154,6 +156,8 @@ namespace RenderCore { namespace Assets
 						result._translation = Formatters::RequireCastValue<Float3>(formatter);
 					} else if (XlEqString(name, "DeformerBindPoint")) {
 						result._deformerBindPoint = RequireStringValue(formatter).AsString();
+					} else if (XlEqString(name, "CompilationConfiguration")) {
+						result._compilationConfiguration = RequireStringValue(formatter).AsString();
 					} else 
 						Throw(Formatters::FormatException(StringMeld<512>() << "Unknown attribute (" << name << ") while serializing DrawModelCommand", formatter.GetLocation()));
 				}
@@ -251,6 +255,8 @@ namespace RenderCore { namespace Assets
 				formatter.WriteKeyedValue("Scale", ImpliedTyping::AsString(cmd._scale.value()));
 			if (!cmd._deformerBindPoint.empty())
 				formatter.WriteKeyedValue("DeformerBindPoint", cmd._deformerBindPoint);
+			if (!cmd._compilationConfiguration.empty())
+				formatter.WriteKeyedValue("CompilationConfiguration", cmd._compilationConfiguration);
 			formatter.EndElement(ele);
 		}
 

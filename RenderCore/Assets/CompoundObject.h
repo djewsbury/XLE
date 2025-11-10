@@ -28,6 +28,7 @@ namespace RenderCore { namespace Assets
 			std::optional<Float3> _translation;
 			std::optional<Float3> _scale;
 			std::string _deformerBindPoint;
+			std::string _compilationConfiguration;
 
 			#if defined(_DEBUG)
 				std::string _description;
