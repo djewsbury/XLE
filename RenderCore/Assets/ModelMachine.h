@@ -19,7 +19,8 @@ namespace RenderCore { namespace Assets
 	enum class GeoCommand : uint32_t
 	{
 		AttachRawGeometry = s_scaffoldCmdBegin_ModelMachine + 0x100,
-		AttachSkinningData
+		AttachSkinningData,
+		GeoSpaceToNodeSpace
 	};
 
 	enum class ModelCommand : uint32_t
@@ -95,7 +96,6 @@ namespace RenderCore { namespace Assets
 		VertexData							_vb;
 		IndexData							_ib;
 		SerializableVector<DrawCallDesc>	_drawCalls;
-		Float4x4							_geoSpaceToNodeSpace;					// transformation from the coordinate space of the geometry itself to whatever node it's attached to. Useful for some deformation operations, where a post-performance transform is required
 		SerializableVector<unsigned>		_finalVertexIndexToOriginalIndex;		// originalIndex = _finalVertexIndexToOriginalIndex[finalIndex]
 	};
 

@@ -43,11 +43,17 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				{ _indexFormat, unsigned(blocks._ib._offset), unsigned(blocks._ib._size) });
 		
 		SerializationOperator(serializer, _mainDrawCalls);
-		SerializationOperator(serializer, _geoSpaceToNodeSpace);
 
 		SerializationOperator(serializer, _finalVertexIndexToOriginalIndex);
 
 		serializer.PushSizeValueAtRecall(recall);
+
+		if (!Equivalent(_geoSpaceToNodeSpace, Identity<Float4x4>(), 1e-3f)) {
+			serializer << (uint32_t)Assets::GeoCommand::GeoSpaceToNodeSpace;
+			auto recall = serializer.CreateRecall(sizeof(unsigned));
+			SerializationOperator(serializer, _geoSpaceToNodeSpace);
+			serializer.PushSizeValueAtRecall(recall);
+		}
 	}
 
 	void NascentRawGeometry::SerializeTopologicalWithResourceBlock(
@@ -82,12 +88,18 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			a._indexCount *= 2;
 		}
 		SerializationOperator(serializer, adjustedDrawCalls);
-		SerializationOperator(serializer, _geoSpaceToNodeSpace);
 
 		std::vector<uint32_t> dummyMapping;
 		SerializationOperator(serializer, dummyMapping);
 
 		serializer.PushSizeValueAtRecall(recall);
+
+		if (!Equivalent(_geoSpaceToNodeSpace, Identity<Float4x4>(), 1e-3f)) {
+			serializer << (uint32_t)Assets::GeoCommand::GeoSpaceToNodeSpace;
+			auto recall = serializer.CreateRecall(sizeof(unsigned));
+			SerializationOperator(serializer, _geoSpaceToNodeSpace);
+			serializer.PushSizeValueAtRecall(recall);
+		}
 	}
 
 	std::ostream& SerializationOperator(std::ostream& stream, const NascentRawGeometry& geo)

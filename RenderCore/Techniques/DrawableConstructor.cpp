@@ -688,11 +688,17 @@ namespace RenderCore { namespace Techniques
 							// configure the draw calls that we're going to need to make for this geocall
 							// while doing this we'll also sort out materials
 							const Assets::RawGeometryDesc* rawGeometry = nullptr;
+							const Float4x4* geoSpaceToNodeSpace = nullptr;
 							for (auto cmd:geoMachine) {
 								switch (cmd.Cmd()) {
 								case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
 									assert(!rawGeometry);
 									rawGeometry = (const Assets::RawGeometryDesc*)cmd.RawData().begin();
+									break;
+
+								case (uint32_t)Assets::GeoCommand::GeoSpaceToNodeSpace:
+									assert(!geoSpaceToNodeSpace);
+									geoSpaceToNodeSpace = (const Float4x4*)cmd.RawData().begin();
 									break;
 								}
 							}
@@ -700,13 +706,13 @@ namespace RenderCore { namespace Techniques
 							if (rawGeometry && pendingGeoIdx != ~0u) {
 								unsigned drawCallIterators[2] = {(unsigned)dstCmdStream->_drawCalls.size()};
 
-								if (!Equivalent(rawGeometry->_geoSpaceToNodeSpace, Identity<Float4x4>(), 1e-3f)) {
-									if (!currentGeoSpaceToNodeSpace.has_value() || currentGeoSpaceToNodeSpace.value() != rawGeometry->_geoSpaceToNodeSpace) {		// binary comparison intentional
+								if (geoSpaceToNodeSpace) {
+									if (!currentGeoSpaceToNodeSpace.has_value() || currentGeoSpaceToNodeSpace.value() != *geoSpaceToNodeSpace) {		// binary comparison intentional
 										auto cmdId = (uint32_t)Command::SetGeoSpaceToNodeSpace, blockSize = (uint32_t)sizeof(Float4x4);
 										dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
 										dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
-										dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&rawGeometry->_geoSpaceToNodeSpace, (const uint8_t*)(&rawGeometry->_geoSpaceToNodeSpace+1));
-										currentGeoSpaceToNodeSpace = rawGeometry->_geoSpaceToNodeSpace;
+										dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)geoSpaceToNodeSpace, (const uint8_t*)(geoSpaceToNodeSpace+1));
+										currentGeoSpaceToNodeSpace = *geoSpaceToNodeSpace;
 									}
 								} else if (currentGeoSpaceToNodeSpace.has_value()) {
 									auto cmdId = (uint32_t)Command::SetGeoSpaceToNodeSpace, blockSize = (uint32_t)0;

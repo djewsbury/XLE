@@ -366,7 +366,7 @@ namespace RenderCore { namespace Techniques
 					bindTypesAndIdx.reserve(ds._slots.size());
 					for (const auto& s:ds._slots) {
 						bindTypesAndIdx.push_back(DescriptorSetInitializer::BindTypeAndIdx{s._bindType, s._resourceIdx, s._descriptorSetSlot, s._descriptorSetArrayIdx});
-						if (s._bindType == DescriptorSetInitializer::BindType::ResourceView && subDepVals[s._resourceIdx])
+						if (s._bindType == DescriptorSetInitializer::BindType::ResourceView && s._resourceIdx != ~0u && subDepVals[s._resourceIdx])
 							subDepValMarkers.push_back(subDepVals[s._resourceIdx]);
 					}
 
