@@ -31,6 +31,7 @@ namespace RenderCore { namespace Assets
 		void MergeInWithFilenameResolve(const ShaderPatchCollection&, const ::Assets::DirectorySearchRules&);
 
 		uint64_t GetHash() const;
+		bool IsEmpty() const;
 
 		friend bool operator<(const ShaderPatchCollection& lhs, const ShaderPatchCollection& rhs);
 		friend bool operator<(const ShaderPatchCollection& lhs, uint64_t rhs);

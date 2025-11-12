@@ -80,121 +80,41 @@ namespace RenderCore { namespace Techniques { namespace Internal
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc)
 		{
 			TRY {
-				std::shared_future<std::shared_ptr<ShaderSourceParser::SelectorFilteringRules>> filteringFuture[3];
+				struct PipelineFilteringHelper
+				{
+					std::shared_future<std::shared_ptr<ShaderSourceParser::SelectorFilteringRules>> _filteringFuture[3];
+					std::shared_future<std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration>> _preconfiguration;
+					unsigned _iterator = 0;
+				};
+				auto helper = std::make_shared<PipelineFilteringHelper>();
+
 				for (unsigned c=0; c<3; ++c)
-					filteringFuture[c] = BuildFutureFiltering(pipelineDesc->_shaders[c]);
+					helper->_filteringFuture[c] = BuildFutureFiltering(pipelineDesc->_shaders[c]);
 
-				if (!filteringFuture[(unsigned)ShaderStage::Vertex].valid()) {
-					assert(!filteringFuture[(unsigned)ShaderStage::Pixel].valid());
-					assert(!filteringFuture[(unsigned)ShaderStage::Geometry].valid());
-					auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-					finalObject->_pipelineDesc = pipelineDesc;
-					for (unsigned c=0; c<3; ++c)
-						if (pipelineDesc->_shaders[c].index())
-							finalObject->_automaticFiltering[c] = pipelineDesc->_additionalSelectorFiltering[c];
-					promise.set_value(std::move(finalObject));
-					return;
-				}
+				if (!pipelineDesc->_techniquePreconfigurationFile.empty() || !pipelineDesc->_materialPreconfigurationFile.empty())
+					helper->_preconfiguration = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
 
-				if (filteringFuture[(unsigned)ShaderStage::Pixel].valid() && !filteringFuture[(unsigned)ShaderStage::Geometry].valid()) {
-
-					if (pipelineDesc->_techniquePreconfigurationFile.empty() && pipelineDesc->_materialPreconfigurationFile.empty()) {
-						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel]).CheckImmediately().ThenConstructToPromise(
-							std::move(promise),
-							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> psFiltering) {
-								
-								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_pipelineDesc = pipelineDesc;
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Pixel, std::move(psFiltering));
-								return finalObject;
-							});
-					} else {
-						auto preconfigurationFuture = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
-						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], preconfigurationFuture).CheckImmediately().ThenConstructToPromise(
-							std::move(promise),
-							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> psFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> preconfiguration) {
-								
-								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_pipelineDesc = pipelineDesc;
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Pixel, std::move(psFiltering));
-								finalObject->_preconfiguration = preconfiguration;
-								return finalObject;
-							});
-					}
-
-				} else if (filteringFuture[(unsigned)ShaderStage::Pixel].valid() && filteringFuture[(unsigned)ShaderStage::Geometry].valid()) {
-
-					if (pipelineDesc->_techniquePreconfigurationFile.empty() && pipelineDesc->_materialPreconfigurationFile.empty()) {
-						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry]).CheckImmediately().ThenConstructToPromise(
-							std::move(promise),
-							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> psFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> gsFiltering) {
-								
-								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_pipelineDesc = pipelineDesc;
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Pixel, std::move(psFiltering));
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Geometry, std::move(gsFiltering));
-								return finalObject;
-							});
-					} else {
-						auto preconfigurationFuture = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
-						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Pixel], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).CheckImmediately().ThenConstructToPromise(
-							std::move(promise),
-							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> psFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> gsFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> preconfiguration) {
-								
-								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_pipelineDesc = pipelineDesc;
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Pixel, std::move(psFiltering));
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Geometry, std::move(gsFiltering));
-								finalObject->_preconfiguration = preconfiguration;
-								return finalObject;
-							});
-					}
-
-				} else if (!filteringFuture[(unsigned)ShaderStage::Pixel].valid() && filteringFuture[(unsigned)ShaderStage::Geometry].valid()) {
-
-					if (pipelineDesc->_techniquePreconfigurationFile.empty() && pipelineDesc->_materialPreconfigurationFile.empty()) {
-						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry]).CheckImmediately().ThenConstructToPromise(
-							std::move(promise),
-							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> gsFiltering) {
-								
-								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_pipelineDesc = pipelineDesc;
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Geometry, std::move(gsFiltering));
-								return finalObject;
-							});
-					} else {
-						auto preconfigurationFuture = ::Assets::GetAssetFuturePtr<ShaderSourceParser::SelectorPreconfiguration>(pipelineDesc->_materialPreconfigurationFile, pipelineDesc->_techniquePreconfigurationFile);
-						::Assets::WhenAll(filteringFuture[(unsigned)ShaderStage::Vertex], filteringFuture[(unsigned)ShaderStage::Geometry], preconfigurationFuture).CheckImmediately().ThenConstructToPromise(
-							std::move(promise),
-							[pipelineDesc]( std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> vsFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> gsFiltering,
-								std::shared_ptr<ShaderSourceParser::SelectorPreconfiguration> preconfiguration) {
-								
-								auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
-								finalObject->_pipelineDesc = pipelineDesc;
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Vertex, std::move(vsFiltering));
-								SetFilteringForStage(*finalObject, (unsigned)ShaderStage::Geometry, std::move(gsFiltering));
-								finalObject->_preconfiguration = preconfiguration;
-								return finalObject;
-							});
-					}
-
-				} else
-					Throw(std::runtime_error("Missing shader stages while building filtering rules"));
+				::Assets::PollToPromise(
+					std::move(promise),
+					[helper](auto timeout) {
+						auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+						for (; helper->_iterator < dimof(PipelineFilteringHelper::_filteringFuture); ++helper->_iterator)
+							if (helper->_filteringFuture[helper->_iterator].valid() && helper->_filteringFuture[helper->_iterator].wait_until(timeoutTime) != std::future_status::ready)
+								return ::Assets::PollStatus::Continue;
+						if (helper->_preconfiguration.valid() && helper->_preconfiguration.wait_until(timeoutTime) != std::future_status::ready)
+							return ::Assets::PollStatus::Continue;
+						return ::Assets::PollStatus::Finish;
+					},
+					[helper, pipelineDesc]() {
+						auto finalObject = std::make_shared<GraphicsPipelineDescWithFilteringRules>();
+						finalObject->_pipelineDesc = pipelineDesc;
+						for (unsigned c=0; c<dimof(PipelineFilteringHelper::_filteringFuture); ++c)
+							if (helper->_filteringFuture[c].valid())
+								SetFilteringForStage(*finalObject, c, helper->_filteringFuture[c].get());
+						if (helper->_preconfiguration.valid())
+							finalObject->_preconfiguration = helper->_preconfiguration.get();
+						return finalObject;
+					});
 			} CATCH(...) {
 				promise.set_exception(std::current_exception());
 			} CATCH_END
@@ -1007,7 +927,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				if (res._patchCollection) {
 					for (auto exp:patchExpansions) {
 						auto i = std::find_if(
-							res._patchCollection->GetInterface().GetPatches().begin(), res._patchCollection->GetInterface().GetPatches().end(),
+							b2e(res._patchCollection->GetInterface().GetPatches()),
 							[exp](const auto& c) { return c._implementsHash == exp || c._originalEntryPointHash == exp; });
 						if (i == res._patchCollection->GetInterface().GetPatches().end()) continue;
 						if (std::find(filteringRulesPulledIn, &filteringRulesPulledIn[autoFilteringCount], i->_filteringRulesId) != &filteringRulesPulledIn[autoFilteringCount]) continue;

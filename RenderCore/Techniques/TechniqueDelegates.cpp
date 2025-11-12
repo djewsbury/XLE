@@ -944,7 +944,7 @@ namespace RenderCore { namespace Techniques
 
 				// new style, more flexible approach
 				if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h) {
-					i->second.Configure(*nascentDesc, std::move(shaderPatches), iaAttributes);
+					i->second.Configure(*nascentDesc, shaderPatches, iaAttributes);
 				}
 
 				nascentDesc->_manualSelectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
@@ -953,6 +953,9 @@ namespace RenderCore { namespace Techniques
 
 			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry).IsEmpty())
 				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry));
+
+			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Pixel).IsEmpty())
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Pixel));
 
 			return nascentDesc;
 		}

@@ -63,8 +63,11 @@ namespace RenderCore { namespace Assets
 		if (!src._preconfiguration.empty())
 			_preconfiguration = src._preconfiguration;
 		for (unsigned c=0; c<dimof(src._overrideShaders); ++c)
-			if (!src._overrideShaders[c].empty())
-				_overrideShaders[c] = src._overrideShaders[c];
+			if (!src._overrideShaders[c].empty()) {
+				char buffer[MaxPath];
+				searchRules.ResolveFile(buffer, src._overrideShaders[c]);
+				_overrideShaders[c] = buffer;
+			}
 
 		SortAndCalculateHash();
 	}
@@ -99,6 +102,14 @@ namespace RenderCore { namespace Assets
 		return _hash;
 	}
 
+	bool ShaderPatchCollection::IsEmpty() const
+	{
+		if (!_patches.empty()) return false;
+		if (!_preconfiguration.empty()) return false;
+		for (const auto& s:_overrideShaders) if (!s.empty()) return false;
+		return true;
+	}
+
 	ShaderPatchCollection::ShaderPatchCollection()
 	{
 		_hash = 0;
@@ -122,7 +133,7 @@ namespace RenderCore { namespace Assets
 
 	void ShaderPatchCollection::SortAndCalculateHash()
 	{
-		if (_patches.empty()) {
+		if (IsEmpty()) {
 			_hash = 0;
 			return;
 		}

@@ -399,7 +399,7 @@ namespace RenderCore { namespace Assets
 
     void RawMaterial::SerializeMethod(Formatters::TextOutputFormatter& formatter) const
     {
-		if (!_patchCollection.GetPatches().empty()) {
+		if (!_patchCollection.IsEmpty()) {
 			auto ele = formatter.BeginKeyedElement("Patches");
 			SerializationOperator(formatter, _patchCollection);
 			formatter.EndElement(ele);
