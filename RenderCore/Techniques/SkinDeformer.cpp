@@ -283,10 +283,21 @@ namespace RenderCore { namespace Techniques
 		{
 			// We'll create one CPUSkinDeformer per element with skinned meshes. Each deformer will animate all of the meshes
 			// within that one element
+			std::vector<std::tuple<std::shared_ptr<Assets::ModelScaffold>, unsigned, std::string>> modelScaffoldsAndElements;
 			unsigned elementIdx = 0;
 			for (auto ele:deformerConstruction.GetModelRendererConstruction()) {
 				auto modelScaffold = ele.GetModel();
 				if (!modelScaffold) { ++elementIdx; continue; }
+				modelScaffoldsAndElements.emplace_back(modelScaffold, elementIdx, ele.GetModelScaffoldName());
+				++elementIdx;
+			}
+			std::sort(b2e(modelScaffoldsAndElements));
+
+			for (auto i=modelScaffoldsAndElements.begin(); i!=modelScaffoldsAndElements.end();) {
+
+				auto start = i; ++i;
+				while (i!=modelScaffoldsAndElements.end() && g<0>(*i) == g<0>(*start)) ++i;
+				auto modelScaffold = g<0>(*start);
 
 				std::vector<std::pair<unsigned, DeformOperationInstantiation>> instantiations;
 				auto geoCount = modelScaffold->GetGeoCount();
@@ -311,12 +322,10 @@ namespace RenderCore { namespace Techniques
 
 				// create the deformer if necessary and add the instantiations we just find
 				if (!instantiations.empty()) {
-					auto deformer = std::make_shared<CPUSkinDeformer>(*modelScaffold, ele.GetModelScaffoldName());
+					auto deformer = std::make_shared<CPUSkinDeformer>(*modelScaffold, g<2>(*start));
 					for (auto& inst:instantiations)
-						deformerConstruction.Add(deformer, std::move(inst.second), elementIdx, inst.first);
+						deformerConstruction.Add(deformer, std::move(inst.second), g<1>(*start), inst.first);
 				}
-
-				++elementIdx;
 			}
 		}
 	};
@@ -789,11 +798,24 @@ namespace RenderCore { namespace Techniques
 		void Configure(DeformerConstruction& deformerConstruction, Formatters::TextInputFormatter<char>&) override
 		{
 			// We'll create one GPUSkinDeformer per element with skinned meshes. Each deformer will animate all of the meshes
-			// within that one element
+			// within that one element.
+			// Note that some model scaffolds might be duplicated, and we need to handle that case
+
+			std::vector<std::tuple<std::shared_ptr<Assets::ModelScaffold>, unsigned, std::string>> modelScaffoldsAndElements;
 			unsigned elementIdx = 0;
 			for (auto ele:deformerConstruction.GetModelRendererConstruction()) {
 				auto modelScaffold = ele.GetModel();
 				if (!modelScaffold) { ++elementIdx; continue; }
+				modelScaffoldsAndElements.emplace_back(modelScaffold, elementIdx, ele.GetModelScaffoldName());
+				++elementIdx;
+			}
+			std::sort(b2e(modelScaffoldsAndElements));
+
+			for (auto i=modelScaffoldsAndElements.begin(); i!=modelScaffoldsAndElements.end();) {
+
+				auto start = i; ++i;
+				while (i!=modelScaffoldsAndElements.end() && g<0>(*i) == g<0>(*start)) ++i;
+				auto modelScaffold = g<0>(*start);
 
 				std::vector<std::pair<unsigned, DeformOperationInstantiation>> instantiations;
 				auto geoCount = modelScaffold->GetGeoCount();
@@ -825,7 +847,7 @@ namespace RenderCore { namespace Techniques
 
 				// create the deformer if necessary and add the instantiations we just find
 				if (!instantiations.empty()) {
-					auto deformer = std::make_shared<GPUSkinDeformer>(_pipelineCollection, modelScaffold, ele.GetModelScaffoldName());
+					auto deformer = std::make_shared<GPUSkinDeformer>(_pipelineCollection, modelScaffold, g<2>(*start));
 
 					// if there's a skeleton attached to the ModelRendererConstruction, then we should pass in a default set of joint matrices
 					const Assets::SkeletonMachine* skeletonMachine = nullptr;
@@ -845,11 +867,10 @@ namespace RenderCore { namespace Techniques
 						deformer->SetDefaultSkeletonMachineResults(defaultSkeletonMachineOutput, defaultSkeletonBinding);
 					}
 
+					// We only instantiate for the first use of this model scaffold -- renderer is expected to recognize a reuse
 					for (auto& inst:instantiations)
-						deformerConstruction.Add(deformer, std::move(inst.second), elementIdx, inst.first);
+						deformerConstruction.Add(deformer, std::move(inst.second), g<1>(*start), inst.first);
 				}
-
-				++elementIdx;
 			}
 		}
 

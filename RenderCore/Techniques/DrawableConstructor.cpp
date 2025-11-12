@@ -602,7 +602,7 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<Assets::CompiledMaterialSet>& materialScaffold,
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator,
-			unsigned elementIdx, const std::string& modelScaffoldName)
+			unsigned elementIdx, unsigned deformElementIdx, const std::string& modelScaffoldName)
 		{
 			_pendingDepVals.push_back(modelScaffold->GetDependencyValidation());
 			_pendingDepVals.push_back(materialScaffold->GetDependencyValidation());
@@ -714,7 +714,7 @@ namespace RenderCore { namespace Techniques
 								pendingGeoIdx = _pendingGeos.AddGeo(
 									geoMachine, modelScaffold,
 									deformAccelerator,
-									FindDeformerBinding(deformerBinding, elementIdx, geoCallDesc._geoId),
+									FindDeformerBinding(deformerBinding, deformElementIdx, geoCallDesc._geoId),		// deformElementIdx considers modelScaffold reuse and matches against the first usage
 									modelScaffoldName);
 								if (pendingGeoIdx != ~0u)
 									modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
@@ -775,12 +775,6 @@ namespace RenderCore { namespace Techniques
 									drawCall._firstIndex = dc._firstIndex;
 									drawCall._indexCount = dc._indexCount;
 									drawCall._firstVertex = dc._firstVertex;
-
-									// if (modelCommandStream == s_topologicalCmdStream) {
-									// 	if (drawCall._batchFilter != (unsigned)Batch::Opaque) continue;		// drop this draw call
-									// 	drawCall._batchFilter = (unsigned)Batch::Topological;
-									// }
-
 									dstCmdStream->_drawCalls.push_back(drawCall);
 								}
 
@@ -930,15 +924,20 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(construction.GetAssetState() != ::Assets::AssetState::Pending);
 		_pimpl->_pendingDepVals.emplace_back(construction.MakeScaffoldsDependencyValidation());			// required in order to catch invalidations on the compilation configuration files
+		std::vector<std::pair<Assets::ModelScaffold*, unsigned>> priorModelScaffoldUses;
 		unsigned elementIdx = 0;
 		for (auto e:construction) {
 			auto modelScaffold = e.GetModel();
 			auto materialScaffold = e.GetMaterials();
-			if (modelScaffold && materialScaffold)
+			if (modelScaffold && materialScaffold) {
+				unsigned deformElementIdx = elementIdx;
+				if (auto i = std::find_if(b2e(priorModelScaffoldUses), [ms=modelScaffold.get()](const auto& q) { return q.first == ms; }); i!=priorModelScaffoldUses.end()) deformElementIdx = i->second;
+				else priorModelScaffoldUses.emplace_back(modelScaffold.get(), deformElementIdx);
 				_pimpl->AddModel(
 					modelScaffold, materialScaffold,
 					deformAcceleratorPool, deformAccelerator, 
-					elementIdx, e.GetModelScaffoldName());
+					elementIdx, deformElementIdx, e.GetModelScaffoldName());
+				}
 			++elementIdx;
 		}
 	}

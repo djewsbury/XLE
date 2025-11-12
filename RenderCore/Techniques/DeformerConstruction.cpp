@@ -21,8 +21,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(!_sealed);
 		// If we can immediately actualize, just treat it as an actualized deformer
-		auto* actualized = deformer->TryActualize();
-		if (actualized) {
+		if (auto* actualized = deformer->TryActualize()) {
 			Add(*actualized, std::move(instantiation), elementIdx, geoIdx);
 			return;
 		}
@@ -68,13 +67,12 @@ namespace RenderCore { namespace Techniques
 	{
 		std::vector<GeoEntry> result;
 		result.reserve(_storedGeoEntries.size());
-		for (const auto& e:_storedGeoEntries) {
+		for (const auto& e:_storedGeoEntries)
 			result.emplace_back(
 				GeoEntry{
 					_deformers[e._deformerIdx],
 					&e._instantiation,
 					e._elementIdx, e._geoIdx});
-		}
 		return result;
 	}
 
