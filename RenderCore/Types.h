@@ -48,6 +48,7 @@ namespace RenderCore
                             unsigned alignedByteOffset = ~unsigned(0x0), 
                             InputDataRate inputSlotClass = InputDataRate::PerVertex,
                             unsigned instanceDataStepRate = 0);
+        friend bool operator==(const InputElementDesc&, const InputElementDesc&);
     };
 
 	using InputLayout = IteratorRange<const InputElementDesc*>;
@@ -154,6 +155,18 @@ namespace RenderCore
 		_alignedByteOffset = alignedByteOffset; _inputSlotClass = inputSlotClass;
 		_instanceDataStepRate = instanceDataStepRate;
 	}
+
+    inline bool operator==(const InputElementDesc& lhs, const InputElementDesc& rhs)
+    {
+        return lhs._semanticName == rhs._semanticName
+            && lhs._semanticIndex == rhs._semanticIndex
+            && lhs._nativeFormat == rhs._nativeFormat
+            && lhs._inputSlot == rhs._inputSlot
+            && lhs._alignedByteOffset == rhs._alignedByteOffset
+            && lhs._inputSlotClass == rhs._inputSlotClass
+            && lhs._instanceDataStepRate == rhs._instanceDataStepRate
+            ;
+    }
 
 }
 

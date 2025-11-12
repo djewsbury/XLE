@@ -102,6 +102,15 @@ namespace RenderCore { namespace Techniques
 		class DrawableGeoBuilder
 		{
 		public:
+			struct GeoRequest
+			{
+				const Assets::RawGeometryDesc* _rawGeometry = nullptr;
+				const Assets::SkinningDataDesc* _skinningData = nullptr;
+				DeformerToRendererBinding::GeoBinding _deformerBinding;
+
+				friend bool operator==(const GeoRequest& lhs, const GeoRequest& rhs) { return lhs._rawGeometry == rhs._rawGeometry && lhs._skinningData == rhs._skinningData && lhs._deformerBinding == rhs._deformerBinding; }
+			};
+			std::vector<GeoRequest> _geoRequests;
 			std::vector<std::shared_ptr<DrawableGeo>> _geos;
 			using InputLayout = std::vector<InputElementDesc>;
 			std::vector<InputLayout> _geosLayout;
@@ -155,18 +164,17 @@ namespace RenderCore { namespace Techniques
 				const DeformerToRendererBinding::GeoBinding* deformerBinding,
 				std::string modelScaffoldName)
 			{
-				const Assets::RawGeometryDesc* rawGeometry = nullptr;
-				const Assets::SkinningDataDesc* skinningData = nullptr;
+				GeoRequest request;
 				for (auto cmd:geoMachine) {
 					switch (cmd.Cmd()) {
 					case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
-						assert(!rawGeometry);
-						rawGeometry = (Assets::RawGeometryDesc*)cmd.RawData().begin();
+						assert(!request._rawGeometry);
+						request._rawGeometry = (Assets::RawGeometryDesc*)cmd.RawData().begin();
 						break;
 
 					case (uint32_t)Assets::GeoCommand::AttachSkinningData:
-						assert(!skinningData);
-						skinningData = (const Assets::SkinningDataDesc*)cmd.RawData().begin();
+						assert(!request._skinningData);
+						request._skinningData = (const Assets::SkinningDataDesc*)cmd.RawData().begin();
 						break;
 
 					default:
@@ -174,49 +182,55 @@ namespace RenderCore { namespace Techniques
 					}
 				}
 
-				if (rawGeometry && rawGeometry->_ib._size) {
-					auto& rg = *rawGeometry;
+				if (deformerBinding) request._deformerBinding = *deformerBinding;
 
-					// Build the main non-deformed vertex stream
-					auto drawableGeo = _drawablesPool->CreateGeo();
-					auto drawableGeoIdx = (unsigned)_geos.size();
-					auto scaffoldIdx = GetScaffoldIdx(scaffold, modelScaffoldName);
+				if (!request._rawGeometry || !request._rawGeometry->_ib._size)
+					return 0u;
 
-					assert(rg._vb._size);
-					AddStaticLoadRequest(LoadBuffer::VB, DrawableStream::Vertex0, scaffoldIdx, drawableGeoIdx, rg._vb._offset, rg._vb._size);
-					drawableGeo->_vertexStreamCount = 1;
+				// look for an identical existing request
+				for (unsigned c=0; c<_geoRequests.size(); ++c)
+					if (_geoRequests[c] == request) return c;
 
-					// Attach those vertex streams that come from the deform operation
-					if (deformerBinding && !deformerBinding->_generatedElements.empty()) {
-						drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
-						drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = deformerBinding->_postDeformBufferOffset;
-						drawableGeo->_deformAccelerator = deformAccelerator;
-						_geosLayout.push_back(BuildFinalIA(rg, deformerBinding, drawableGeo->_vertexStreamCount));
-						++drawableGeo->_vertexStreamCount;
-					} else {
-						if (skinningData) {
-							AddStaticLoadRequest(
-								LoadBuffer::VB, DrawableStream((unsigned)DrawableStream::Vertex0+drawableGeo->_vertexStreamCount), scaffoldIdx, drawableGeoIdx, 
-								skinningData->_animatedVertexElements._offset, skinningData->_animatedVertexElements._size);
-						}
+				auto& rg = *request._rawGeometry;
 
-						_geosLayout.push_back(BuildFinalIA(rg));
+				// Build the main non-deformed vertex stream
+				auto drawableGeo = _drawablesPool->CreateGeo();
+				auto drawableGeoIdx = (unsigned)_geos.size();
+				auto scaffoldIdx = GetScaffoldIdx(scaffold, modelScaffoldName);
+
+				assert(rg._vb._size);
+				AddStaticLoadRequest(LoadBuffer::VB, DrawableStream::Vertex0, scaffoldIdx, drawableGeoIdx, rg._vb._offset, rg._vb._size);
+				drawableGeo->_vertexStreamCount = 1;
+
+				// Attach those vertex streams that come from the deform operation
+				if (!request._deformerBinding._generatedElements.empty()) {
+					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
+					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = request._deformerBinding._postDeformBufferOffset;
+					drawableGeo->_deformAccelerator = deformAccelerator;
+					_geosLayout.push_back(BuildFinalIA(rg, &request._deformerBinding, drawableGeo->_vertexStreamCount));
+					++drawableGeo->_vertexStreamCount;
+				} else {
+					if (request._skinningData) {
+						AddStaticLoadRequest(
+							LoadBuffer::VB, DrawableStream((unsigned)DrawableStream::Vertex0+drawableGeo->_vertexStreamCount), scaffoldIdx, drawableGeoIdx, 
+							request._skinningData->_animatedVertexElements._offset, request._skinningData->_animatedVertexElements._size);
 					}
 
-					// hack -- we might need this for material deform, as well
-					drawableGeo->_deformAccelerator = deformAccelerator;
-
-					#if defined(_DEBUG)
-						drawableGeo->_name = modelScaffoldName;
-					#endif
-					
-					AddStaticLoadRequest(LoadBuffer::IB, DrawableStream::IB, scaffoldIdx, drawableGeoIdx, rg._ib._offset, rg._ib._size);
-					drawableGeo->_ibFormat = rg._ib._format;
-					_geos.push_back(std::move(drawableGeo));
-					return (unsigned)_geos.size()-1;
-				} else {
-					return ~0u;
+					_geosLayout.push_back(BuildFinalIA(rg));
 				}
+
+				// hack -- we might need this for material deform, as well
+				drawableGeo->_deformAccelerator = deformAccelerator;
+
+				#if defined(_DEBUG)
+					drawableGeo->_name = modelScaffoldName;
+				#endif
+				
+				AddStaticLoadRequest(LoadBuffer::IB, DrawableStream::IB, scaffoldIdx, drawableGeoIdx, rg._ib._offset, rg._ib._size);
+				drawableGeo->_ibFormat = rg._ib._format;
+				_geos.push_back(std::move(drawableGeo));
+				_geoRequests.emplace_back(std::move(request));
+				return (unsigned)_geos.size()-1;
 			}
 
 			void LoadPendingStaticResources(

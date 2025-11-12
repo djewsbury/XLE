@@ -77,9 +77,30 @@ namespace RenderCore { namespace Techniques
 			std::vector<InputElementDesc> _generatedElements;
 			std::vector<uint64_t> _suppressedElements;
 			unsigned _postDeformBufferOffset = 0;
+			friend bool operator==(const GeoBinding& lhs, const GeoBinding& rhs);
 		};
 		using ElementAndGeoIdx = std::pair<unsigned, unsigned>;
 		std::vector<std::pair<ElementAndGeoIdx, GeoBinding>> _geoBindings;	// geoId, GeoBinding
+
+		friend bool operator==(const DeformerToRendererBinding& lhs, const DeformerToRendererBinding& rhs);
 	};
+
+	T1(Type) inline bool CompareRange(IteratorRange<const Type*> lhs, IteratorRange<const Type*> rhs)
+	{
+		if (lhs.size() != rhs.size()) return false;
+		for (unsigned c=0; c<lhs.size(); ++c)
+			if (!(lhs[c] == rhs[c])) return false;
+		return true;
+	}
+
+	inline bool operator==(const DeformerToRendererBinding::GeoBinding& lhs, const DeformerToRendererBinding::GeoBinding& rhs)
+	{
+		return CompareRange<InputElementDesc>(lhs._generatedElements, rhs._generatedElements) && CompareRange<uint64_t>(lhs._suppressedElements, rhs._suppressedElements) && lhs._postDeformBufferOffset == rhs._postDeformBufferOffset;
+	}
+	
+	inline bool operator==(const DeformerToRendererBinding& lhs, const DeformerToRendererBinding& rhs)
+	{
+		return CompareRange<std::pair<DeformerToRendererBinding::ElementAndGeoIdx, DeformerToRendererBinding::GeoBinding>>(lhs._geoBindings, rhs._geoBindings);
+	}
 }}
 
