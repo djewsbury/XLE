@@ -181,6 +181,7 @@ namespace RenderCore { namespace Techniques
 		RenderCore::Assets::RenderStateSet _stateSet;
 		uint64_t _shaderPatchCollection = ~0ull;
 		uint64_t _materialDescriptorSetLayout = ~0ull;
+		uint64_t _commandStream = ~0ull;
 	};
 	MatMachineDecompositionHelper DecomposeMaterialMachine(IteratorRange<RenderCore::Assets::ScaffoldCmdIterator>);
 

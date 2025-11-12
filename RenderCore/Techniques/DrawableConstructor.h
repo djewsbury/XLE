@@ -59,6 +59,7 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<CommandStream> _cmdStreams;
 
+		const CommandStream& GetCmdStream() const;
 		const CommandStream* FindCmdStream(uint64_t guid) const;
 
 		std::vector<Float4x4> _baseTransforms;
@@ -87,6 +88,12 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 			const std::shared_ptr<DeformAccelerator>& deformAccelerator);
 	};
+
+	inline auto DrawableConstructor::GetCmdStream() const -> const CommandStream&
+	{
+		assert(!_cmdStreams.empty());
+		return _cmdStreams.front();
+	}
 
 	inline auto DrawableConstructor::FindCmdStream(uint64_t guid) const -> const CommandStream*
 	{

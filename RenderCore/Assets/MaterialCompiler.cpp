@@ -159,6 +159,9 @@ namespace RenderCore { namespace Assets
 					}
 					tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachStateSet, resolvedMat._stateSet.GetHash());
 
+					if (resolvedMat._cmdStream)
+						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachCommandStream, resolvedMat._cmdStream);
+
 					if (resolvedMat._patchCollection.GetHash() != 0) {
 						tempBlock << MakeCmdAndSerializable(MaterialCommand::AttachPatchCollectionId, resolvedMat._patchCollection.GetHash());
 

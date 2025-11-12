@@ -22,8 +22,7 @@ namespace SceneEngine
 		const std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>& rendererConstruction)
 	{
 		using namespace RenderCore;
-		assert(!constructor._cmdStreams.empty());
-		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		auto& cmdStream = constructor.GetCmdStream();
 
 		assert(lookupContext.PktIndex() < dimof(cmdStream._drawCallCounts));
 		if (lookupContext.NextIndex() >= cmdStream._drawCallCounts[lookupContext.PktIndex()]) {

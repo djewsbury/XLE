@@ -17,6 +17,7 @@
 #include "../Assets/CompiledMaterialSet.h"
 #include "../Assets/RawMaterial.h"
 #include "../Assets/SkeletonMachine.h"
+#include "../Assets/MaterialMachine.h"
 #include "../Assets/AnimationBindings.h"		// required for extracting base transforms
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
@@ -553,6 +554,14 @@ namespace RenderCore { namespace Techniques
 		return nullptr;
 	}
 
+	static uint64_t FindCommandStream(IteratorRange<Assets::ScaffoldCmdIterator> material)
+	{
+		for (auto cmd:material)
+			if (cmd.Cmd() == (uint32_t)Assets::MaterialCommand::AttachCommandStream)
+				return cmd.As<uint64_t>();
+		return 0;
+	}
+
 	static const uint64_t s_topologicalCmdStream = "adjacency"_h;
 
 	class DrawableConstructor::Pimpl
@@ -595,37 +604,53 @@ namespace RenderCore { namespace Techniques
 					deformerBinding = geoDeformerInfrastructure->GetDeformerToRendererBinding();
 			}
 
-			// there can be multiple cmd streams in a single model scaffold. We will load and interpret each one
+			// We will always write to cmdStream 0 (even when the input model/material refers to other command streams).
+			// In this case, the model/material drive what gets rendered, rather than the parameter used when rendering
+			PendingCmdStream* dstCmdStream;
+			auto existingCmdStream = std::find_if(b2e(_pendingCmdStreams), [](const auto& q) { return q.first == 0; });
+			if (existingCmdStream == _pendingCmdStreams.end()) {
+				_pendingCmdStreams.emplace_back(0, PendingCmdStream{});
+				dstCmdStream = &_pendingCmdStreams.back().second;
+			} else
+				dstCmdStream = &existingCmdStream->second;
+
+			{
+				// BeginElement command
+				auto cmdId = (uint32_t)Command::BeginElement, blockSize = 4u;
+				dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
+				dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
+				dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&elementIdx, (const uint8_t*)(&elementIdx+1));
+			}
+
+			// We will go through every command stream, looking for what has material bindings for the relevent command stream
 			int maxTransformMarker = -1;
-			for (auto cmdStreamGuid:modelScaffold->CollateCommandStreams()) {
-				PendingCmdStream* dstCmdStream;
-				auto existingCmdStream = std::find_if(_pendingCmdStreams.begin(), _pendingCmdStreams.end(), [cmdStreamGuid](const auto& q) { return q.first == cmdStreamGuid; });
-				if (existingCmdStream == _pendingCmdStreams.end()) {
-					_pendingCmdStreams.emplace_back(cmdStreamGuid, PendingCmdStream{});
-					dstCmdStream = &_pendingCmdStreams.back().second;
-				} else
-					dstCmdStream = &existingCmdStream->second;
-
-				{
-					// BeginElement command
-					auto cmdId = (uint32_t)Command::BeginElement, blockSize = 4u;
-					dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
-					dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&blockSize, (const uint8_t*)(&blockSize+1));
-					dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&elementIdx, (const uint8_t*)(&elementIdx+1));
-				}
-
+			for (auto modelCommandStream:modelScaffold->CollateCommandStreams()) {
+				bool atLeastOneRelevantMaterialAssignment = false;
 				IteratorRange<const uint64_t*> currentMaterialAssignments;
 				std::vector<std::pair<unsigned, unsigned>> modelGeoIdToPendingGeoIndex;
 				std::optional<Float4x4> currentGeoSpaceToNodeSpace;
-				for (auto cmd:modelScaffold->CommandStream(cmdStreamGuid)) {
+				for (auto cmd:modelScaffold->CommandStream(modelCommandStream)) {
 					switch (cmd.Cmd()) {
 					default:
 						{
 							if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::SetMaterialAssignments) {
 								currentMaterialAssignments = cmd.RawData().Cast<const uint64_t*>();
+
+								// Look at the materials to see if the command stream matches the command stream we're going through
+								atLeastOneRelevantMaterialAssignment = false;
+								for (auto matAssignment:currentMaterialAssignments) {
+									auto materialMachine = materialScaffold->GetMaterialMachine(matAssignment);
+									atLeastOneRelevantMaterialAssignment |= FindCommandStream(materialMachine) == modelCommandStream;
+									if (atLeastOneRelevantMaterialAssignment) break;
+								}
+								if (!atLeastOneRelevantMaterialAssignment) continue;
+								
 							} else if (cmd.Cmd() == (uint32_t)Assets::ModelCommand::SetTransformMarker) {
 								maxTransformMarker = std::max(maxTransformMarker, (int)cmd.As<unsigned>());
 							}
+
+							// Note that we have to write out command stream elements even if atLeastOneRelevantMaterialAssignment is false,
+							// because the SetMaterialAssignments may not necessarily be called first
 
 							auto cmdId = cmd.Cmd(), blockSize = cmd.BlockSize();
 							dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), (const uint8_t*)&cmdId, (const uint8_t*)(&cmdId+1));
@@ -636,6 +661,8 @@ namespace RenderCore { namespace Techniques
 
 					case (uint32_t)Assets::ModelCommand::GeoCall:
 						{
+							if (!atLeastOneRelevantMaterialAssignment) continue;
+
 							auto& geoCallDesc = cmd.As<Assets::GeoCallDesc>();
 							auto geoMachine = modelScaffold->GetGeoMachine(geoCallDesc._geoId);
 							assert(!geoMachine.empty());
@@ -644,7 +671,7 @@ namespace RenderCore { namespace Techniques
 							// Find the referenced geo object, and create the DrawableGeo object, etc
 							unsigned pendingGeoIdx = ~0u;
 							auto i = std::find_if(
-								modelGeoIdToPendingGeoIndex.begin(), modelGeoIdToPendingGeoIndex.end(),
+								b2e(modelGeoIdToPendingGeoIndex),
 								[geoId=geoCallDesc._geoId](const auto& q) { return q.first == geoId; });
 							if (i == modelGeoIdToPendingGeoIndex.end()) {
 								pendingGeoIdx = _pendingGeos.AddGeo(
@@ -699,6 +726,8 @@ namespace RenderCore { namespace Techniques
 									assert(materialIterator < currentMaterialAssignments.size());
 									auto matAssignment = currentMaterialAssignments[materialIterator++];
 									auto materialMachine = materialScaffold->GetMaterialMachine(matAssignment);
+									if (FindCommandStream(materialMachine) != modelCommandStream) continue;
+
 									auto* workingMaterial = _pendingPipelines.AddMaterial(
 										materialMachine,
 										materialScaffold,
@@ -719,10 +748,10 @@ namespace RenderCore { namespace Techniques
 									drawCall._indexCount = dc._indexCount;
 									drawCall._firstVertex = dc._firstVertex;
 
-									if (cmdStreamGuid == s_topologicalCmdStream) {
-										if (drawCall._batchFilter != (unsigned)Batch::Opaque) continue;		// drop this draw call
-										drawCall._batchFilter = (unsigned)Batch::Topological;
-									}
+									// if (modelCommandStream == s_topologicalCmdStream) {
+									// 	if (drawCall._batchFilter != (unsigned)Batch::Opaque) continue;		// drop this draw call
+									// 	drawCall._batchFilter = (unsigned)Batch::Topological;
+									// }
 
 									dstCmdStream->_drawCalls.push_back(drawCall);
 								}
@@ -820,7 +849,7 @@ namespace RenderCore { namespace Techniques
 			// per-command-stream stuff --
 
 			for (auto& srcCmdStream:_pendingCmdStreams) {
-				auto dstCmdStream = std::find_if(dst._cmdStreams.begin(), dst._cmdStreams.end(), [guid=srcCmdStream.first](const auto& q) { return q._guid == guid; });
+				auto dstCmdStream = std::find_if(b2e(dst._cmdStreams), [guid=srcCmdStream.first](const auto& q) { return q._guid == guid; });
 				if (dstCmdStream == dst._cmdStreams.end()) {
 					dst._cmdStreams.emplace_back(CommandStream{srcCmdStream.first});
 					dstCmdStream = dst._cmdStreams.end()-1;

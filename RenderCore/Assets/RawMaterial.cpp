@@ -381,6 +381,9 @@ namespace RenderCore { namespace Assets
             _samplers = DeserializeSamplerStates(formatter);
             RequireEndElement(formatter);
             return true;
+        } else if (XlEqString(eleName, "CommandStream")) {
+            _cmdStream = Hash64(Formatters::RequireStringValue(formatter));
+            return true;
         } else if (XlEqString(eleName, "Inherit")) {
             Throw(std::runtime_error("Unexpected Inherit key"));
         }
@@ -468,6 +471,8 @@ namespace RenderCore { namespace Assets
             } else
                 _samplers.emplace_back(s);
         }
+
+        if (src._cmdStream) _cmdStream = src._cmdStream;
 		_patchCollection.MergeInWithFilenameResolve(src._patchCollection, searchRules);
 	}
 

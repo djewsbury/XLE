@@ -61,7 +61,7 @@ namespace RenderCore { namespace Techniques
 			const InstancedFixedSkeleton_Drawable& drawable)
 		{
 			assert(drawable._objectToWorldCount != 0);
-			assert(drawFnContext.GetBoundLooseImmediateDatas());
+			// assert(drawFnContext.GetBoundLooseImmediateDatas()); HACK -- triggering this for shaders that don't read local to world
 			LocalTransformConstants localTransform;
 			localTransform._localSpaceView = {0,0,0};
 			localTransform._viewMask = 1u;
@@ -89,8 +89,7 @@ namespace RenderCore { namespace Techniques
 		IteratorRange<const Float3x4*> objectToWorlds)
 	{
 		using namespace RenderCore;
-		assert(!constructor._cmdStreams.empty());
-		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		auto& cmdStream = constructor.GetCmdStream();
 		Internal::InstancedFixedSkeleton_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
 		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
 		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
@@ -208,8 +207,7 @@ namespace RenderCore { namespace Techniques
 	{
 		using namespace RenderCore;
 		assert(viewMasks.size() == objectToWorlds.size());
-		assert(!constructor._cmdStreams.empty());
-		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		auto& cmdStream = constructor.GetCmdStream();
 		Internal::InstancedFixedSkeletonViewMask_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
 		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
 		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
@@ -326,8 +324,7 @@ namespace RenderCore { namespace Techniques
 	{
 		using namespace RenderCore;
 		assert(viewMask);
-		assert(!constructor._cmdStreams.empty());
-		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		auto& cmdStream = constructor.GetCmdStream();
 		Internal::SingleInstanceViewMask_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
 		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c)
 			drawables[c] = (cmdStream._drawCallCounts[c] && pkts[c]) ? pkts[c]->_drawables.Allocate<Internal::SingleInstanceViewMask_Drawable>(cmdStream._drawCallCounts[c]) : nullptr;
@@ -391,8 +388,7 @@ namespace RenderCore { namespace Techniques
 	{
 		using namespace RenderCore;
 		assert(viewMask);
-		assert(!constructor._cmdStreams.empty());
-		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		auto& cmdStream = constructor.GetCmdStream();
 		Internal::SingleInstanceViewMask_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
 		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c)
 			drawables[c] = (cmdStream._drawCallCounts[c] && pkts[c]) ? pkts[c]->_drawables.Allocate<Internal::SingleInstanceViewMask_Drawable>(cmdStream._drawCallCounts[c]) : nullptr;
@@ -454,8 +450,7 @@ namespace RenderCore { namespace Techniques
 		unsigned pktIndex)
 	{
 		using namespace RenderCore;
-		assert(!constructor._cmdStreams.empty());
-		auto& cmdStream = constructor._cmdStreams.front();		// first is always the default
+		auto& cmdStream = constructor.GetCmdStream();
 		return (pktIndex < dimof(cmdStream._drawCallCounts)) ? cmdStream._drawCallCounts[pktIndex] : 0;
 	}
 }}
