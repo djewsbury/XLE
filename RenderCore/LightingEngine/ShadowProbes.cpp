@@ -209,7 +209,7 @@ namespace RenderCore { namespace LightingEngine
 				for (unsigned p=0; p<nextBatchCount; ++p) probesThisStep[p] = _probesToRender[_probeIterator+p].second;
 				result._multiViewDesc.resize(nextBatchCount*6);
 				WriteProjectionDescs(result._multiViewDesc.data(), MakeIteratorRange(probesThisStep, probesThisStep+nextBatchCount));
-				result._pkts.resize((unsigned)Techniques::Batch::Max);
+				result._pkts.resize(Techniques::Services::GetInstance().BatchCodeCount());
 				result._pkts[(unsigned)Techniques::Batch::Opaque] = &_drawablePkt;
 				_pendingViews.reserve(result._multiViewDesc.size());
 				for (const auto&v:result._multiViewDesc) _pendingViews.push_back(v._worldToProjection);

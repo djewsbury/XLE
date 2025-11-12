@@ -48,6 +48,12 @@ namespace RenderCore { namespace Techniques
 		unsigned 			RegisterDeformConfigure(StringSection<>, std::shared_ptr<IDeformConfigure>);
 		void 				DeregisterDeformConfigure(unsigned);
 
+		/////////////////////////////
+		//   M I S C
+		////////////////////////////////////////////
+		unsigned 	ExtendedBatchCode(uint64_t id);
+		unsigned	BatchCodeCount();
+
 		void 		SetBufferUploads(const std::shared_ptr<BufferUploads::IManager>&);
 		void 		SetCommonResources(const std::shared_ptr<CommonResourceBox>&);
 		

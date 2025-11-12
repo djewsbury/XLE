@@ -333,8 +333,10 @@ namespace RenderCore { namespace LightingEngine
 			captures->_lightScene->CreateMainSceneResourceDelegate(),
 			hasSSR, hasSSAO, balanceNoiseTexture);
 
+		auto batches = Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending;
+		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
 		result.AddSubpass(
-			std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Decal|Techniques::BatchFlags::Blending, std::move(box),
+			std::move(mainSubpass), forwardIllumDelegate, batches, std::move(box),
 			std::move(resourceDelegate));
 		return result;
 	}

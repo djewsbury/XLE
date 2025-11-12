@@ -11,6 +11,7 @@
 #include "CommonUtils.h"
 #include "ResourceConstructionContext.h"
 #include "ManualDrawables.h"		// for DecomposeMaterialMachine
+#include "Services.h"
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelMachine.h"
 #include "../Assets/ModelScaffold.h"
@@ -88,7 +89,7 @@ namespace RenderCore { namespace Techniques
 			return part0;
 		}
 
-		static Batch CalculateBatchForStateSet(const Assets::RenderStateSet& stateSet)
+		static unsigned CalculateBatchForStateSet(const Assets::RenderStateSet& stateSet)
 		{
 			if (stateSet._flag & Assets::RenderStateSet::Flag::BlendType) {
 				switch (stateSet._blendType) {
@@ -96,17 +97,17 @@ namespace RenderCore { namespace Techniques
 				case Assets::RenderStateSet::BlendType::Ordered:
 				default:
 					if (stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend && stateSet._forwardBlendOp != BlendOp::NoBlending)
-						return Batch::Blending;
+						return (unsigned)Batch::Blending;
 					else
-						return Batch::Opaque;
+						return (unsigned)Batch::Opaque;
 				case Assets::RenderStateSet::BlendType::DeferredDecal:
-					return Batch::Decal;
+					return Services::GetInstance().ExtendedBatchCode("decal"_h);
 				}
 			}
 			if (stateSet._flag & Assets::RenderStateSet::Flag::ForwardBlend && stateSet._forwardBlendOp != BlendOp::NoBlending)
-				return Batch::Blending;
+				return (unsigned)Batch::Blending;
 			else
-				return Batch::Opaque;
+				return (unsigned)Batch::Opaque;
 		}
 
 		class DrawableGeoBuilder
@@ -495,7 +496,7 @@ namespace RenderCore { namespace Techniques
 						deformBinding);
 
 					i->_descriptorSetAcceleratorIdx = AddDescriptorSetAccelerator(std::move(descSet));
-					i->_batchFilter = (unsigned)CalculateBatchForStateSet(i->_stateSet);
+					i->_batchFilter = decomposed._batch ? Services::GetInstance().ExtendedBatchCode(decomposed._batch) : (unsigned)CalculateBatchForStateSet(i->_stateSet);
 					return AsPointer(i);
 				}
 			}
@@ -895,10 +896,10 @@ namespace RenderCore { namespace Techniques
 				dstCmdStream->_translatedCmdStream.insert(dstCmdStream->_translatedCmdStream.end(), srcCmdStream.second._translatedCmdStream.begin(), srcCmdStream.second._translatedCmdStream.end());
 
 				// count up draw calls
-				static_assert(dimof(dstCmdStream->_drawCallCounts) == (size_t)Batch::Max);
-				for (auto& count:dstCmdStream->_drawCallCounts) count = 0;
-				for (const auto& drawCall:dstCmdStream->_drawCalls)
-					++dstCmdStream->_drawCallCounts[(unsigned)drawCall._batchFilter];
+				unsigned maxBatchFilter = 0;
+				for (const auto& drawCall:dstCmdStream->_drawCalls) maxBatchFilter = std::max(maxBatchFilter, drawCall._batchFilter);
+				dstCmdStream->_drawCallCounts.resize(maxBatchFilter+1, 0);
+				for (const auto& drawCall:dstCmdStream->_drawCalls) ++dstCmdStream->_drawCallCounts[(unsigned)drawCall._batchFilter];
 			}
 
 			_pendingCmdStreams.clear();

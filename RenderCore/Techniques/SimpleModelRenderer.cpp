@@ -184,8 +184,8 @@ namespace RenderCore { namespace Techniques
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		if (!cmdStream) return;		// cmdStream could the topological stream, for example
 
-		SimpleModelDrawable* drawables[dimof(cmdStream->_drawCallCounts)];
-		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
+		VLA(SimpleModelDrawable*, drawables, cmdStream->_drawCallCounts.size());
+		for (unsigned c=0; c<cmdStream->_drawCallCounts.size(); ++c) {
 			if (!cmdStream->_drawCallCounts[c]) {
 				drawables[c] = nullptr;
 				continue;
@@ -242,10 +242,6 @@ namespace RenderCore { namespace Techniques
 				break;
 			}
 		}
-
-		// if we need the topological batch, make sure to draw the appropriate cmd stream
-		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
-			BuildDrawables(pkts, deformersPkt, localToWorld, deformInstanceIdx, viewMask, s_topologicalCmdStream);
 	}
 
 	void SimpleModelRenderer::BuildDrawables(
@@ -263,8 +259,8 @@ namespace RenderCore { namespace Techniques
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		if (!cmdStream) return;		// cmdStream could the topological stream, for example
 
-		SimpleModelDrawable* drawables[dimof(cmdStream->_drawCallCounts)];
-		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
+		VLA(SimpleModelDrawable*, drawables, cmdStream->_drawCallCounts.size());
+		for (unsigned c=0; c<cmdStream->_drawCallCounts.size(); ++c) {
 			if (!cmdStream->_drawCallCounts[c]) {
 				drawables[c] = nullptr;
 				continue;
@@ -328,10 +324,6 @@ namespace RenderCore { namespace Techniques
 			}
 		}
 
-		// if we need the topological batch, make sure to draw the appropriate cmd stream
-		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
-			BuildDrawables(pkts, deformersPkt, localToWorld, deformInstanceIdx, viewMask, s_topologicalCmdStream);
-
 		TestDescSetInvalidation();
 	}
 
@@ -356,8 +348,8 @@ namespace RenderCore { namespace Techniques
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		if (!cmdStream) return;		// cmdStream could the topological stream, for example
 
-		SimpleModelDrawable_Delegate* drawables[dimof(cmdStream->_drawCallCounts)];
-		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
+		VLA(SimpleModelDrawable_Delegate*, drawables, cmdStream->_drawCallCounts.size());
+		for (unsigned c=0; c<cmdStream->_drawCallCounts.size(); ++c) {
 			if (!cmdStream->_drawCallCounts[c]) {
 				drawables[c] = nullptr;
 				continue;
@@ -427,10 +419,6 @@ namespace RenderCore { namespace Techniques
 				break;
 			}
 		}
-
-		// if we need the topological batch, make sure to draw the appropriate cmd stream
-		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
-			BuildDrawables(pkts, deformersPkt, localToWorld, animatedSkeletonOutput, deformInstanceIdx, delegate, viewMask, s_topologicalCmdStream);
 	}
 
 	void SimpleModelRenderer::BuildGeometryProcables(
@@ -442,8 +430,8 @@ namespace RenderCore { namespace Techniques
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		if (!cmdStream) return;		// cmdStream could the topological stream, for example
 
-		GeometryProcable* drawables[dimof(cmdStream->_drawCallCounts)];
-		for (unsigned c=0; c<dimof(cmdStream->_drawCallCounts); ++c) {
+		VLA(GeometryProcable*, drawables, cmdStream->_drawCallCounts.size());
+		for (unsigned c=0; c<cmdStream->_drawCallCounts.size(); ++c) {
 			if (!cmdStream->_drawCallCounts[c]) {
 				drawables[c] = nullptr;
 				continue;
@@ -496,10 +484,6 @@ namespace RenderCore { namespace Techniques
 				break;
 			}
 		}
-
-		// if we need the topological batch, make sure to draw the appropriate cmd stream
-		if (pkts[(unsigned)Batch::Topological] && cmdStreamGuid != s_topologicalCmdStream)
-			BuildGeometryProcables(pkts, localToWorld, s_topologicalCmdStream);
 	}
 
 	void SimpleModelRenderer::LookupDrawableMetadata(
@@ -509,7 +493,7 @@ namespace RenderCore { namespace Techniques
 		auto* cmdStream = _drawableConstructor->FindCmdStream(cmdStreamGuid);
 		if (!cmdStream) return;		// cmdStream could the topological stream, for example
 
-		assert(lookupContext.PktIndex() < dimof(cmdStream->_drawCallCounts));
+		assert(lookupContext.PktIndex() < cmdStream->_drawCallCounts.size());
 		if (lookupContext.NextIndex() >= cmdStream->_drawCallCounts[lookupContext.PktIndex()]) {
 			lookupContext.AdvanceIndexOffset(cmdStream->_drawCallCounts[lookupContext.PktIndex()]);
 			return;

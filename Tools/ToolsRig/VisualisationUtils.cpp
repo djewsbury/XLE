@@ -639,8 +639,7 @@ namespace ToolsRig
 
 		auto deformersPacket = drawingApparatus._deformAccelerators->CreatePacket();
 		RenderCore::Techniques::DrawablesPacket pkt;
-		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max] {};
-		pkts[(unsigned)RenderCore::Techniques::Batch::Opaque] = &pkt;
+		RenderCore::Techniques::DrawablesPacket* pkts[1] { &pkt };
 		SceneEngine::ExecuteSceneContext sceneExecuteContext{MakeIteratorRange(pkts), deformersPacket.get(), {}};
 		if (viewProjDesc)
 			sceneExecuteContext._views = { &(*viewProjDesc), &(*viewProjDesc)+1 };

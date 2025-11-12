@@ -90,9 +90,9 @@ namespace RenderCore { namespace Techniques
 	{
 		using namespace RenderCore;
 		auto& cmdStream = constructor.GetCmdStream();
-		Internal::InstancedFixedSkeleton_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
+		VLA(Internal::InstancedFixedSkeleton_Drawable*, drawables, cmdStream._drawCallCounts.size());
 		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
-		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
+		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c) {
 			if (cmdStream._drawCallCounts[c] && pkts[c]) {
 				drawables[c] = pkts[c]->_drawables.Allocate<Internal::InstancedFixedSkeleton_Drawable>(cmdStream._drawCallCounts[c]);
 				pktForAllocations = pkts[c];
@@ -208,9 +208,9 @@ namespace RenderCore { namespace Techniques
 		using namespace RenderCore;
 		assert(viewMasks.size() == objectToWorlds.size());
 		auto& cmdStream = constructor.GetCmdStream();
-		Internal::InstancedFixedSkeletonViewMask_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
+		VLA(Internal::InstancedFixedSkeletonViewMask_Drawable*, drawables, cmdStream._drawCallCounts.size());
 		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
-		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) {
+		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c) {
 			if (cmdStream._drawCallCounts[c] && pkts[c]) {
 				drawables[c] = pkts[c]->_drawables.Allocate<Internal::InstancedFixedSkeletonViewMask_Drawable>(cmdStream._drawCallCounts[c]);
 				pktForAllocations = pkts[c];
@@ -221,8 +221,8 @@ namespace RenderCore { namespace Techniques
 		if (!pktForAllocations) return;		// no overlap between our output pkts and what's in 'pkts'
 
 		#if defined(_DEBUG)
-			Internal::InstancedFixedSkeletonViewMask_Drawable* starts[dimof(cmdStream._drawCallCounts)];
-			for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) starts[c] = drawables[c];
+			VLA(Internal::InstancedFixedSkeletonViewMask_Drawable*, starts, cmdStream._drawCallCounts.size());
+			for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c) starts[c] = drawables[c];
 		#endif
 
 		const unsigned deformInstanceIdx = ~0u;
@@ -283,7 +283,7 @@ namespace RenderCore { namespace Techniques
 		}
 
 		#if defined(_DEBUG)
-			for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c) assert(((drawables[c] - starts[c]) == cmdStream._drawCallCounts[c]) || !pkts[c]);		// expecting draw call count to match promised count
+			for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c) assert(((drawables[c] - starts[c]) == cmdStream._drawCallCounts[c]) || !pkts[c]);		// expecting draw call count to match promised count
 		#endif
 	}
 
@@ -325,8 +325,8 @@ namespace RenderCore { namespace Techniques
 		using namespace RenderCore;
 		assert(viewMask);
 		auto& cmdStream = constructor.GetCmdStream();
-		Internal::SingleInstanceViewMask_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
-		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c)
+		VLA(Internal::SingleInstanceViewMask_Drawable*, drawables, cmdStream._drawCallCounts.size());
+		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c)
 			drawables[c] = (cmdStream._drawCallCounts[c] && pkts[c]) ? pkts[c]->_drawables.Allocate<Internal::SingleInstanceViewMask_Drawable>(cmdStream._drawCallCounts[c]) : nullptr;
 
 		const Float4x4* geoSpaceToNodeSpace = nullptr;
@@ -389,8 +389,8 @@ namespace RenderCore { namespace Techniques
 		using namespace RenderCore;
 		assert(viewMask);
 		auto& cmdStream = constructor.GetCmdStream();
-		Internal::SingleInstanceViewMask_Drawable* drawables[dimof(cmdStream._drawCallCounts)];
-		for (unsigned c=0; c<dimof(cmdStream._drawCallCounts); ++c)
+		VLA(Internal::SingleInstanceViewMask_Drawable*, drawables, cmdStream._drawCallCounts.size());
+		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c)
 			drawables[c] = (cmdStream._drawCallCounts[c] && pkts[c]) ? pkts[c]->_drawables.Allocate<Internal::SingleInstanceViewMask_Drawable>(cmdStream._drawCallCounts[c]) : nullptr;
 
 		auto nodeSpaceToWorld = Identity<Float3x4>();
@@ -451,6 +451,6 @@ namespace RenderCore { namespace Techniques
 	{
 		using namespace RenderCore;
 		auto& cmdStream = constructor.GetCmdStream();
-		return (pktIndex < dimof(cmdStream._drawCallCounts)) ? cmdStream._drawCallCounts[pktIndex] : 0;
+		return (pktIndex < cmdStream._drawCallCounts.size()) ? cmdStream._drawCallCounts[pktIndex] : 0;
 	}
 }}

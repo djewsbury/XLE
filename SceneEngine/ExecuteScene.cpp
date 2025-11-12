@@ -10,6 +10,7 @@
 #include "../RenderCore/Techniques/RenderPass.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/Drawables.h"
+#include "../RenderCore/Techniques/Services.h"
 #include "../Assets/Marker.h"
 
 namespace SceneEngine
@@ -22,9 +23,11 @@ namespace SceneEngine
 		IScene& scene)
     {
 		RenderCore::Techniques::DrawablesPacket pkt;
-		RenderCore::Techniques::DrawablesPacket* pkts[(unsigned)RenderCore::Techniques::Batch::Max] {};
+		unsigned batchCount = RenderCore::Techniques::Services::GetInstance().BatchCodeCount();
+		VLA(RenderCore::Techniques::DrawablesPacket*, pkts, batchCount);
+		std::memset(pkts, 0, sizeof(void*)*batchCount);
 		pkts[(unsigned)batch] = &pkt;
-		ExecuteSceneContext executeContext{MakeIteratorRange(pkts), nullptr, MakeIteratorRange(&view, &view+1)};
+		ExecuteSceneContext executeContext{MakeIteratorRange(pkts, pkts+batchCount), nullptr, MakeIteratorRange(&view, &view+1)};
         scene.ExecuteScene(parserContext.GetThreadContext(), executeContext);
 		parserContext.RequireCommandList(executeContext._completionCmdList);
 		RenderCore::Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkt);

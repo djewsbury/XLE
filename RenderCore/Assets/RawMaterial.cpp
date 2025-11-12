@@ -381,6 +381,9 @@ namespace RenderCore { namespace Assets
             _samplers = DeserializeSamplerStates(formatter);
             RequireEndElement(formatter);
             return true;
+        } else if (XlEqString(eleName, "Batch")) {
+            _batch = Hash64(Formatters::RequireStringValue(formatter));
+            return true;
         } else if (XlEqString(eleName, "CommandStream")) {
             _cmdStream = Hash64(Formatters::RequireStringValue(formatter));
             return true;
@@ -444,6 +447,10 @@ namespace RenderCore { namespace Assets
             SerializeSamplerStates(formatter, _samplers);
             formatter.EndElement(ele);
         }
+
+        char buffer[64];
+        if (_batch) formatter.WriteKeyedValue("Batch", StringMeldInPlace(buffer) << _batch);
+        if (_cmdStream) formatter.WriteKeyedValue("CommandStream", StringMeldInPlace(buffer) << _cmdStream);
     }
 
     void RawMaterial::MergeInWithFilenameResolve(const RawMaterial& src, const ::Assets::DirectorySearchRules& searchRules)
@@ -472,6 +479,7 @@ namespace RenderCore { namespace Assets
                 _samplers.emplace_back(s);
         }
 
+        if (src._batch) _batch = src._batch;
         if (src._cmdStream) _cmdStream = src._cmdStream;
 		_patchCollection.MergeInWithFilenameResolve(src._patchCollection, searchRules);
 	}
@@ -492,7 +500,9 @@ namespace RenderCore { namespace Assets
             _selectors.GetHash(), _selectors.GetParameterNamesHash(),
             _uniforms.GetHash(), _uniforms.GetParameterNamesHash(),
             _stateSet.GetHash(),
-            _patchCollection.GetHash()
+            _patchCollection.GetHash(),
+            _batch,
+            _cmdStream
         };
         auto result = Hash64(MakeIteratorRange(hashes), seed);
         for (auto& s:_samplers)

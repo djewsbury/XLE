@@ -17,6 +17,7 @@ namespace RenderCore { namespace Assets
 		AttachSamplerBindings,
 		AttachPatchCollectionId,
 		AttachMaterialDescriptorSetLayoutId,
+		AttachBatch,
 		AttachCommandStream
 	};
 }}

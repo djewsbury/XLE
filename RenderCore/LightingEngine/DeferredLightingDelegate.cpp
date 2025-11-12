@@ -29,6 +29,7 @@
 #include "../Techniques/Techniques.h"
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/DeformAccelerator.h"
+#include "../Techniques/Services.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Assets.h"
@@ -231,7 +232,9 @@ namespace RenderCore { namespace LightingEngine
 				box.SetParameter("GBUFFER_TYPE", (unsigned)gbufferType);
 				box.SetParameter("FRONT_STENCIL_REF", 0xff);
 				box.SetParameter("BACK_STENCIL_REF", 0xff);
-				createGBuffer.AddSubpass(std::move(subpass), std::move(defIllumDel), Techniques::BatchFlags::Opaque, std::move(box), std::move(srDelegate));
+				unsigned batches = Techniques::BatchFlags::Opaque;
+				batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
+				createGBuffer.AddSubpass(std::move(subpass), std::move(defIllumDel), batches, std::move(box), std::move(srDelegate));
 				return std::make_pair(std::move(createGBuffer), normalsFitting->GetCompletionCommandList());
 			});
 		return result;
@@ -577,7 +580,9 @@ namespace RenderCore { namespace LightingEngine
 
 					// prepare-only steps
 					for (const auto&shadowPreparer:captures->_lightScene->_shadowPreparers->_preparers) {
-						mainSequence.CreatePrepareOnlyParseScene(Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Decal|Techniques::BatchFlags::Blending);
+						auto batches = Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending;
+						batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
+						mainSequence.CreatePrepareOnlyParseScene(batches);
 						mainSequence.CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
 					}
 

@@ -47,6 +47,7 @@ namespace RenderCore { namespace LightingEngine
 		std::vector<bool> _drawablePktsReserved;
 		std::vector<Techniques::IShaderResourceDelegate*> _delegatesPendingUnbind;
 		unsigned _drawablePktIdxOffset = 0;
+		unsigned _drawablePktsPerParse = 0;
 		FrameToFrameProperties* _frameToFrameProps = nullptr;
 		IteratorRange<const std::pair<uint64_t, std::shared_ptr<void>>*> _interfaces;
 		std::shared_ptr<Techniques::DeformersPacket> _deformersPacket;

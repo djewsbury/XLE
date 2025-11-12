@@ -908,6 +908,8 @@ namespace RenderCore { namespace Techniques
 				assert(result._matSelectors.GetCount() == 0);
 				assert(!cmd.RawData().empty());
 				result._matSelectors = *(const ParameterBox*)cmd.RawData().begin();
+			} else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachBatch) {
+				result._batch = cmd.As<uint64_t>();
 			} else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::MaterialCommand::AttachCommandStream) {
 				result._commandStream = cmd.As<uint64_t>();
 			}

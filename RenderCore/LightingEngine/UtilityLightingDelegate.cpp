@@ -16,11 +16,14 @@
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/Techniques.h"
 #include "../Techniques/DeformAccelerator.h"
+#include "../Techniques/Services.h"
 #include "../IDevice.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/Assets.h"
 #include "../Utility/MemoryUtils.h"
+
+using namespace Utility::Literals;
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -93,7 +96,9 @@ namespace RenderCore { namespace LightingEngine
 			mainSubpass.SetName("Utility");
 
 			ParameterBox box;
-			result.AddSubpass(std::move(mainSubpass), mainDelegate, Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Decal|Techniques::BatchFlags::Blending);
+			auto batches = Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending;
+			batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
+			result.AddSubpass(std::move(mainSubpass), mainDelegate, batches);
 		}
 
 		return result;

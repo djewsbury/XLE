@@ -24,7 +24,7 @@ namespace SceneEngine
 		using namespace RenderCore;
 		auto& cmdStream = constructor.GetCmdStream();
 
-		assert(lookupContext.PktIndex() < dimof(cmdStream._drawCallCounts));
+		assert(lookupContext.PktIndex() < cmdStream._drawCallCounts.size());
 		if (lookupContext.NextIndex() >= cmdStream._drawCallCounts[lookupContext.PktIndex()]) {
 			lookupContext.AdvanceIndexOffset(cmdStream._drawCallCounts[lookupContext.PktIndex()]);
 			return;

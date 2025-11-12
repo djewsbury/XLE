@@ -13,6 +13,8 @@
 #include "wildcards.hpp"
 #include <vector>
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Techniques
 {
 	class Services::Pimpl
@@ -36,6 +38,9 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<DeformConfigure> _deformConfigures;
 		unsigned _nextDeformConfigureId = 1;
+
+		std::vector<uint64_t> _batchCodes;
+		std::atomic<unsigned> _batchCodeCount;
 
 		Threading::Mutex _lock;
 	};
@@ -118,6 +123,21 @@ namespace RenderCore { namespace Techniques
 		assert(0);		// didn't find it
 	}
 
+	unsigned Services::ExtendedBatchCode(uint64_t id)
+	{
+		std::unique_lock<decltype(_pimpl->_lock)> locker{_pimpl->_lock};
+		auto i = std::find(b2e(_pimpl->_batchCodes), id);
+		if (i != _pimpl->_batchCodes.end()) return unsigned(i-_pimpl->_batchCodes.begin());
+		_pimpl->_batchCodes.emplace_back(id);
+		_pimpl->_batchCodeCount = _pimpl->_batchCodes.size();
+		return (unsigned)_pimpl->_batchCodes.size()-1;
+	}
+
+	unsigned Services::BatchCodeCount()
+	{
+		return _pimpl->_batchCodeCount;
+	}
+
 	Services::Services(const std::shared_ptr<RenderCore::IDevice>& device)
 	{
 		_pimpl = std::make_unique<Pimpl>();
@@ -125,6 +145,8 @@ namespace RenderCore { namespace Techniques
 		_subFrameEvents = std::make_shared<SubFrameEvents>();
 		_textureCompilerRegistrar = std::make_shared<Assets::TextureCompilerRegistrar>();
 		_compoundAssetUtil = std::make_shared<::AssetsNew::CompoundAssetUtil>(std::make_shared<::AssetsNew::AssetHeap>());
+		_pimpl->_batchCodes.push_back("opaque"_h);
+		_pimpl->_batchCodes.push_back("blending"_h);
 	}
 
 	Services::~Services()

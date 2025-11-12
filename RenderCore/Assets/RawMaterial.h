@@ -163,6 +163,7 @@ namespace RenderCore { namespace Assets
         ParameterBox	_uniforms;
         RenderStateSet	_stateSet;
         std::vector<std::pair<std::string, SamplerDesc>> _samplers;
+        uint64_t        _batch = 0;
         uint64_t        _cmdStream = 0;
 
 		ShaderPatchCollection _patchCollection;

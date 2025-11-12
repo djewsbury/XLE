@@ -19,6 +19,7 @@
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/PipelineLayoutDelegate.h"     // (for CompiledPipelineLayoutAsset)
 #include "../../RenderCore/Techniques/Drawables.h"
+#include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Assets/PredefinedCBLayout.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Format.h"
@@ -65,11 +66,12 @@ namespace ToolsRig
 		using namespace RenderCore;
 		using namespace SceneEngine;
 		SceneEngine::ExecuteSceneContext sceneExeContext;
-        Techniques::DrawablesPacket pkts[(unsigned)Techniques::Batch::Max];
-        Techniques::DrawablesPacket* pktPtrs[(unsigned)Techniques::Batch::Max];
-        for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
-            pktPtrs[c] = &pkts[c];
-        sceneExeContext._destinationPkts = MakeIteratorRange(pktPtrs);
+        const unsigned batchCount = RenderCore::Techniques::Services::GetInstance().BatchCodeCount();
+        assert(batchCount);
+        std::vector<Techniques::DrawablesPacket> pkt; pkt.resize(batchCount);
+        VLA(Techniques::DrawablesPacket*, pktPtr, batchCount);
+        for (unsigned c=0; c<batchCount; ++c) pktPtr[c] = &pkt[c];
+        sceneExeContext._destinationPkts = MakeIteratorRange(pktPtr, pktPtr+batchCount);
         sceneExeContext._views = {&parserContext.GetProjectionDesc(), &parserContext.GetProjectionDesc()+1};
 		if (materialGuid == ~0ull) {
 			renderer.BuildDrawablesSingleView(
@@ -81,9 +83,9 @@ namespace ToolsRig
 		}
         parserContext.RequireCommandList(sceneExeContext._completionCmdList);
 
-        for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) {
-            if (pkts[c]._drawables.empty()) continue;
-            Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkts[c]);
+        for (unsigned c=0; c<batchCount; ++c) {
+            if (pkt[c]._drawables.empty()) continue;
+            Techniques::Draw(parserContext, pipelineAccelerators, sequencerConfig, pkt[c]);
         }
     }
 

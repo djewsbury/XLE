@@ -8,14 +8,13 @@
 #include "RayVsModel.h"
 #include "PlacementsManager.h"
 
-#include "../RenderCore/RenderUtils.h"
 #include "../RenderCore/IDevice.h"
-#include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/Drawables.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../RenderCore/Techniques/Services.h"
 
 #include "../Math/Transformations.h"
 #include "../Math/Vector.h"
@@ -146,12 +145,14 @@ namespace SceneEngine
             TRY
             {
                 using namespace RenderCore;
-                Techniques::DrawablesPacket pkt[(unsigned)Techniques::Batch::Max];
-                Techniques::DrawablesPacket* pktPtr[(unsigned)Techniques::Batch::Max];
-                for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) pktPtr[c] = &pkt[c];
+                const unsigned batchCount = RenderCore::Techniques::Services::GetInstance().BatchCodeCount();
+                assert(batchCount);
+                std::vector<Techniques::DrawablesPacket> pkt; pkt.resize(batchCount);
+                VLA(Techniques::DrawablesPacket*, pktPtr, batchCount);
+                for (unsigned c=0; c<batchCount; ++c) pktPtr[c] = &pkt[c];
                 ExecuteSceneContext sceneExeContext;
                 sceneExeContext._views = {&parsingContext.GetProjectionDesc(), &parsingContext.GetProjectionDesc()+1};
-                sceneExeContext._destinationPkts = {pktPtr, &pktPtr[(unsigned)Techniques::Batch::Max]};
+                sceneExeContext._destinationPkts = {pktPtr, pktPtr+batchCount};
 
                 auto& renderer = *placementsEditor.GetManager()->GetRenderer();
                 auto count = trans->GetObjectCount();
@@ -171,7 +172,7 @@ namespace SceneEngine
                         parsingContext.GetPipelineAcceleratorsVisibility() };
                     intersectionContext.SetRay(worldSpaceRay);
                     parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
-                    for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
+                    for (unsigned c=0; c<batchCount; ++c)
                         intersectionContext.ExecuteDrawables(parsingContext, pkt[c], c, cameraForLOD);
                     modelIntersectionResults = intersectionContext.GetResults();
                 }
@@ -298,12 +299,14 @@ namespace SceneEngine
                     parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
 
                     using namespace RenderCore;
-                    Techniques::DrawablesPacket pkt[(unsigned)Techniques::Batch::Max];
-                    Techniques::DrawablesPacket* pktPtr[(unsigned)Techniques::Batch::Max];
-                    for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c) pktPtr[c] = &pkt[c];
+                    const unsigned batchCount = RenderCore::Techniques::Services::GetInstance().BatchCodeCount();
+                    assert(batchCount);
+                    std::vector<Techniques::DrawablesPacket> pkt; pkt.resize(batchCount);
+                    VLA(Techniques::DrawablesPacket*, pktPtr, batchCount);
+                    for (unsigned c=0; c<batchCount; ++c) pktPtr[c] = &pkt[c];
                     ExecuteSceneContext sceneExeContext;
                     sceneExeContext._views = {&parsingContext.GetProjectionDesc(), &parsingContext.GetProjectionDesc()+1};
-                    sceneExeContext._destinationPkts = {pktPtr, &pktPtr[(unsigned)Techniques::Batch::Max]};
+                    sceneExeContext._destinationPkts = {pktPtr, pktPtr+batchCount};
 
                     auto& renderer = *_placementsEditor->GetManager()->GetRenderer();
                     auto count = trans->GetObjectCount();
@@ -350,7 +353,7 @@ namespace SceneEngine
                                 parsingContext.GetPipelineAcceleratorsVisibility()};
                             intersectionContext.SetFrustum(frustum.GetLocalToProjection());
                             parsingContext.RequireCommandList(sceneExeContext._completionCmdList);
-                            for (unsigned c=0; c<(unsigned)Techniques::Batch::Max; ++c)
+                            for (unsigned c=0; c<batchCount; ++c)
                                 intersectionContext.ExecuteDrawables(parsingContext, pkt[c], c, &context._cameraDesc);
                             modelIntersectionResults = intersectionContext.GetResults();
                         }
