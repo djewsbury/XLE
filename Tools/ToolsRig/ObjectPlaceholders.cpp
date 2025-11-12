@@ -109,7 +109,7 @@ namespace ToolsRig
 			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 			std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
-			const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile,
+			const RenderCore::Assets::RawGeometryDesc& geo, const RenderCore::Assets::RawGeometryDrawOrderDesc& geoOrder, ::Assets::IFileInterface& largeBlocksFile,
 			StringSection<> identifier);
 		SimpleModel(
 			std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
@@ -130,7 +130,7 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _pipelineAccelerator;
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _descriptorSetAccelerator;
 
-		void Build(const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile, StringSection<> fn);
+		void Build(const RenderCore::Assets::RawGeometryDesc& geo, const RenderCore::Assets::RawGeometryDrawOrderDesc& geoOrder, ::Assets::IFileInterface& largeBlocksFile, StringSection<> fn);
 	};
 
 	void SimpleModel::BuildDrawables(
@@ -163,13 +163,13 @@ namespace ToolsRig
 		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> drawablesPool,
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAcceleratorPool,
 		std::shared_ptr<RenderCore::BufferUploads::IManager> bufferUploads,
-		const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile,
+		const RenderCore::Assets::RawGeometryDesc& geo, const RenderCore::Assets::RawGeometryDrawOrderDesc& geoOrder, ::Assets::IFileInterface& largeBlocksFile,
 		StringSection<> identifier)
 	{
 		_drawablesPool = std::move(drawablesPool);
 		_pipelineAcceleratorPool = std::move(pipelineAcceleratorPool);
 		_bufferUploads = std::move(bufferUploads);
-		Build(geo, largeBlocksFile, identifier);
+		Build(geo, geoOrder, largeBlocksFile, identifier);
 	}
 
 	SimpleModel::SimpleModel(
@@ -186,16 +186,19 @@ namespace ToolsRig
 		if (scaffold.GetGeoCount() > 0) {
 			auto largeBlocksFile = scaffold.OpenLargeBlocks();
 			const RenderCore::Assets::RawGeometryDesc* geo = nullptr;
+			const RenderCore::Assets::RawGeometryDrawOrderDesc* geoOrder = nullptr;
 			for (auto cmd:scaffold.GetGeoMachine(0))
 				if (cmd.Cmd() == (uint32_t)RenderCore::Assets::GeoCommand::AttachRawGeometry)
 					geo = &cmd.As<RenderCore::Assets::RawGeometryDesc>();
+				else if (cmd.Cmd() == (uint32_t)RenderCore::Assets::GeoCommand::AttachRawGeometryDrawOrderDesc && cmd.As<RenderCore::Assets::RawGeometryDrawOrderDesc>()._cmdStream == 0)
+					geoOrder = &cmd.As<RenderCore::Assets::RawGeometryDrawOrderDesc>();
 			if (geo)
-				Build(*geo, *largeBlocksFile, filename);
+				Build(*geo, *geoOrder, *largeBlocksFile, filename);
 		}
 		_depVal = scaffold.GetDependencyValidation();
 	}
 
-	void SimpleModel::Build(const RenderCore::Assets::RawGeometryDesc& geo, ::Assets::IFileInterface& largeBlocksFile, StringSection<> fn)
+	void SimpleModel::Build(const RenderCore::Assets::RawGeometryDesc& geo, const RenderCore::Assets::RawGeometryDrawOrderDesc& geoOrder, ::Assets::IFileInterface& largeBlocksFile, StringSection<> fn)
 	{
 		// load the vertex buffer & index buffer from the geo input, and copy draw calls data
 		auto largeBlocksOffset = largeBlocksFile.TellP();
@@ -211,7 +214,7 @@ namespace ToolsRig
 		_drawableGeo = geoFulfillment.GetInstantiatedGeos()[0];
 		_completionCmdList = geoFulfillment.GetCompletionCommandList();
 
-		_drawCalls.insert(_drawCalls.begin(), geo._drawCalls.cbegin(), geo._drawCalls.cend());
+		_drawCalls.insert(_drawCalls.begin(), geoOrder._drawCalls.cbegin(), geoOrder._drawCalls.cend());
 
 		// also construct a technique material for the geometry format
 		std::vector<InputElementDesc> inputElements;

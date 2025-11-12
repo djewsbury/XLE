@@ -105,7 +105,6 @@ namespace RenderCore { namespace Techniques
 			std::vector<std::shared_ptr<DrawableGeo>> _geos;
 			using InputLayout = std::vector<InputElementDesc>;
 			std::vector<InputLayout> _geosLayout;
-			std::vector<Topology> _geosTopologies;
 			std::shared_ptr<IDrawablesPool> _drawablesPool;
 
 			enum class LoadBuffer { VB, IB };
@@ -175,7 +174,7 @@ namespace RenderCore { namespace Techniques
 					}
 				}
 
-				if (rawGeometry && !rawGeometry->_drawCalls.empty() && rawGeometry->_ib._size) {
+				if (rawGeometry && rawGeometry->_ib._size) {
 					auto& rg = *rawGeometry;
 
 					// Build the main non-deformed vertex stream
@@ -203,18 +202,6 @@ namespace RenderCore { namespace Techniques
 
 						_geosLayout.push_back(BuildFinalIA(rg));
 					}
-
-					if (!rg._drawCalls.empty()) {
-						// Figure out the topology from from the rawGeo. We can't mix topology across the one geo call; all draw calls
-						// for the same geo object must share the same toplogy mode
-						auto topology = rg._drawCalls[0]._topology;
-						#if defined(_DEBUG)
-							for (auto r=rg._drawCalls.begin()+1; r!=rg._drawCalls.end(); ++r)
-								assert(topology == r->_topology);
-						#endif
-						_geosTopologies.push_back(topology);
-					} else
-						_geosTopologies.push_back(Topology::TriangleList);
 
 					// hack -- we might need this for material deform, as well
 					drawableGeo->_deformAccelerator = deformAccelerator;
@@ -668,6 +655,30 @@ namespace RenderCore { namespace Techniques
 							assert(!geoMachine.empty());
 							assert(!currentMaterialAssignments.empty());
 
+							const Assets::RawGeometryDesc* rawGeometry = nullptr;
+							const Assets::RawGeometryDrawOrderDesc* drawOrderDesc = nullptr;
+							const Float4x4* geoSpaceToNodeSpace = nullptr;
+							for (auto cmd:geoMachine) {
+								switch (cmd.Cmd()) {
+								case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
+									assert(!rawGeometry);
+									rawGeometry = (const Assets::RawGeometryDesc*)cmd.RawData().begin();
+									break;
+
+								case (uint32_t)Assets::GeoCommand::GeoSpaceToNodeSpace:
+									assert(!geoSpaceToNodeSpace);
+									geoSpaceToNodeSpace = (const Float4x4*)cmd.RawData().begin();
+									break;
+
+								case (uint32_t)Assets::GeoCommand::AttachRawGeometryDrawOrderDesc:
+									if (cmd.As<Assets::RawGeometryDrawOrderDesc>()._cmdStream == modelCommandStream) {
+										assert(!drawOrderDesc);
+										drawOrderDesc = &cmd.As<Assets::RawGeometryDrawOrderDesc>();
+									}
+									break;
+								}
+							}
+
 							// Find the referenced geo object, and create the DrawableGeo object, etc
 							unsigned pendingGeoIdx = ~0u;
 							auto i = std::find_if(
@@ -687,21 +698,6 @@ namespace RenderCore { namespace Techniques
 
 							// configure the draw calls that we're going to need to make for this geocall
 							// while doing this we'll also sort out materials
-							const Assets::RawGeometryDesc* rawGeometry = nullptr;
-							const Float4x4* geoSpaceToNodeSpace = nullptr;
-							for (auto cmd:geoMachine) {
-								switch (cmd.Cmd()) {
-								case (uint32_t)Assets::GeoCommand::AttachRawGeometry:
-									assert(!rawGeometry);
-									rawGeometry = (const Assets::RawGeometryDesc*)cmd.RawData().begin();
-									break;
-
-								case (uint32_t)Assets::GeoCommand::GeoSpaceToNodeSpace:
-									assert(!geoSpaceToNodeSpace);
-									geoSpaceToNodeSpace = (const Float4x4*)cmd.RawData().begin();
-									break;
-								}
-							}
 
 							if (rawGeometry && pendingGeoIdx != ~0u) {
 								unsigned drawCallIterators[2] = {(unsigned)dstCmdStream->_drawCalls.size()};
@@ -722,9 +718,9 @@ namespace RenderCore { namespace Techniques
 								}
 
 								unsigned materialIterator = 0;
-								auto drawCallCount = rawGeometry->_drawCalls.size();
+								auto drawCallCount = drawOrderDesc->_drawCalls.size();
 								assert(drawCallCount == currentMaterialAssignments.size());
-								for (const auto& dc:rawGeometry->_drawCalls) {
+								for (const auto& dc:drawOrderDesc->_drawCalls) {
 									// note -- there's some redundancy here, because we'll end up calling 
 									// AddMaterial & MakePipeline over and over again for the same parameters. There's
 									// some caching in those to precent allocating dupes, but it might still be more
@@ -742,7 +738,7 @@ namespace RenderCore { namespace Techniques
 									auto compiledPipeline = _pendingPipelines.MakePipeline(
 										*workingMaterial, workingMaterial->_materialDescriptorSetLayout,
 										_pendingGeos._geosLayout[pendingGeoIdx],
-										_pendingGeos._geosTopologies[pendingGeoIdx]);
+										dc._topology);
 
 									DrawCall drawCall;
 									drawCall._drawableGeoIdx = pendingGeoIdx;

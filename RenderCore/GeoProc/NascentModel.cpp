@@ -338,14 +338,14 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		{
 			NascentObjectGuid _srcGuid;
 			NascentRawGeometry _geo;
-			unsigned _id = ~0u, _topologicalId = ~0u;
+			unsigned _id = ~0u;
 			NascentRawGeometry::LargeResourceBlocks _blocks;
 		};
 		struct SkinnedGeoEntry
 		{
 			uint64_t _srcGuid;
 			NascentBoundSkinnedGeometry _geo;
-			unsigned _id = ~0u, _topologicalId = ~0u;
+			unsigned _id = ~0u;
 			NascentBoundSkinnedGeometry::LargeResourceBlocks _blocks;
 		};
 		std::vector<RawGeoEntry> _rawGeos;
@@ -610,13 +610,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 						i = geoObjects._rawGeos.end()-1;
 					}
 
-					if (!isTopologicalStream) {
-						if (i->_id == ~0u) i->_id = geoObjects._nextId++;
-						cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
-					} else {
-						if (i->_topologicalId == ~0u) i->_topologicalId = geoObjects._nextId++;
-						cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_topologicalId);
-					}
+					if (i->_id == ~0u) i->_id = geoObjects._nextId++;
+					cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
 				} else {
 					auto hashedId = HashOfGeoAndSkinControllerIds(cmd.second);
 					auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(),
@@ -646,13 +641,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 					assert(currentMaterialAssignment.value().size() == i->_geo._unanimatedBase._mainDrawCalls.size());
 
-					if (!isTopologicalStream) {
-						if (i->_id == ~0u) i->_id = geoObjects._nextId++;
-						cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
-					} else {
-						if (i->_topologicalId == ~0u) i->_topologicalId = geoObjects._nextId++;
-						cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_topologicalId);
-					}
+					if (i->_id == ~0u) i->_id = geoObjects._nextId++;
+					cmdStreamSerializer << MakeCmdAndRawData(ModelCommand::GeoCall, i->_id);
 				}
 			}
 
@@ -685,16 +675,12 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			std::sort(
 				geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(),
 				[](const auto& lhs, const auto& rhs) {
-					if (lhs._id < rhs._id) return true;
-					if (lhs._id > rhs._id) return false;
-					return lhs._topologicalId < rhs._topologicalId;
+					return lhs._id < rhs._id;
 				});
 			std::sort(
 				geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(),
 				[](const auto& lhs, const auto& rhs) {
-					if (lhs._id < rhs._id) return true;
-					if (lhs._id > rhs._id) return false;
-					return lhs._topologicalId < rhs._topologicalId;
+					return lhs._id < rhs._id;
 				});
 
 			// VBs
@@ -706,16 +692,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				geo._blocks._animatedVertexElements = largeResourcesConstructor.AddBlock(geo._geo._animatedVertexElements);
 
 			// IBs
-			for (auto& geo:geoObjects._rawGeos)
+			// note that topological IBs are interleaved... This is convenient for RawGeometryDesc, but arguably not the most efficient option
+			for (auto& geo:geoObjects._rawGeos) {
 				geo._blocks._ib = largeResourcesConstructor.AddBlock(geo._geo._indices);
-			for (auto& geo:geoObjects._skinnedGeos)
-				geo._blocks._ib = largeResourcesConstructor.AddBlock(geo._geo._unanimatedBase._indices);
-
-			// Topological IBs
-			for (auto& geo:geoObjects._rawGeos)
 				geo._blocks._topologicalIb = largeResourcesConstructor.AddBlock(geo._geo._adjacencyIndices);
-			for (auto& geo:geoObjects._skinnedGeos)
+			}
+			for (auto& geo:geoObjects._skinnedGeos) {
+				geo._blocks._ib = largeResourcesConstructor.AddBlock(geo._geo._unanimatedBase._indices);
 				geo._blocks._topologicalIb = largeResourcesConstructor.AddBlock(geo._geo._unanimatedBase._adjacencyIndices);
+			}
 
 			// Skeleton binding
 			for (auto& geo:geoObjects._skinnedGeos)
@@ -736,24 +721,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				if (auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(), [c](const auto&q) { return q._id == c; }); i != geoObjects._skinnedGeos.end()) {
 					::Assets::BlockSerializer tempBlock;
 					i->_geo.SerializeWithResourceBlock(tempBlock, i->_blocks);
-					serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
-					serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
-					serializer << tempBlock.SizePrimaryBlock();
-					serializer.SerializeSubBlock(tempBlock);
-				}
-
-				if (auto i = std::find_if(geoObjects._rawGeos.begin(), geoObjects._rawGeos.end(), [c](const auto&q) { return q._topologicalId == c; }); i != geoObjects._rawGeos.end()) {
-					i->_geo.SerializeTopologicalWithResourceBlock(tempBlock, i->_blocks);
-					serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
-					serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
-					serializer << tempBlock.SizePrimaryBlock();
-					serializer.SerializeSubBlock(tempBlock);
-					continue;
-				}
-
-				if (auto i = std::find_if(geoObjects._skinnedGeos.begin(), geoObjects._skinnedGeos.end(), [c](const auto&q) { return q._topologicalId == c; }); i != geoObjects._skinnedGeos.end()) {
-					::Assets::BlockSerializer tempBlock;
-					i->_geo.SerializeTopologicalWithResourceBlock(tempBlock, i->_blocks);
 					serializer << (uint32_t)Assets::ScaffoldCommand::Geo;
 					serializer << (uint32_t)(sizeof(size_t) + sizeof(size_t));
 					serializer << tempBlock.SizePrimaryBlock();

@@ -24,7 +24,6 @@ namespace RenderCore { namespace Assets
 	class ModelSupplementScaffold;
 
 	class AnimationImmutableData;
-	class ModelImmutableData;
 	class ModelSupplementImmutableData;
 	struct ModelDefaultPoseData;
 	struct ModelRootData;

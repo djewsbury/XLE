@@ -16,6 +16,8 @@
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/Streams/SerializationUtils.h"
 
+using namespace Utility::Literals;
+
 namespace RenderCore { namespace Assets { namespace GeoProc
 {
 	void NascentRawGeometry::SerializeWithResourceBlock(
@@ -29,77 +31,82 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		assert(blocks._vb._size == _vertices.size());
 		assert(blocks._ib._size == _indices.size());
 
-		serializer << (uint32_t)Assets::GeoCommand::AttachRawGeometry;
-		auto recall = serializer.CreateRecall(sizeof(unsigned));
+		////////////////////////////////////////////////////
+		{
+			serializer << (uint32_t)Assets::GeoCommand::AttachRawGeometry;
+			auto recall = serializer.CreateRecall(sizeof(unsigned));
 
-		SerializationOperator(
-			serializer, 
-			RenderCore::Assets::VertexData
-				{ _mainDrawInputAssembly, unsigned(blocks._vb._offset), unsigned(blocks._vb._size) });
+			SerializationOperator(
+				serializer, 
+				RenderCore::Assets::VertexData
+					{ _mainDrawInputAssembly, unsigned(blocks._vb._offset), unsigned(blocks._vb._size) });
 
-		SerializationOperator(
-			serializer, 
-			RenderCore::Assets::IndexData
-				{ _indexFormat, unsigned(blocks._ib._offset), unsigned(blocks._ib._size) });
-		
-		SerializationOperator(serializer, _mainDrawCalls);
+			if (!blocks._topologicalIb._size) {
+				SerializationOperator(
+					serializer, 
+					RenderCore::Assets::IndexData
+						{ _indexFormat, unsigned(blocks._ib._offset), unsigned(blocks._ib._size) });
+			} else {
+				// topological IB must follow on immediately after the main IB (without even padding)
+				assert(blocks._topologicalIb._offset == blocks._ib._offset+blocks._ib._size);
+				SerializationOperator(
+					serializer, 
+					RenderCore::Assets::IndexData
+						{ _indexFormat, unsigned(blocks._ib._offset), unsigned(blocks._ib._size+blocks._topologicalIb._size) });
+			}
+			serializer.PushSizeValueAtRecall(recall);
+		}
+		////////////////////////////////////////////////////
 
-		SerializationOperator(serializer, _finalVertexIndexToOriginalIndex);
+		////////////////////////////////////////////////////
+		{
+			serializer << (uint32_t)Assets::GeoCommand::AttachRawGeometryDrawOrderDesc;
+			auto recall = serializer.CreateRecall(sizeof(unsigned));
 
-		serializer.PushSizeValueAtRecall(recall);
+			serializer << (uint64_t)0;
+			SerializationOperator(serializer, _mainDrawCalls);
+			serializer.PushSizeValueAtRecall(recall);
+		}
+		////////////////////////////////////////////////////
 
+		////////////////////////////////////////////////////
+		{
+			serializer << (uint32_t)Assets::GeoCommand::AttachRawGeometryDrawOrderDesc;
+			auto recall = serializer.CreateRecall(sizeof(unsigned));
+
+			serializer << (uint64_t)"adjacency"_h;
+			auto adjustedDrawCalls = _mainDrawCalls;
+			auto indexOffset = blocks._ib._size / (BitsPerPixel(_indexFormat) / 8);		// because the adjacency indices immediately follow base indices
+			for (auto& a:adjustedDrawCalls) {
+				assert(a._topology == Topology::TriangleList);
+				a._topology = Topology::TriangleListWithAdjacency;
+				// _firstIndex, _indexCount doubled by addition of adjacency
+				a._firstIndex *= 2;
+				a._indexCount *= 2;
+				a._firstIndex += indexOffset;
+			}
+			SerializationOperator(serializer, adjustedDrawCalls);
+			serializer.PushSizeValueAtRecall(recall);
+		}
+		////////////////////////////////////////////////////
+
+		////////////////////////////////////////////////////
 		if (!Equivalent(_geoSpaceToNodeSpace, Identity<Float4x4>(), 1e-3f)) {
 			serializer << (uint32_t)Assets::GeoCommand::GeoSpaceToNodeSpace;
 			auto recall = serializer.CreateRecall(sizeof(unsigned));
 			SerializationOperator(serializer, _geoSpaceToNodeSpace);
 			serializer.PushSizeValueAtRecall(recall);
 		}
-	}
+		////////////////////////////////////////////////////
 
-	void NascentRawGeometry::SerializeTopologicalWithResourceBlock(
-		::Assets::BlockSerializer& serializer, 
-		const LargeResourceBlocks& blocks) const
-	{
-		// write out a version of RawGeometryDesc that is setup for topological operations
-		// ie, index buffer has adjacency information
-
-		assert(blocks._vb._size == _vertices.size());
-		assert(blocks._topologicalIb._size == _adjacencyIndices.size());
-
-		serializer << (uint32_t)Assets::GeoCommand::AttachRawGeometry;
-		auto recall = serializer.CreateRecall(sizeof(unsigned));
-
-		SerializationOperator(
-			serializer, 
-			RenderCore::Assets::VertexData
-				{ _mainDrawInputAssembly, unsigned(blocks._vb._offset), unsigned(blocks._vb._size) });
-
-		SerializationOperator(
-			serializer, 
-			RenderCore::Assets::IndexData
-				{ _indexFormat, unsigned(blocks._topologicalIb._offset), unsigned(blocks._topologicalIb._size) });
-		
-		auto adjustedDrawCalls = _mainDrawCalls;
-		for (auto& a:adjustedDrawCalls) {
-			assert(a._topology == Topology::TriangleList);
-			a._topology = Topology::TriangleListWithAdjacency;
-			// _firstIndex, _indexCount doubled by addition of adjacency
-			a._firstIndex *= 2;
-			a._indexCount *= 2;
-		}
-		SerializationOperator(serializer, adjustedDrawCalls);
-
-		std::vector<uint32_t> dummyMapping;
-		SerializationOperator(serializer, dummyMapping);
-
-		serializer.PushSizeValueAtRecall(recall);
-
-		if (!Equivalent(_geoSpaceToNodeSpace, Identity<Float4x4>(), 1e-3f)) {
-			serializer << (uint32_t)Assets::GeoCommand::GeoSpaceToNodeSpace;
+		////////////////////////////////////////////////////
+		if (!_finalVertexIndexToOriginalIndex.empty()) {
+			serializer << (uint32_t)Assets::GeoCommand::AttachVertexIndexMapping;
 			auto recall = serializer.CreateRecall(sizeof(unsigned));
-			SerializationOperator(serializer, _geoSpaceToNodeSpace);
+			SerializationOperator(serializer, _finalVertexIndexToOriginalIndex);
 			serializer.PushSizeValueAtRecall(recall);
 		}
+		////////////////////////////////////////////////////
 	}
 
 	std::ostream& SerializationOperator(std::ostream& stream, const NascentRawGeometry& geo)

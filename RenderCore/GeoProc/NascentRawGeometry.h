@@ -55,10 +55,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			::Assets::BlockSerializer& outputSerializer, 
 			const LargeResourceBlocks& blocks) const;
 
-		void SerializeTopologicalWithResourceBlock(
-			::Assets::BlockSerializer& outputSerializer, 
-			const LargeResourceBlocks& blocks) const;
-
 		friend std::ostream& SerializationOperator(std::ostream&, const NascentRawGeometry&);
 	};
 

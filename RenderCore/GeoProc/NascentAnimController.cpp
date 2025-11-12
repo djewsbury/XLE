@@ -1072,37 +1072,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         outputSerializer.PushSizeValueAtRecall(recall);
     }
 
-    void    NascentBoundSkinnedGeometry::SerializeTopologicalWithResourceBlock(
-        ::Assets::BlockSerializer& outputSerializer,
-        const LargeResourceBlocks& blocks) const
-    {
-        _unanimatedBase.SerializeTopologicalWithResourceBlock(outputSerializer, blocks);
-
-        assert(blocks._animatedVertexElements._size == _animatedVertexElements.size());
-		assert(blocks._skeletonBinding._size == _skeletonBinding.size());
-
-            // append skinning related information
-        outputSerializer << (uint32_t)Assets::GeoCommand::AttachSkinningData;
-		auto recall = outputSerializer.CreateRecall(sizeof(unsigned));
-
-        SerializationOperator(
-            outputSerializer, 
-            RenderCore::Assets::VertexData 
-                { _mainDrawAnimatedIA, unsigned(blocks._animatedVertexElements._offset), unsigned(blocks._animatedVertexElements._size) });
-        SerializationOperator(
-            outputSerializer, 
-            RenderCore::Assets::VertexData 
-                { _preskinningIA, unsigned(blocks._skeletonBinding._offset), unsigned(blocks._skeletonBinding._size) });
-        
-		SerializationOperator(outputSerializer, _preskinningSections);
-
-        SerializationOperator(outputSerializer, _localBoundingBox.first);
-        SerializationOperator(outputSerializer, _localBoundingBox.second);
-
-        outputSerializer.PushSizeValueAtRecall(recall);
-    }
-
-
 
 
 

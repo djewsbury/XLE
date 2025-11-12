@@ -20,7 +20,9 @@ namespace RenderCore { namespace Assets
 	{
 		AttachRawGeometry = s_scaffoldCmdBegin_ModelMachine + 0x100,
 		AttachSkinningData,
-		GeoSpaceToNodeSpace
+		GeoSpaceToNodeSpace,
+		AttachRawGeometryDrawOrderDesc,
+		AttachVertexIndexMapping
 	};
 
 	enum class ModelCommand : uint32_t
@@ -93,10 +95,19 @@ namespace RenderCore { namespace Assets
 
 	struct RawGeometryDesc
 	{
-		VertexData							_vb;
-		IndexData							_ib;
-		SerializableVector<DrawCallDesc>	_drawCalls;
+		VertexData	_vb;
+		IndexData	_ib;
+	};
+
+	struct VertexIndexMapping
+	{
 		SerializableVector<unsigned>		_finalVertexIndexToOriginalIndex;		// originalIndex = _finalVertexIndexToOriginalIndex[finalIndex]
+	};
+
+	struct RawGeometryDrawOrderDesc
+	{
+		uint64_t							_cmdStream;
+		SerializableVector<DrawCallDesc>	_drawCalls;
 	};
 
 	struct ModelDefaultPoseData
