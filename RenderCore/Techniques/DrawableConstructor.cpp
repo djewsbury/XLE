@@ -78,6 +78,16 @@ namespace RenderCore { namespace Techniques
 			return result;
 		}
 
+		static std::vector<InputElementDesc> BuildFinalIA(
+			const Assets::RawGeometryDesc& geo,
+			const Assets::SkinningDataDesc& skinningData)
+		{
+			auto part0 = MakeIA(MakeIteratorRange(geo._vb._ia._elements), {}, 0);
+			auto part1 = MakeIA(MakeIteratorRange(skinningData._animatedVertexElements._ia._elements), {}, 1);
+			part0.insert(part0.end(), part1.begin(), part1.end());
+			return part0;
+		}
+
 		static Batch CalculateBatchForStateSet(const Assets::RenderStateSet& stateSet)
 		{
 			if (stateSet._flag & Assets::RenderStateSet::Flag::BlendType) {
@@ -214,9 +224,10 @@ namespace RenderCore { namespace Techniques
 						AddStaticLoadRequest(
 							LoadBuffer::VB, DrawableStream((unsigned)DrawableStream::Vertex0+drawableGeo->_vertexStreamCount), scaffoldIdx, drawableGeoIdx, 
 							request._skinningData->_animatedVertexElements._offset, request._skinningData->_animatedVertexElements._size);
-					}
-
-					_geosLayout.push_back(BuildFinalIA(rg));
+						++drawableGeo->_vertexStreamCount;
+						_geosLayout.push_back(BuildFinalIA(rg, *request._skinningData));
+					} else
+						_geosLayout.push_back(BuildFinalIA(rg));
 				}
 
 				// hack -- we might need this for material deform, as well
@@ -456,6 +467,7 @@ namespace RenderCore { namespace Techniques
 				auto materialAndDeformerHash = materialGuid;
 				if (deformBinding)
 					materialAndDeformerHash = HashCombine(materialGuid, deformBinding->GetHash());
+				materialAndDeformerHash = HashCombine(materialAndDeformerHash, (size_t)materialScaffold.get());
 
 				auto i = std::lower_bound(_drawableMaterials.begin(), _drawableMaterials.end(), materialAndDeformerHash, [](const auto& q, uint64_t materialGuid) { return q._guid < materialGuid; });
 				if (i != _drawableMaterials.end() && i->_guid == materialAndDeformerHash) {
