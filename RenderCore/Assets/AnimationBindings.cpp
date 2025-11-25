@@ -171,9 +171,13 @@ namespace RenderCore { namespace Assets
 		{
 			unsigned componentCount = 0;
 			switch ((TransformCommand)*cmd) {
+			case TransformCommand::BindingPointInverse_1:
 			case TransformCommand::BindingPoint_1: componentCount = 1; break;
+			case TransformCommand::BindingPointInverse_2:
 			case TransformCommand::BindingPoint_2: componentCount = 2; break;
+			case TransformCommand::BindingPointInverse_3:
 			case TransformCommand::BindingPoint_3: componentCount = 3; break;
+			case TransformCommand::BindingPointInverse_0:
 			case TransformCommand::BindingPoint_0:
 			default: break;
 			}
@@ -284,6 +288,25 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
+	static void SetupTranslationInverseBinding(
+		std::vector<uint32_t>& result,
+		std::vector<AnimationSet::ParameterBindingRules>& bindingRules, 
+		std::vector<uint8_t>& outputBlockItemsDefaults,
+		DefaultedTransformation& defaults,
+		unsigned animParameterIndex, AnimSamplerType samplerType)
+	{
+		if (samplerType == AnimSamplerType::Float3) {
+			result.push_back((uint32_t)TransformCommand::TranslateInverse_Parameter);
+			result.push_back(
+				ConfigureBindingRules(
+					bindingRules, outputBlockItemsDefaults, 
+					defaults.AsTranslateParameter(),
+					animParameterIndex, samplerType));
+		} else {
+			UNREACHABLE();
+		}
+	}
+
 	static void SetupRotationBinding(
 		std::vector<uint32_t>& result,
 		std::vector<AnimationSet::ParameterBindingRules>& bindingRules, 
@@ -306,6 +329,25 @@ namespace RenderCore { namespace Assets
 					defaults.AsRotateAxisAngleParameter(),
 					animParameterIndex, samplerType));
 		} else {
+			UNREACHABLE();
+		}
+	}
+
+	static void SetupRotationInverseBinding(
+		std::vector<uint32_t>& result,
+		std::vector<AnimationSet::ParameterBindingRules>& bindingRules, 
+		std::vector<uint8_t>& outputBlockItemsDefaults,
+		DefaultedTransformation& defaults,
+		unsigned animParameterIndex, AnimSamplerType samplerType)
+	{
+		if (samplerType == AnimSamplerType::Quaternion) {
+			result.push_back((uint32_t)TransformCommand::RotateQuaternionInverse_Parameter);
+			result.push_back(
+				ConfigureBindingRules(
+					bindingRules, outputBlockItemsDefaults, 
+					defaults.AsRotateQuaternionParameter(),
+					animParameterIndex, samplerType));
+		} else {		// non-quaternion types not supported
 			UNREACHABLE();
 		}
 	}
@@ -366,6 +408,8 @@ namespace RenderCore { namespace Assets
 			case TransformCommand::RotateQuaternion_Parameter:
 			case TransformCommand::UniformScale_Parameter:
 			case TransformCommand::ArbitraryScale_Parameter:
+			case TransformCommand::TranslateInverse_Parameter:
+			case TransformCommand::RotateQuaternionInverse_Parameter:
 				Throw(std::runtime_error("Attempting to specialize a transformation machine in SpecializeTransformationMachine() that has already been specialized"));
 
 			case TransformCommand::BindingPoint_0:
@@ -508,6 +552,59 @@ namespace RenderCore { namespace Assets
 								noneParam.value(), animSetOutput[noneParam.value()]._samplerType);
 						} else {
 							UNREACHABLE();		// no defaults at all; we can't imply the component for this animation parameter
+						}
+					} else {
+						// no matching parameters at all. We can just take the defaults as-is because they are specified
+						// with the same "_Static" as static transformations
+						result.insert(result.end(), cmd, i);
+					}
+				}
+				break;
+
+			case TransformCommand::BindingPointInverse_0:
+			case TransformCommand::BindingPointInverse_1:
+			case TransformCommand::BindingPointInverse_2:
+			case TransformCommand::BindingPointInverse_3:
+				{
+					auto startOfCmd = cmd;
+					++cmd;
+					uint64_t bindName = *cmd | (uint64_t(*(cmd+1)) << 32ull);
+					cmd += 2;
+					std::optional<unsigned> rotationParam, translationParam;
+
+					for (unsigned c=0; c<animSetOutput.size(); ++c)
+						if (animSetOutput[c]._name == bindName)
+							switch (animSetOutput[c]._component) {
+							case AnimSamplerComponent::Rotation:
+								assert(!rotationParam);
+								rotationParam = c;
+								break;
+							case AnimSamplerComponent::Translation:
+								assert(!translationParam);
+								translationParam = c;
+								break;
+							default:
+								break;
+							}
+
+					if (rotationParam || translationParam) {
+						DefaultedTransformation defaults(startOfCmd);
+						if (translationParam) {
+							SetupTranslationInverseBinding(
+								result, parameterBindingRules, parameterDefaultsBlock,
+								defaults,
+								translationParam.value(), animSetOutput[translationParam.value()]._samplerType);
+						} else if (!defaults._defaultTranslationCmds.empty()) {
+							result.insert(result.end(), defaults._defaultTranslationCmds.begin(), defaults._defaultTranslationCmds.end());
+						}
+
+						if (rotationParam) {
+							SetupRotationInverseBinding(
+								result, parameterBindingRules, parameterDefaultsBlock,
+								defaults,
+								rotationParam.value(), animSetOutput[rotationParam.value()]._samplerType);
+						} else if (!defaults._defaultRotationCmds.empty()) {
+							result.insert(result.end(), defaults._defaultRotationCmds.begin(), defaults._defaultRotationCmds.end());
 						}
 					} else {
 						// no matching parameters at all. We can just take the defaults as-is because they are specified

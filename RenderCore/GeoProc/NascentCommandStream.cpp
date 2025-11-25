@@ -409,6 +409,21 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			_skeletonMachine.PushCommand(cmds.data(), cmds.size()*sizeof(uint32_t));
 	}
 
+	void	NascentSkeleton::WriteParameterizedInverseTransform(StringSection<> parameterName, const Transform& transform)
+	{
+		auto hashName = Hash64(parameterName);
+		auto i = LowerBound(_skeletonMachine._parameterDehashTable, hashName);
+		if (i == _skeletonMachine._parameterDehashTable.end() || i->first != hashName)
+			_skeletonMachine._parameterDehashTable.insert(i, std::make_pair(hashName, parameterName.AsString()));
+
+		unsigned cmdCount = 0;
+		auto cmds = TransformToCmds(transform, cmdCount);
+		_skeletonMachine.PushCommand(TransformCommand((unsigned)TransformCommand::BindingPointInverse_0 + cmdCount));
+		_skeletonMachine.PushCommand(&hashName, sizeof(hashName));
+		if (cmdCount)
+			_skeletonMachine.PushCommand(cmds.data(), cmds.size()*sizeof(uint32_t));
+	}
+
 	void	NascentSkeleton::WriteOutputMarker(StringSection<> skeletonName, StringSection<> jointName)
 	{
 		_skeletonMachine.WriteOutputMarker(skeletonName, jointName);

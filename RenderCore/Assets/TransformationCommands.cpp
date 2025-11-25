@@ -54,6 +54,8 @@ namespace RenderCore { namespace Assets
 		case TransformCommand::RotateQuaternion_Parameter:
         case TransformCommand::UniformScale_Parameter:
         case TransformCommand::ArbitraryScale_Parameter:
+        case TransformCommand::TranslateInverse_Parameter:
+        case TransformCommand::RotateQuaternionInverse_Parameter:
             return cmd+1+(1);
 
         case TransformCommand::WriteOutputMatrix:
@@ -65,15 +67,18 @@ namespace RenderCore { namespace Assets
         case TransformCommand::Comment: return cmd+1+(64/4);
 
         case TransformCommand::BindingPoint_0:
+        case TransformCommand::BindingPointInverse_0:
             return cmd+1+(2);
 
         case TransformCommand::BindingPoint_1:
+        case TransformCommand::BindingPointInverse_1:
             cmd += 1+(2);
             assert(IsStaticCommand((TransformCommand)*cmd));
             cmd = NextTransformationCommand_(cmd);
             return cmd;
 
         case TransformCommand::BindingPoint_2:
+        case TransformCommand::BindingPointInverse_2:
             cmd += 1+(2);
             assert(IsStaticCommand((TransformCommand)*cmd));
             cmd = NextTransformationCommand_(cmd);
@@ -82,6 +87,7 @@ namespace RenderCore { namespace Assets
             return cmd;
 
         case TransformCommand::BindingPoint_3:
+        case TransformCommand::BindingPointInverse_3:
             cmd += 1+(2);
             assert(IsStaticCommand((TransformCommand)*cmd));
             cmd = NextTransformationCommand_(cmd);
@@ -118,12 +124,12 @@ namespace RenderCore { namespace Assets
     static bool IsTransformCommand(TransformCommand cmd)
     {
         return  (cmd >= TransformCommand::TransformFloat4x4_Static && cmd <= TransformCommand::ArbitraryScale_Static)
-            ||  (cmd >= TransformCommand::TransformFloat4x4_Parameter && cmd <= TransformCommand::ArbitraryScale_Parameter);
+            ||  (cmd >= TransformCommand::TransformFloat4x4_Parameter && cmd <= TransformCommand::RotateQuaternionInverse_Parameter);
     }
 
     static bool IsBindingPointCommand(TransformCommand cmd)
     {
-        return  (cmd >= TransformCommand::BindingPoint_0 && cmd <= TransformCommand::BindingPoint_3);
+        return  (cmd >= TransformCommand::BindingPoint_0 && cmd <= TransformCommand::BindingPointInverse_3);
     }
 
 	static bool IsOutputCommand(TransformCommand cmd)
@@ -1109,6 +1115,21 @@ namespace RenderCore { namespace Assets
                 }
                 break;
 
+            case TransformCommand::TranslateInverse_Parameter:
+                {
+                    uint32_t parameterOffset = *i++;
+                    Combine_IntoRHS(-GetParameter<Float3>(parameterBlock, parameterOffset), *workingTransform);
+                }
+                break;
+
+            case TransformCommand::RotateQuaternionInverse_Parameter:
+				{
+                    uint32_t parameterOffset = *i++;
+                    auto rot = cml::inverse(GetParameter<Quaternion>(parameterBlock, parameterOffset));
+                    Combine_IntoRHS(rot, *workingTransform);
+                }
+                break;
+
             case TransformCommand::WriteOutputMatrix:
                     //
                     //      Dump the current working transform to the output array
@@ -1155,6 +1176,10 @@ namespace RenderCore { namespace Assets
             case TransformCommand::BindingPoint_1:
             case TransformCommand::BindingPoint_2:
             case TransformCommand::BindingPoint_3:
+            case TransformCommand::BindingPointInverse_0:
+            case TransformCommand::BindingPointInverse_1:
+            case TransformCommand::BindingPointInverse_2:
+            case TransformCommand::BindingPointInverse_3:
                 // skip over the binding point and treat the static defaults as just normal statics
                 i += 2;
                 break;
@@ -1494,13 +1519,28 @@ namespace RenderCore { namespace Assets
                 i++;
                 break;
 
+            case TransformCommand::TranslateInverse_Parameter:
+                stream << indentBuffer << "TranslateInverse_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
+            case TransformCommand::RotateQuaternionInverse_Parameter:
+                stream << indentBuffer << "RotateQuaternionInverse_Parameter at offset (0x" << std::hex << *i << std::dec << ")" << std::endl;
+                i++;
+                break;
+
             case TransformCommand::BindingPoint_0:
             case TransformCommand::BindingPoint_1:
             case TransformCommand::BindingPoint_2:
             case TransformCommand::BindingPoint_3:
+            case TransformCommand::BindingPointInverse_0:
+            case TransformCommand::BindingPointInverse_1:
+            case TransformCommand::BindingPointInverse_2:
+            case TransformCommand::BindingPointInverse_3:
                 {
                     uint64_t param = (*i) | (uint64_t(*(i+1)) << 32ull);        // endian
-                    stream << indentBuffer << "Binding point for parameter ";
+                    if (commandIndex >= (uint32_t)TransformCommand::BindingPointInverse_0) stream << indentBuffer << "Binding point for inverse parameter ";
+                    else stream << indentBuffer << "Binding point for parameter ";
                     if (parameterToName) 
                         stream << "(" << parameterToName(param) << ")";
                     else
@@ -1509,15 +1549,15 @@ namespace RenderCore { namespace Assets
 
                     // handle defaults
                     unsigned defaultCount = 0;
-                    if (commandIndex == (uint32_t)TransformCommand::BindingPoint_0) {
+                    if (commandIndex == (uint32_t)TransformCommand::BindingPoint_0 || commandIndex == (uint32_t)TransformCommand::BindingPointInverse_0) {
                         stream << " with no defaults" << std::endl;
-                    } else if (commandIndex == (uint32_t)TransformCommand::BindingPoint_1) {
+                    } else if (commandIndex == (uint32_t)TransformCommand::BindingPoint_1 || commandIndex == (uint32_t)TransformCommand::BindingPointInverse_1) {
                         stream << " with 1 defaults" << std::endl;
                         defaultCount = 1;
-                    } else if (commandIndex == (uint32_t)TransformCommand::BindingPoint_2) {
+                    } else if (commandIndex == (uint32_t)TransformCommand::BindingPoint_2 || commandIndex == (uint32_t)TransformCommand::BindingPointInverse_2) {
                         stream << " with 2 defaults" << std::endl;
                         defaultCount = 2;
-                    } else if (commandIndex == (uint32_t)TransformCommand::BindingPoint_3) {
+                    } else if (commandIndex == (uint32_t)TransformCommand::BindingPoint_3 || commandIndex == (uint32_t)TransformCommand::BindingPointInverse_3) {
                         stream << " with 3 defaults" << std::endl;
                         defaultCount = 3;
                     }

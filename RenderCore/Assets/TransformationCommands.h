@@ -27,8 +27,8 @@ namespace RenderCore { namespace Assets
         RotateX_Static,                 // rotation around X
         RotateY_Static,                 // rotation around Y
         RotateZ_Static,                 // rotation around Z
-        RotateAxisAngle_Static,                  // Axis X, Y, Z, rotation
-        RotateQuaternion_Static,		// Rotate through a quaternion
+        RotateAxisAngle_Static,         // Axis X, Y, Z, rotation
+        RotateQuaternion_Static,        // Rotate through a quaternion
         UniformScale_Static,            // scalar
         ArbitraryScale_Static,          // X, Y, Z scales
 
@@ -46,7 +46,10 @@ namespace RenderCore { namespace Assets
         RotateQuaternion_Parameter,
         UniformScale_Parameter,
         ArbitraryScale_Parameter,
-        
+
+        TranslateInverse_Parameter,
+        RotateQuaternionInverse_Parameter,
+
         Translate_ParameterGeoSpace,
 
             //
@@ -63,6 +66,15 @@ namespace RenderCore { namespace Assets
         BindingPoint_1,
         BindingPoint_2,
         BindingPoint_3,
+
+            //
+            //      Like binding point, except the inverse of the parameter is used
+            //      used to construct complex transforms with scale and rotation pivots
+            //
+        BindingPointInverse_0,
+        BindingPointInverse_1,
+        BindingPointInverse_2,
+        BindingPointInverse_3,
 
         WriteOutputMatrix,
         TransformFloat4x4AndWrite_Static,

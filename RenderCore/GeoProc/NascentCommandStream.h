@@ -129,6 +129,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		};
 		void	WriteStaticTransform(const Transform& transform);
 		void    WriteParameterizedTransform(StringSection<> parameterName, const Transform& transform);
+        void    WriteParameterizedInverseTransform(StringSection<> parameterName, const Transform& transform);      // "transform" should be pre-inverted. That is, it is used as-is when defaulted
 
 		void	WriteOutputMarker(StringSection<> skeletonName, StringSection<> jointName);
 
