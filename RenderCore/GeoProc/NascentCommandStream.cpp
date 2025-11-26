@@ -342,6 +342,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		return stream;
 	}
 
+	NascentAnimationSet::NascentAnimationSet() = default;
+	NascentAnimationSet::~NascentAnimationSet() = default;
+	NascentAnimationSet::NascentAnimationSet(NascentAnimationSet&&) = default;
+	NascentAnimationSet& NascentAnimationSet::operator=(NascentAnimationSet&&) = default;
+
 
 
 

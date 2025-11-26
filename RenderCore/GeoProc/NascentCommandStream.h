@@ -90,6 +90,11 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		friend std::ostream& SerializationOperator(std::ostream&, const NascentAnimationSet&);
         friend void SerializationOperator(::Assets::BlockSerializer&, const NascentAnimationSet&);
+
+        NascentAnimationSet();
+        ~NascentAnimationSet();
+        NascentAnimationSet(NascentAnimationSet&&);
+        NascentAnimationSet& operator=(NascentAnimationSet&&);
     private:
         std::vector<AnimationDriver>    _animationDrivers;
         std::vector<ConstantDriver>     _constantDrivers;

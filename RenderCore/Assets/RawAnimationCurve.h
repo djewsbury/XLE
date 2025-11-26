@@ -25,7 +25,7 @@ namespace RenderCore { namespace Assets
         TimeMarkerType  _timeMarkerType = TimeMarkerType::None;
 	};
 
-    class RawAnimationCurve 
+    class RawAnimationCurve
     {
     public:
         template<typename Serializer>
@@ -41,6 +41,7 @@ namespace RenderCore { namespace Assets
 		RawAnimationCurve(  SerializableVector<uint16_t>&& timeMarkers, 
                             SerializableVector<uint8_t>&& keyData,
 							const CurveDesc&	keyDataDesc);
+        RawAnimationCurve() = default;
         RawAnimationCurve(RawAnimationCurve&& moveFrom) = default;
         RawAnimationCurve& operator=(RawAnimationCurve&& moveFrom) = default;
 		RawAnimationCurve(const RawAnimationCurve& copyFrom) = default;
