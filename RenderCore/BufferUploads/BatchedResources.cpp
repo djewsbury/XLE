@@ -41,7 +41,7 @@ namespace RenderCore { namespace BufferUploads
 		BatchedResources(
 			IDevice&, const std::shared_ptr<IManager>&, 
 			BindFlag::BitField bindFlags,
-			unsigned pageSizeInBytes);
+			unsigned pageSizeInBytes, unsigned alignment);
 		~BatchedResources();
 	private:
 		struct EventListManager;
@@ -54,6 +54,7 @@ namespace RenderCore { namespace BufferUploads
 		mutable Threading::Mutex _lock;
 		std::weak_ptr<IManager> _bufferUploads;
 		BindFlag::BitField _fallbackBindFlags;
+		unsigned _alignment;
 
 			//  Active defrag stuff...
 		std::unique_ptr<ActiveReposition> _activeDefrag;
@@ -138,13 +139,16 @@ namespace RenderCore { namespace BufferUploads
 	};
 
 	ResourceLocator    BatchedResources::Allocate(
-		size_t size, StringSection<> name)
+		size_t unalignedSize, StringSection<> name)
 	{
-		if (size >= _prototype._linearBufferDesc._sizeInBytes)		// support allocating a reposition uber-buffer
+		size_t alignedSize = unalignedSize;
+		if (auto dealignment = unalignedSize%_alignment)
+			alignedSize += _alignment - dealignment;
+		if (alignedSize >= _prototype._linearBufferDesc._sizeInBytes)		// support allocating a reposition uber-buffer
 			return {};
 
-		_recentAllocateBytes += size;
-		_totalAllocateBytes += size;
+		_recentAllocateBytes += alignedSize;
+		_totalAllocateBytes += alignedSize;
 
 		{
 			ScopedLock(_lock);
@@ -154,23 +158,24 @@ namespace RenderCore { namespace BufferUploads
 				for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
 					if ((*i)->_lockedForDefrag) continue;
 					unsigned largestBlock = (*i)->_heap.CalculateLargestFreeBlock();
-					if (largestBlock >= size && largestBlock < bestHeapLargestBlock) {
+					if (largestBlock >= alignedSize && largestBlock < bestHeapLargestBlock) {
 						bestHeap = i->get();
 						bestHeapLargestBlock = largestBlock;
 					}
 				}
 
 				if (bestHeap) {
-					unsigned allocation = bestHeap->Allocate(size, name);
+					unsigned allocation = bestHeap->Allocate(alignedSize, name);
 					if (allocation != ~unsigned(0x0)) {
-						assert((allocation+size)<=ByteCount(_prototype));
+						assert((allocation+alignedSize)<=ByteCount(_prototype));
 						// We take the reference count before the ResourceLocator is created in
 						// order to avoid looking up the HeapedResource a second time, and avoid
 						// issues with non-recursive mutex locks
-						bestHeap->AddRef(allocation, size);
+						bestHeap->AddRef(allocation, alignedSize);
+						assert((allocation % _alignment) == 0);
 						return ResourceLocator{
 							bestHeap->_heapResource, 
-							allocation, size, 
+							allocation, unalignedSize, 		// note -- alignment padding comes after block, and is not added to the resultant allocator
 							weak_from_this(),
 							true, CommandListID_Invalid};
 					}
@@ -186,22 +191,26 @@ namespace RenderCore { namespace BufferUploads
 		++_totalCreateCount;
 
 		auto newHeap = std::make_unique<HeapedResource>(_prototype, heapResource);
-		unsigned allocation = newHeap->Allocate(size, name);
+		unsigned allocation = newHeap->Allocate(alignedSize, name);
 		assert(allocation != ~unsigned(0x0));
-		newHeap->AddRef(allocation, size);
+		newHeap->AddRef(allocation, alignedSize);
 
 		{
 			ScopedLock(_lock);
 			_heaps.push_back(std::move(newHeap));
 		}
 
-		return ResourceLocator{std::move(heapResource), allocation, size, weak_from_this(), true, CommandListID_Invalid};
+		return ResourceLocator{std::move(heapResource), allocation, unalignedSize, weak_from_this(), true, CommandListID_Invalid};
 	}
 	
 	bool BatchedResources::AddRef(
 		IResource& resource, 
-		size_t offset, size_t size)
+		size_t offset, size_t unalignedSize)
 	{
+		size_t alignedSize = unalignedSize;
+		if (auto dealignment = unalignedSize%_alignment)
+			alignedSize += _alignment - dealignment;
+
 		ScopedLock(_lock);
 		HeapedResource* heap = NULL;
 		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
@@ -213,14 +222,18 @@ namespace RenderCore { namespace BufferUploads
 
 		if (!heap) return false;
 
-		heap->AddRef(offset, size);
+		heap->AddRef(offset, alignedSize);
 		return true;
 	}
 
 	bool BatchedResources::Release(
 		IResource& resource,
-		size_t offset, size_t size)
+		size_t offset, size_t unalignedSize)
 	{
+		size_t alignedSize = unalignedSize;
+		if (auto dealignment = unalignedSize%_alignment)
+			alignedSize += _alignment - dealignment;
+
 		ScopedLock(_lock);
 		HeapedResource* heap = NULL;
 		for (auto i=_heaps.rbegin(); i!=_heaps.rend(); ++i) {
@@ -242,12 +255,12 @@ namespace RenderCore { namespace BufferUploads
 		// That might cause some issues with the defrag stuff, however, since the defragger might attempt
 		// to move a block during that phase after Release() but before the actual Deallocate from the heap
 
-		auto newRefCounts = heap->_refCounts.Release(offset, size);
+		auto newRefCounts = heap->_refCounts.Release(offset, alignedSize);
 		assert(newRefCounts.first >= 0 && newRefCounts.second >= 0);
 		if (newRefCounts.first == 0) {
 			if (newRefCounts.second == 0) {
 				// Simple case -- entire block dealloced
-				heap->Deallocate(offset, size);
+				heap->Deallocate(offset, alignedSize);
 			} else {
 				// Complex case -- some parts were left behind. We need to check what
 				// parts of the block are still have references, and what were released
@@ -263,7 +276,7 @@ namespace RenderCore { namespace BufferUploads
 						break;
 					++i;
 				}
-				unsigned start = offset, end = offset+size;
+				unsigned start = offset, end = offset+alignedSize;
 				while (i != entryCount && heap->_refCounts.GetEntry(i).first < end) {
 					auto e = heap->_refCounts.GetEntry(i);
 					unsigned allocatedPartsStart = e.first;
@@ -628,11 +641,13 @@ namespace RenderCore { namespace BufferUploads
 	BatchedResources::BatchedResources(
 		IDevice& device, const std::shared_ptr<IManager>& bufferUploads,
 		BindFlag::BitField bindFlags,
-		unsigned pageSizeInBytes)
+		unsigned pageSizeInBytes, unsigned alignment)
 	: _device(&device)
 	, _bufferUploads(bufferUploads)
 	, _fallbackBindFlags(bindFlags)
+	, _alignment(alignment)
 	{
+		assert(_alignment > 0);
 		_prototype = CreateDesc(
 			bindFlags | BindFlag::TransferDst | BindFlag::TransferSrc, 0,
 			LinearBufferDesc::Create(pageSizeInBytes));
@@ -772,9 +787,9 @@ namespace RenderCore { namespace BufferUploads
 	std::shared_ptr<IBatchedResources> CreateBatchedResources(
 		IDevice& device, const std::shared_ptr<IManager>& bufferUploads, 
 		BindFlag::BitField bindFlags,
-		unsigned pageSizeInBytes)
+		unsigned pageSizeInBytes, unsigned alignment)
 	{
-		return std::make_shared<BatchedResources>(device, bufferUploads, bindFlags, pageSizeInBytes);
+		return std::make_shared<BatchedResources>(device, bufferUploads, bindFlags, pageSizeInBytes, alignment);
 	}
 
 }}

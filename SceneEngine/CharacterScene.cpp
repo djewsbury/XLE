@@ -671,8 +671,8 @@ namespace SceneEngine
 		using namespace RenderCore;
 		if (bufferUploads) {
 			auto repositionableGeometry = std::make_shared<Techniques::RepositionableGeometryConduit>(
-				BufferUploads::CreateBatchedResources(*_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::VertexBuffer, 1024*1024),
-				BufferUploads::CreateBatchedResources(*_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::IndexBuffer, 1024*1024));
+				BufferUploads::CreateBatchedResources(*_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::VertexBuffer, 1024*1024, RenderCore::BufferUploads::s_batchedResultsDefaultAlignment),
+				BufferUploads::CreateBatchedResources(*_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::IndexBuffer, 1024*1024, RenderCore::BufferUploads::s_batchedResultsIndexAlignment));
 			_constructionContext = std::make_shared<Techniques::ResourceConstructionContext>(bufferUploads, std::move(repositionableGeometry));
 		}
 	}

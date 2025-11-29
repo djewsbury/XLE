@@ -157,6 +157,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		if (ibView._resource) {
 			assert(ibView._resource);
+			assert(ibView._indexFormat == Format::R32_UINT || ibView._indexFormat == Format::R16_UINT);		// also VK_INDEX_TYPE_UINT8_EXT
+			assert((ibView._offset % (BitsPerPixel(ibView._indexFormat)/8)) == 0);
 			vkCmdBindIndexBuffer(
 				_sharedState->_commandList.GetUnderlying().get(),
 				checked_cast<const Resource*>(ibView._resource)->GetBuffer(),

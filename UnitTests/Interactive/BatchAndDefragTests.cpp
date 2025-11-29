@@ -266,12 +266,12 @@ namespace UnitTests
 		auto tester = std::make_shared<BatchedResourcesDefragOverlay>();
 		tester->_batchedResources0 = BufferUploads::CreateBatchedResources(
 			*testHelper->GetDevice(), testHelper->GetPrimaryResourcesApparatus()->_bufferUploads,
-			BindFlag::VertexBuffer, 1024*1024);
+			BindFlag::VertexBuffer, 1024*1024, RenderCore::BufferUploads::s_batchedResultsDefaultAlignment);
 		tester->_batchingDisplay0 = std::make_shared<PlatformRig::Overlays::BatchingDisplay>(tester->_batchedResources0);
 
 		tester->_batchedResources1 = BufferUploads::CreateBatchedResources(
 			*testHelper->GetDevice(), testHelper->GetPrimaryResourcesApparatus()->_bufferUploads,
-			BindFlag::VertexBuffer, 1024*1024);
+			BindFlag::VertexBuffer, 1024*1024, RenderCore::BufferUploads::s_batchedResultsDefaultAlignment);
 		tester->_batchingDisplay1 = std::make_shared<PlatformRig::Overlays::BatchingDisplay>(tester->_batchedResources1);
 
 		testHelper->Run(visCamera, tester);

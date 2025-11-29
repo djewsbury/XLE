@@ -136,13 +136,15 @@ namespace RenderCore { namespace Techniques
 				unsigned _srcOffset, _srcSize;
 				LoadBuffer _loadBuffer;
 				DrawableStream _drawableStream;
+				unsigned _alignment = 1;
 			};
 			std::vector<LoadRequest> _staticLoadRequests;
 
 			void AddStaticLoadRequest(
 				LoadBuffer loadBuffer, DrawableStream drawableStream,
 				unsigned scaffoldIdx, unsigned drawableGeoIdx,
-				unsigned largeBlocksOffset, unsigned largeBlocksSize)
+				unsigned largeBlocksOffset, unsigned largeBlocksSize,
+				unsigned alignment)
 			{
 				if (!largeBlocksSize) return;
 				// note -- we could throw in a hash check here to avoid reuploading the same data
@@ -153,7 +155,7 @@ namespace RenderCore { namespace Techniques
 					LoadRequest{
 						scaffoldIdx, drawableGeoIdx,
 						largeBlocksOffset, largeBlocksSize,
-						loadBuffer, drawableStream});
+						loadBuffer, drawableStream, alignment});
 			}
 
 			std::vector<std::shared_ptr<Assets::ModelScaffold>> _registeredScaffolds;
@@ -210,7 +212,8 @@ namespace RenderCore { namespace Techniques
 				auto scaffoldIdx = GetScaffoldIdx(scaffold, modelScaffoldName);
 
 				assert(rg._vb._size);
-				AddStaticLoadRequest(LoadBuffer::VB, DrawableStream::Vertex0, scaffoldIdx, drawableGeoIdx, rg._vb._offset, rg._vb._size);
+				const unsigned requiredStartAlignment = 1;
+				AddStaticLoadRequest(LoadBuffer::VB, DrawableStream::Vertex0, scaffoldIdx, drawableGeoIdx, rg._vb._offset, rg._vb._size, requiredStartAlignment);
 				drawableGeo->_vertexStreamCount = 1;
 
 				// Attach those vertex streams that come from the deform operation
@@ -224,7 +227,7 @@ namespace RenderCore { namespace Techniques
 					if (request._skinningData) {
 						AddStaticLoadRequest(
 							LoadBuffer::VB, DrawableStream((unsigned)DrawableStream::Vertex0+drawableGeo->_vertexStreamCount), scaffoldIdx, drawableGeoIdx, 
-							request._skinningData->_animatedVertexElements._offset, request._skinningData->_animatedVertexElements._size);
+							request._skinningData->_animatedVertexElements._offset, request._skinningData->_animatedVertexElements._size, requiredStartAlignment);
 						++drawableGeo->_vertexStreamCount;
 						_geosLayout.push_back(BuildFinalIA(rg, *request._skinningData));
 					} else
@@ -238,7 +241,7 @@ namespace RenderCore { namespace Techniques
 					drawableGeo->_name = modelScaffoldName;
 				#endif
 				
-				AddStaticLoadRequest(LoadBuffer::IB, DrawableStream::IB, scaffoldIdx, drawableGeoIdx, rg._ib._offset, rg._ib._size);
+				AddStaticLoadRequest(LoadBuffer::IB, DrawableStream::IB, scaffoldIdx, drawableGeoIdx, rg._ib._offset, rg._ib._size, BitsPerPixel(rg._ib._format) / 8);
 				drawableGeo->_ibFormat = rg._ib._format;
 				_geos.push_back(std::move(drawableGeo));
 				_geoRequests.emplace_back(std::move(request));
@@ -296,6 +299,9 @@ namespace RenderCore { namespace Techniques
 					localLoadRequests.reserve(i-start);
 					unsigned offset = 0;
 					for (auto i2=start; i2!=i; ++i2) {
+
+						if (auto dealignment = offset % i2->_alignment)
+							offset += i2->_alignment-dealignment;
 
 						// set the offset value in the DrawableGeo now (though the resource won't be filled in immediately)
 						if (i2->_drawableStream == DrawableStream::IB) {

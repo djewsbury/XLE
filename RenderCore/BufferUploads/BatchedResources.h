@@ -31,10 +31,13 @@ namespace RenderCore { namespace BufferUploads
 		virtual BatchingSystemMetrics CalculateMetrics() const = 0;
 	};
 
+	static constexpr unsigned s_batchedResultsDefaultAlignment = 1;
+	static constexpr unsigned s_batchedResultsIndexAlignment = 4;				// alignment required by 32-bit indices
+
 	std::shared_ptr<IBatchedResources> CreateBatchedResources(
 		IDevice&, const std::shared_ptr<IManager>&, 
 		BindFlag::BitField bindFlags,
-		unsigned pageSizeInBytes);
+		unsigned pageSizeInBytes, unsigned alignment);
 
 	struct BatchedHeapMetrics
 	{
