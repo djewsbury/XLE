@@ -379,8 +379,6 @@ namespace ToolsRig { namespace Camera
         return Clamp(-0.002f * float(mouseMovement[1]), -limit, limit);
     }
 
-    static OSServices::Coord2 prevMousePosition(0, 0);
-
     static Float3 GetCameraTargetPos(const ClientUnit& unit, float unitScaleFactor)
     {
         return ExtractTranslation(unit._localToWorld) + Float3(0.f, 0.f, 125.f / 100.f * unitScaleFactor);
@@ -409,13 +407,9 @@ namespace ToolsRig { namespace Camera
 
         Float3 deltaRot(0.f, 0.f, 0.f);
         if (rightButton || leftButton) {
-            auto relativeMouse = snapShot._mousePosition;
-            relativeMouse[0] -= prevMousePosition[0];
-            relativeMouse[1] -= prevMousePosition[1];
-            deltaRot[2] = GetCameraYawInput(dt, {relativeMouse._x, relativeMouse._y});
-            deltaRot[0] = GetCameraPitchInput(dt, {relativeMouse._x, relativeMouse._y});
+            deltaRot[2] = GetCameraYawInput(dt, {snapShot._mouseDelta._x, snapShot._mouseDelta._y});
+            deltaRot[0] = GetCameraPitchInput(dt, {snapShot._mouseDelta._x, snapShot._mouseDelta._y});
         }
-        prevMousePosition = snapShot._mousePosition;
 
         const bool keepCameraRotation = false;
 
@@ -438,7 +432,7 @@ namespace ToolsRig { namespace Camera
         }
 
         bool dived = _dived;
-        float waterLevel = 0.f; // -actor->GetActorStats().relativeWaterLevel;
+        float waterLevel = -10000.f; // -actor->GetActorStats().relativeWaterLevel;
         _dived |= (waterLevel > Tweakable("camDiveStartDepth", 2.f*UnitScaleFactor()));
         _dived &= (waterLevel > Tweakable("camDiveEndDepth", 1.f*UnitScaleFactor()));
         _raiseCameraFromWater |= (dived && !_dived) && (_unitCam.pitch >0);
