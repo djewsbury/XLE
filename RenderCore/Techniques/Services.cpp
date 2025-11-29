@@ -147,6 +147,7 @@ namespace RenderCore { namespace Techniques
 		_compoundAssetUtil = std::make_shared<::AssetsNew::CompoundAssetUtil>(std::make_shared<::AssetsNew::AssetHeap>());
 		_pimpl->_batchCodes.push_back("opaque"_h);
 		_pimpl->_batchCodes.push_back("blending"_h);
+		_pimpl->_batchCodeCount = 2;
 	}
 
 	Services::~Services()

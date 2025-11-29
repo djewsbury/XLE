@@ -717,6 +717,7 @@ namespace RenderCore { namespace LightingEngine
 					std::vector<Techniques::DrawablesPacket*> pkts;
 					pkts.resize(_iterator->_drawablePktsPerParse);
 					_iterator->GetOrAllocatePkts(MakeIteratorRange(pkts), next->_parseId, next->_batches);
+					assert(!pkts.empty());
 					if (next->_multiViewProjections.empty()) {
 						return { StepType::ParseScene, _iterator->_parsingContext, std::move(pkts), _iterator->_deformersPacket.get(), next->_complexCullingVolume.get() };
 					} else {
