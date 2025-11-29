@@ -20,11 +20,21 @@ namespace AssetsNew
 		while (Formatters::TryKeyedItem(fmttr, keyname)) {
 			if (XlEqString(keyname, "Entity")) {
 
-				auto entityName = Formatters::RequireStringValue(fmttr);
-				auto hashName = Hash64(entityName);
-				auto i2 = LowerBound(_entityLookup, hashName);
-				if (i2 != _entityLookup.end() && i2->first == hashName) Throw(::Formatters::FormatException("Duplicate entity name", fmttr.GetLocation()));
-				_entityLookup.emplace(i2, hashName, Internal::EntityBookkeeping{ nextComponentTableIdx++, entityName });
+				if (fmttr.TryBeginElement()) {
+					while (fmttr.TryStringValue(keyname)) {
+						auto hashName = Hash64(keyname);
+						auto i2 = LowerBound(_entityLookup, hashName);
+						if (i2 != _entityLookup.end() && i2->first == hashName) Throw(::Formatters::FormatException("Duplicate entity name", fmttr.GetLocation()));
+						_entityLookup.emplace(i2, hashName, Internal::EntityBookkeeping{ nextComponentTableIdx++, keyname });
+					}
+					Formatters::RequireEndElement(fmttr);
+				} else {
+					auto entityName = Formatters::RequireStringValue(fmttr);
+					auto hashName = Hash64(entityName);
+					auto i2 = LowerBound(_entityLookup, hashName);
+					if (i2 != _entityLookup.end() && i2->first == hashName) Throw(::Formatters::FormatException("Duplicate entity name", fmttr.GetLocation()));
+					_entityLookup.emplace(i2, hashName, Internal::EntityBookkeeping{ nextComponentTableIdx++, entityName });
+				}
 
 			} else if (XlEqString(keyname, "Inherit")) {
 
