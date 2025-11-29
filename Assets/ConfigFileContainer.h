@@ -270,7 +270,10 @@ namespace Assets
 
 		std::string containerName, internalSection;
 		if (const char* p = XlFindChar(initializer, ':')) {
-			if (p+1!=initializer.end() && (*(p+1) == '/' || *(p+1) == '\\')) Throw(std::runtime_error("Possible ':' confusing loading filename: " + initializer.AsString()));
+			if (p+1!=initializer.end() && (*(p+1) == '/' || *(p+1) == '\\')) {
+				promise.set_exception(std::make_exception_ptr(std::runtime_error("Possible ':' confusing loading filename: " + initializer.AsString())));
+				return;
+			}
 			containerName = MakeStringSection(initializer.begin(), p).AsString();
 			internalSection = MakeStringSection(p+1, initializer.end()).AsString();
 		} else
