@@ -11,11 +11,13 @@ namespace RenderCore { namespace Assets
 	AnimationSetBinding::AnimationSetBinding(
 		const AnimationSetOutputInterface&		output,
 		const SkeletonMachine&    				input)
+	: _animationSetOutput(output.begin(), output.end())
 	{
 		_specializedSkeletonMachine = SpecializeTransformationMachine(
 			_animBindingRules, _parameterDefaultsBlock, 
 			input.GetCommandStream(),
 			output);
+		assert(_animBindingRules.size() == output.size());
 
 		TransformationMachineOptimizer_Null nullOptimizer;
 		_specializedSkeletonMachine = OptimizeTransformationMachine(_specializedSkeletonMachine, nullOptimizer);
@@ -24,6 +26,27 @@ namespace RenderCore { namespace Assets
 		// TraceTransformationMachine(Log(Warning), _specializedSkeletonMachine);
 
 		_outputMatrixCount = input.GetOutputMatrixCount();
+
+		// calculate _float1ParameterOffsets, etc
+		for (unsigned c=0; c<_animBindingRules.size(); ++c) {
+			switch (_animBindingRules[c]._samplerType) {
+			case AnimSamplerType::Float1: _float1ParameterOffsets.emplace_back(_animBindingRules[c]._outputOffset); break;
+			case AnimSamplerType::Float3: _float3ParameterOffsets.emplace_back(_animBindingRules[c]._outputOffset); break;
+			case AnimSamplerType::Float4: _float4ParameterOffsets.emplace_back(_animBindingRules[c]._outputOffset); break;
+			case AnimSamplerType::Float4x4: _float4x4ParameterOffsets.emplace_back(_animBindingRules[c]._outputOffset); break;
+			case AnimSamplerType::Quaternion: _quaternionParameterOffsets.emplace_back(_animBindingRules[c]._outputOffset); break;
+			default: assert(0); break;
+			}
+		}
+
+		std::sort(b2e(_float1ParameterOffsets));
+		std::sort(b2e(_float3ParameterOffsets));
+		std::sort(b2e(_float4ParameterOffsets));
+		std::sort(b2e(_float4x4ParameterOffsets));
+		std::sort(b2e(_quaternionParameterOffsets));
+
+		assert(std::unique(b2e(_float3ParameterOffsets)) == _float3ParameterOffsets.end());
+		assert(std::unique(b2e(_quaternionParameterOffsets)) == _quaternionParameterOffsets.end());
 	}
 
 	void AnimationSetBinding::GenerateOutputTransforms(
