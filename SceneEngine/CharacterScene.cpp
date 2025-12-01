@@ -620,43 +620,47 @@ namespace SceneEngine
 		assert(animationCount >= 1);
 
 		// Get the animation parameter set for this anim state, and run the skeleton machine with those parameters
-		auto parameterBlockSize = _activeAnimator->_animSetBinding.GetParameterDefaultsBlock().size();
+		auto& bind = _activeAnimator->_animSetBinding;
+		auto paramDefaults = bind.GetParameterDefaultsBlock();
+		auto parameterBlockSize = paramDefaults.size();
 		VLA(uint8_t, parameterBlock, parameterBlockSize);
-		std::memcpy(parameterBlock, _activeAnimator->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
+		std::memcpy(parameterBlock, paramDefaults.begin(), parameterBlockSize);
 		
 		// calculate animated parameters
 		_activeAnimator->_animSet->ImmutableData()._animationSet.CalculateOutput(
 			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
 			RenderCore::Assets::AnimationState{times[0], ids[0]},
-			_activeAnimator->_animSetBinding.GetParameterBindingRules());
+			bind.GetParameterBindingRules());
 
-		for (auto o:_activeAnimator->_animSetBinding._float1ParameterOffsets) *(float*)PtrAdd(parameterBlock, o) *= weights[0];
-		for (auto o:_activeAnimator->_animSetBinding._float3ParameterOffsets) *(Float3*)PtrAdd(parameterBlock, o) *= weights[0];
-		for (auto o:_activeAnimator->_animSetBinding._float4ParameterOffsets) *(Float4*)PtrAdd(parameterBlock, o) *= weights[0];
-		for (auto o:_activeAnimator->_animSetBinding._float4x4ParameterOffsets) *(Float4x4*)PtrAdd(parameterBlock, o) *= weights[0];
-		float qw = weights[0];
+		for (auto o:bind._float1ParameterOffsets) *(float*)PtrAdd(parameterBlock, o) = LinearInterpolate(*(float*)PtrAdd(paramDefaults.begin(), o), *(float*)PtrAdd(parameterBlock, o), weights[0]);
+		for (auto o:bind._float3ParameterOffsets) *(Float3*)PtrAdd(parameterBlock, o) = LinearInterpolate(*(Float3*)PtrAdd(paramDefaults.begin(), o), *(Float3*)PtrAdd(parameterBlock, o), weights[0]);
+		for (auto o:bind._float4ParameterOffsets) *(Float4*)PtrAdd(parameterBlock, o) = LinearInterpolate(*(Float4*)PtrAdd(paramDefaults.begin(), o), *(Float4*)PtrAdd(parameterBlock, o), weights[0]);
+		for (auto o:bind._float4x4ParameterOffsets) *(Float4x4*)PtrAdd(parameterBlock, o) = LinearInterpolate(*(Float4x4*)PtrAdd(paramDefaults.begin(), o), *(Float4x4*)PtrAdd(parameterBlock, o), weights[0]);
+		for (auto o:bind._quaternionParameterOffsets) *(Quaternion*)PtrAdd(parameterBlock, o) = SphericalInterpolate(*(Quaternion*)PtrAdd(paramDefaults.begin(), o), *(Quaternion*)PtrAdd(parameterBlock, o), weights[0]);
 
 		VLA(uint8_t, parameterBlockTemp, parameterBlockSize);
 		for (unsigned a=1; a<animationCount; ++a) {
 			_activeAnimator->_animSet->ImmutableData()._animationSet.CalculateOutput(
 				MakeIteratorRange(parameterBlockTemp, &parameterBlockTemp[parameterBlockSize]),
 				RenderCore::Assets::AnimationState{times[a], ids[a]},
-				_activeAnimator->_animSetBinding.GetParameterBindingRules());
+				bind.GetParameterBindingRules());
 
-			for (auto o:_activeAnimator->_animSetBinding._float1ParameterOffsets) *(float*)PtrAdd(parameterBlock, o) += *(float*)PtrAdd(parameterBlockTemp, o) * weights[a];
-			for (auto o:_activeAnimator->_animSetBinding._float3ParameterOffsets) *(Float3*)PtrAdd(parameterBlock, o) += *(Float3*)PtrAdd(parameterBlockTemp, o) * weights[a];
-			for (auto o:_activeAnimator->_animSetBinding._float4ParameterOffsets) *(Float4*)PtrAdd(parameterBlock, o) += *(Float4*)PtrAdd(parameterBlockTemp, o) * weights[a];
-			for (auto o:_activeAnimator->_animSetBinding._float4x4ParameterOffsets) *(Float4x4*)PtrAdd(parameterBlock, o) += *(Float4x4*)PtrAdd(parameterBlockTemp, o) * weights[a];
-			qw += weights[a];
-			for (auto o:_activeAnimator->_animSetBinding._quaternionParameterOffsets)
-				// simple multi-slerp. Not exactly an ideal interpolation for Quaternions
-				*(Quaternion*)PtrAdd(parameterBlock, o) = SphericalInterpolate(
-					*(Quaternion*)PtrAdd(parameterBlock, o), *(Quaternion*)PtrAdd(parameterBlockTemp, o), weights[a] / qw);
+			float w = weights[a];
+			for (auto o:bind._float1ParameterOffsets) *(float*)PtrAdd(parameterBlock, o) += (*(float*)PtrAdd(parameterBlockTemp, o) - *(float*)PtrAdd(paramDefaults.begin(), o)) * w;
+			for (auto o:bind._float3ParameterOffsets) *(Float3*)PtrAdd(parameterBlock, o) += (*(Float3*)PtrAdd(parameterBlockTemp, o) - *(Float3*)PtrAdd(paramDefaults.begin(), o)) * w;
+			for (auto o:bind._float4ParameterOffsets) *(Float4*)PtrAdd(parameterBlock, o) += (*(Float4*)PtrAdd(parameterBlockTemp, o) - *(Float4*)PtrAdd(paramDefaults.begin(), o)) * w;
+			for (auto o:bind._float4x4ParameterOffsets) *(Float4x4*)PtrAdd(parameterBlock, o) += (*(Float4x4*)PtrAdd(parameterBlockTemp, o) - *(Float4x4*)PtrAdd(paramDefaults.begin(), o)) * w;
+			for (auto o:bind._quaternionParameterOffsets) {
+				// simple multi-slerp. Imperfect blending, but we can afford a little roughness
+				auto existingWeight = cml::dot(*(Quaternion*)PtrAdd(parameterBlock, o), *(Quaternion*)PtrAdd(paramDefaults.begin(), o));
+				existingWeight = 0.5f - 0.5f * existingWeight; assert(existingWeight >= -1e-3f && existingWeight <= (1.f+1e-3f));
+				*(Quaternion*)PtrAdd(parameterBlock, o) = SphericalInterpolate(*(Quaternion*)PtrAdd(parameterBlock, o), *(Quaternion*)PtrAdd(parameterBlockTemp, o), w / (existingWeight+w));
+			}
 		}
 
 		// generate the joint transforms based on the animation parameters
 		assert(_activeAnimator->_skeletonMachineOutput.size() == _activeSkeletonMachine->GetOutputMatrixCount());
-		_activeAnimator->_animSetBinding.GenerateOutputTransforms(
+		bind.GenerateOutputTransforms(
 			MakeIteratorRange(_activeAnimator->_skeletonMachineOutput),
 			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
 
