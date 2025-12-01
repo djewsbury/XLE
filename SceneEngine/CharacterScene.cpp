@@ -612,6 +612,59 @@ namespace SceneEngine
 			instanceIdx, MakeIteratorRange(_activeAnimator->_skeletonMachineOutput));
 	}
 
+	void ICharacterScene::AnimationConfigureHelper::ApplyAnimation(unsigned instanceIdx, const uint64_t ids[], const float times[], const float weights[], unsigned animationCount)
+	{
+		assert(_activeAnimator);
+		assert(_activeAnimator->_deformerSkeletonInterface);
+
+		assert(animationCount >= 1);
+
+		// Get the animation parameter set for this anim state, and run the skeleton machine with those parameters
+		auto parameterBlockSize = _activeAnimator->_animSetBinding.GetParameterDefaultsBlock().size();
+		VLA(uint8_t, parameterBlock, parameterBlockSize);
+		std::memcpy(parameterBlock, _activeAnimator->_animSetBinding.GetParameterDefaultsBlock().begin(), parameterBlockSize);
+		
+		// calculate animated parameters
+		_activeAnimator->_animSet->ImmutableData()._animationSet.CalculateOutput(
+			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]),
+			RenderCore::Assets::AnimationState{times[0], ids[0]},
+			_activeAnimator->_animSetBinding.GetParameterBindingRules());
+
+		for (auto o:_activeAnimator->_animSetBinding._float1ParameterOffsets) *(float*)PtrAdd(parameterBlock, o) *= weights[0];
+		for (auto o:_activeAnimator->_animSetBinding._float3ParameterOffsets) *(Float3*)PtrAdd(parameterBlock, o) *= weights[0];
+		for (auto o:_activeAnimator->_animSetBinding._float4ParameterOffsets) *(Float4*)PtrAdd(parameterBlock, o) *= weights[0];
+		for (auto o:_activeAnimator->_animSetBinding._float4x4ParameterOffsets) *(Float4x4*)PtrAdd(parameterBlock, o) *= weights[0];
+		float qw = weights[0];
+
+		VLA(uint8_t, parameterBlockTemp, parameterBlockSize);
+		for (unsigned a=1; a<animationCount; ++a) {
+			_activeAnimator->_animSet->ImmutableData()._animationSet.CalculateOutput(
+				MakeIteratorRange(parameterBlockTemp, &parameterBlockTemp[parameterBlockSize]),
+				RenderCore::Assets::AnimationState{times[a], ids[a]},
+				_activeAnimator->_animSetBinding.GetParameterBindingRules());
+
+			for (auto o:_activeAnimator->_animSetBinding._float1ParameterOffsets) *(float*)PtrAdd(parameterBlock, o) += *(float*)PtrAdd(parameterBlockTemp, o) * weights[a];
+			for (auto o:_activeAnimator->_animSetBinding._float3ParameterOffsets) *(Float3*)PtrAdd(parameterBlock, o) += *(Float3*)PtrAdd(parameterBlockTemp, o) * weights[a];
+			for (auto o:_activeAnimator->_animSetBinding._float4ParameterOffsets) *(Float4*)PtrAdd(parameterBlock, o) += *(Float4*)PtrAdd(parameterBlockTemp, o) * weights[a];
+			for (auto o:_activeAnimator->_animSetBinding._float4x4ParameterOffsets) *(Float4x4*)PtrAdd(parameterBlock, o) += *(Float4x4*)PtrAdd(parameterBlockTemp, o) * weights[a];
+			qw += weights[a];
+			for (auto o:_activeAnimator->_animSetBinding._quaternionParameterOffsets)
+				// simple multi-slerp. Not exactly an ideal interpolation for Quaternions
+				*(Quaternion*)PtrAdd(parameterBlock, o) = SphericalInterpolate(
+					*(Quaternion*)PtrAdd(parameterBlock, o), *(Quaternion*)PtrAdd(parameterBlockTemp, o), weights[a] / qw);
+		}
+
+		// generate the joint transforms based on the animation parameters
+		assert(_activeAnimator->_skeletonMachineOutput.size() == _activeSkeletonMachine->GetOutputMatrixCount());
+		_activeAnimator->_animSetBinding.GenerateOutputTransforms(
+			MakeIteratorRange(_activeAnimator->_skeletonMachineOutput),
+			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
+
+		// set the skeleton machine output to the deformer
+		_activeAnimator->_deformerSkeletonInterface->FeedInSkeletonMachineResults(
+			instanceIdx, MakeIteratorRange(_activeAnimator->_skeletonMachineOutput));
+	}
+
 	IteratorRange<const Float4x4*> ICharacterScene::AnimationConfigureHelper::GetSkeletonMachineOutput()
 	{
 		assert(_activeAnimator);
