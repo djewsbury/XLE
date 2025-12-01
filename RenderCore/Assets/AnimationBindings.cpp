@@ -14,7 +14,7 @@ namespace RenderCore { namespace Assets
 	: _animationSetOutput(output.begin(), output.end())
 	{
 		_specializedSkeletonMachine = SpecializeTransformationMachine(
-			_animBindingRules, _parameterDefaultsBlock, 
+			_animBindingRules, _parameterDefaultsBlock,
 			input.GetCommandStream(),
 			output);
 		assert(_animBindingRules.size() == output.size());
@@ -29,6 +29,7 @@ namespace RenderCore { namespace Assets
 
 		// calculate _float1ParameterOffsets, etc
 		for (unsigned c=0; c<_animBindingRules.size(); ++c) {
+			if (_animBindingRules[c]._outputOffset == ~0u) continue;
 			switch (_animBindingRules[c]._samplerType) {
 			case AnimSamplerType::Float1: _float1ParameterOffsets.emplace_back(_animBindingRules[c]._outputOffset); break;
 			case AnimSamplerType::Float3: _float3ParameterOffsets.emplace_back(_animBindingRules[c]._outputOffset); break;
