@@ -83,21 +83,42 @@ namespace RenderCore { namespace LightingEngine
 		return std::make_shared<DataSourceFromResourceSynchronized>(std::move(threadContext), std::move(resource), std::move(depVal));
 	}
 
+	class Compiler_JustLoad : public Assets::ITextureCompiler
+	{
+	public:
+		std::string _src;
+		RenderCore::Assets::TextureLoaderFlags::BitField _flags = 0;
+		std::string GetIntermediateName() const override { return (StringMeld<128>() << "convert-" << _src).AsString(); }
+		std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override {
+			return Techniques::Services::GetInstance().CreateTextureDataSource(_src, _flags);
+		}
+
+		void MergeInWithFilenameResolve(const Compiler_JustLoad& src, const ::Assets::DirectorySearchRules& searchRules)
+		{
+			if (!src._src.empty()) {
+				char buffer[MaxPath];
+				searchRules.ResolveFile(buffer, src._src);
+				_src = buffer;
+			}
+			_flags |= src._flags;
+		}
+
+		Compiler_JustLoad(std::string src, RenderCore::Assets::TextureLoaderFlags::BitField flags) : _src(src), _flags(flags) {}
+		Compiler_JustLoad(Formatters::TextInputFormatter<>& fmttr)
+		{
+			StringSection<> kn;
+			while (fmttr.TryKeyedItem(kn)) {
+				if (XlEqString(kn, "SourceFile")) _src = Formatters::RequireStringValue(fmttr);
+				else if (XlEqString(kn, "GenerateMipmaps")) _flags = (_flags&~RenderCore::Assets::TextureLoaderFlags::GenerateMipmaps) | (Formatters::RequireCastValue<bool>(fmttr) * RenderCore::Assets::TextureLoaderFlags::GenerateMipmaps);
+				else Formatters::SkipValueOrElement(fmttr);
+			}
+		}
+		Compiler_JustLoad() = default;
+	};
+
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_JustLoad(
 		StringSection<> src, RenderCore::Assets::TextureLoaderFlags::BitField loadFlags)
 	{
-		class Compiler_JustLoad : public Assets::ITextureCompiler
-		{
-		public:
-			std::string _src;
-			RenderCore::Assets::TextureLoaderFlags::BitField _bitField = 0;
-			std::string GetIntermediateName() const override { return (StringMeld<128>() << "convert-" << _src).AsString(); }
-			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override {
-				return Techniques::Services::GetInstance().CreateTextureDataSource(_src, _bitField);
-			}
-
-			Compiler_JustLoad(std::string src, RenderCore::Assets::TextureLoaderFlags::BitField bitField) : _src(src), _bitField(bitField) {}
-		};
 		return std::make_shared<Compiler_JustLoad>(src.AsString(), loadFlags);
 	}
 
@@ -1346,6 +1367,18 @@ namespace RenderCore { namespace LightingEngine
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "HaltonOrderedSamples"_h))
 			return util->GetFuture<std::shared_ptr<Compiler_HaltonOrderedSamples>>("HaltonOrderedSamples"_h, indexer).get().get();
+
+		return nullptr;
+	}
+
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_Basics(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer)
+	{
+		auto scaffold = indexer._scaffold.get();
+
+		if (scaffold->HasComponent(indexer._entityNameHash, "JustLoad"_h))
+			return util->GetFuture<std::shared_ptr<Compiler_JustLoad>>("JustLoad"_h, indexer).get().get();
 
 		return nullptr;
 	}

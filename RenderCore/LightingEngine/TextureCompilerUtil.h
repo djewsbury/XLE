@@ -88,6 +88,10 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer);
 
+	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_Basics(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		const ::AssetsNew::ScaffoldAndEntityName& indexer);
+
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_ConversionComputeShader(
 		std::string srcTexture, std::string shader,
 		const TextureDesc& targetDesc);
