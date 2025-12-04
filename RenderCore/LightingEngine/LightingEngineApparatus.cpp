@@ -154,6 +154,7 @@ namespace RenderCore { namespace LightingEngine
 		_textureCompilerRegistrations[0] = tcRegistrar.Register(TextureCompiler_EquirectFilter);
 		_textureCompilerRegistrations[1] = tcRegistrar.Register(TextureCompiler_ComputeShader);
 		_textureCompilerRegistrations[2] = tcRegistrar.Register(TextureCompiler_LightingEngineCommon);
+		_textureCompilerRegistrations[3] = tcRegistrar.Register(TextureCompiler_Basics);
 	}
 
 	LightingEngineApparatus::~LightingEngineApparatus()
