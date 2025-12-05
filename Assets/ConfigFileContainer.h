@@ -229,8 +229,10 @@ namespace Assets
 		// First parameter should be the section of the input file to read (or just use the root of the file if it doesn't exist)
 		// See also AutoConstructToPromise<> variation of this function
 		StringSection<> containerName, internalSection;
-		if (const char* p = XlFindChar(initializer, ':')) {
-			if (p+1!=initializer.end() && (*(p+1) == '/' || *(p+1) == '\\')) Throw(std::runtime_error("Possible ':' confusing loading filename: " + initializer.AsString()));
+		const char* p = XlFindChar(initializer, ':');
+		while (p && p+1!=initializer.end() && (*(p+1) == '/' || *(p+1) == '\\'))
+			p = XlFindChar({p+1, initializer.end()}, ':');
+		if (p) {
 			containerName = MakeStringSection(initializer.begin(), p);
 			internalSection = MakeStringSection(p+1, initializer.end());
 		} else
@@ -269,11 +271,10 @@ namespace Assets
 		// In particular, it can hide the mechanism for invoking compiles
 
 		std::string containerName, internalSection;
-		if (const char* p = XlFindChar(initializer, ':')) {
-			if (p+1!=initializer.end() && (*(p+1) == '/' || *(p+1) == '\\')) {
-				promise.set_exception(std::make_exception_ptr(std::runtime_error("Possible ':' confusing loading filename: " + initializer.AsString())));
-				return;
-			}
+		const char* p = XlFindChar(initializer, ':');
+		while (p && p+1!=initializer.end() && (*(p+1) == '/' || *(p+1) == '\\'))
+			p = XlFindChar({p+1, initializer.end()}, ':');
+		if (p) {
 			containerName = MakeStringSection(initializer.begin(), p).AsString();
 			internalSection = MakeStringSection(p+1, initializer.end()).AsString();
 		} else
