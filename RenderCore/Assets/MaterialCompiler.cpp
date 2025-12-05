@@ -529,7 +529,7 @@ namespace RenderCore { namespace Assets
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static ::Assets::SimpleCompilerResult MaterialCompileOperation(const ::Assets::InitializerPack& initializers)
+	static ::Assets::SerializedTarget MaterialCompileOperation(const ::Assets::InitializerPack& initializers)
 	{
 		std::string sourceMaterialName, sourceModelName;
 		sp<ModelCompilationConfiguration> sourceModelConfiguration;
@@ -562,15 +562,14 @@ namespace RenderCore { namespace Assets
 					::Assets::AsBlob(blockSerializer)
 				}
 			},
-			AsDepVal(depVals),
-			GetCompileProcessType((CompiledMaterialSet*)nullptr)
+			AsDepVal(depVals)
 		};
 	}
 
 	::Assets::CompilerRegistration RegisterMaterialCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "material-set-compiler", "material-set-compiler", MaterialCompileOperation);
+		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "material-set-compiler", "material-set-compiler", MaterialCompileOperation, GetCompileProcessType((CompiledMaterialSet*)nullptr));
 		uint64_t outputAssetTypes[] = { GetCompileProcessType((CompiledMaterialSet*)nullptr) };
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),

@@ -53,17 +53,14 @@ namespace Assets
 
 	using CreateCompileOperationFn = std::shared_ptr<ICompileOperation>(const InitializerPack&);
 
-	struct SimpleCompilerResult : public SerializedTarget
-	{
-		uint64_t _targetCode;
-	};
-	using SimpleCompilerSig = ::Assets::SimpleCompilerResult(const ::Assets::InitializerPack&);
+	using SimpleCompilerSig = SerializedTarget(const ::Assets::InitializerPack&);
 
 	CompilerRegistration RegisterSimpleCompiler(
 		IIntermediateCompilers& compilers,
 		const std::string& name,
 		const std::string& shortName,
 		std::function<SimpleCompilerSig>&& fn,
+		ArtifactTargetCode targetCode,
 		IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate = {});
 }
 

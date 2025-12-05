@@ -47,7 +47,7 @@ namespace ShaderSourceParser
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	::Assets::SimpleCompilerResult CompileShaderSignatureResource(const ::Assets::InitializerPack& initializers)
+	::Assets::SerializedTarget CompileShaderSignatureResource(const ::Assets::InitializerPack& initializers)
 	{
 		auto fn = initializers.GetInitializer<std::string>(0);
 		size_t fileSize;
@@ -81,13 +81,10 @@ namespace ShaderSourceParser
 		blockSerializer << (uint32_t)isGraphSyntaxFile;
 
 		return {
-			{
-				::Assets::PortableVector<::Assets::SerializedArtifact>{
-					{ "shader-signature"_h, 1, fn, ::Assets::AsBlob(blockSerializer) }
-				},
-				depVal
+			::Assets::PortableVector<::Assets::SerializedArtifact>{
+				{ "shader-signature"_h, 1, fn, ::Assets::AsBlob(blockSerializer) }
 			},
-			"shader-signature"_h
+			depVal
 		};
 	}
 
@@ -98,6 +95,7 @@ namespace ShaderSourceParser
 			"shader-signature-compiler",
 			"shader-signature-compiler",
 			CompileShaderSignatureResource,
+			"shader-signature"_h,
 			[](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
 				::Assets::IIntermediateCompilers::SplitArchiveName result;
 				auto fn = initializers.GetInitializer<std::string>(0);

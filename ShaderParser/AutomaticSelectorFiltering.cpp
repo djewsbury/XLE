@@ -279,7 +279,7 @@ namespace ShaderSourceParser
 		return str;
 	}
 
-	static ::Assets::SimpleCompilerResult ShaderSelectorFilteringCompileOperation(const ::Assets::InitializerPack& initializer)
+	static ::Assets::SerializedTarget ShaderSelectorFilteringCompileOperation(const ::Assets::InitializerPack& initializer)
 	{
 		::Assets::PreprocessorIncludeHandler handler;
 		TRY {
@@ -336,8 +336,7 @@ namespace ShaderSourceParser
 
 			return {
 				std::move(artifacts),
-				::Assets::GetDepValSys().Make(depFileStates),
-				GetCompileProcessType((SelectorFilteringRules*)nullptr)
+				::Assets::GetDepValSys().Make(depFileStates)
 			};
 		} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 			Throw(::Assets::Exceptions::ConstructionError(e, handler.MakeDependencyValidation()));
@@ -354,6 +353,7 @@ namespace ShaderSourceParser
 			"shader-selector-filtering-compiler",
 			"shader-selector-filtering-compiler",
 			ShaderSelectorFilteringCompileOperation,
+			GetCompileProcessType((SelectorFilteringRules*)nullptr),
 			[](::Assets::ArtifactTargetCode targetCode, const ::Assets::InitializerPack& initializers) {
 				assert(targetCode == GetCompileProcessType((SelectorFilteringRules*)nullptr));
 				::Assets::IIntermediateCompilers::SplitArchiveName result;

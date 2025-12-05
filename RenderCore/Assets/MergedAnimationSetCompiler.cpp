@@ -70,7 +70,7 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-	static ::Assets::SimpleCompilerResult MergedAnimSetCompileOperation(const ::Assets::InitializerPack& initializers)
+	static ::Assets::SerializedTarget MergedAnimSetCompileOperation(const ::Assets::InitializerPack& initializers)
 	{
 		auto baseFolderSrc = initializers.GetInitializer<std::string>(0);
 		auto splitPath = MakeSplitPath(baseFolderSrc);
@@ -115,15 +115,14 @@ namespace RenderCore { namespace Assets
 
 		return {
 			std::move(serializedArtifacts),
-			::Assets::GetDepValSys().MakeOrReuse(depVals),
-			Type_AnimationSet
+			::Assets::GetDepValSys().MakeOrReuse(depVals)
 		};
 	}
 
 	::Assets::CompilerRegistration RegisterMergedAnimationSetCompiler(
 		::Assets::IIntermediateCompilers& intermediateCompilers)
 	{
-		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "merged-animset-compiler", "merged-animset-compiler", MergedAnimSetCompileOperation);
+		auto result = ::Assets::RegisterSimpleCompiler(intermediateCompilers, "merged-animset-compiler", "merged-animset-compiler", MergedAnimSetCompileOperation, Type_AnimationSet);
 		uint64_t outputAssetTypes[] = { Type_AnimationSet };
 		intermediateCompilers.AssociateRequest(
 			result.RegistrationId(),

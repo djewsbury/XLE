@@ -11,8 +11,6 @@
 #include "IArtifact.h"
 #include "InitializerPack.h"
 #include "CompilerLibrary.h"
-#include "ArchiveCache.h"
-#include "IFileSystem.h"
 #include "OperationContext.h"
 #include "../OSServices/AttachableLibrary.h"
 #include "../ConsoleRig/GlobalServices.h"
@@ -825,17 +823,17 @@ namespace Assets
 				TargetDesc { _targetCode, _serializedArtifacts[0]._name.c_str() }
 			};
 		}
-		::Assets::SerializedTarget	SerializeTarget(unsigned idx) override
+		::Assets::SerializedTarget SerializeTarget(unsigned idx) override
 		{
 			assert(idx == 0);
 			return { _serializedArtifacts, _depVal };
 		}
 		DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
-		SimpleCompilerAdapter(SimpleCompilerResult&& compilerResult)
+		SimpleCompilerAdapter(SerializedTarget&& compilerResult, uint64_t targetCode)
 		: _serializedArtifacts(std::move(compilerResult._artifacts))
 		, _depVal(std::move(compilerResult._depVal))
-		, _targetCode(compilerResult._targetCode)
+		, _targetCode(targetCode)
 		{}
 
 	private:
@@ -844,11 +842,17 @@ namespace Assets
 		ArtifactTargetCode _targetCode;
 	};
 
+	static SerializedArtifact AsSerializedArtifact(const std::exception& e)
+	{
+		return { ChunkType_Log, 0, "exception", AsBlob(e.what()) };
+	}
+
 	CompilerRegistration RegisterSimpleCompiler(
 		IIntermediateCompilers& compilers,
 		const std::string& name,
 		const std::string& shortName,
 		std::function<SimpleCompilerSig>&& fn,
+		ArtifactTargetCode targetCode,
 		IIntermediateCompilers::ArchiveNameDelegate&& archiveNameDelegate)
 	{
 		return CompilerRegistration{
@@ -856,8 +860,31 @@ namespace Assets
 			name, shortName,
 			ConsoleRig::GetLibVersionDesc(),
 			{},
-			[fn=std::move(fn)](const auto& initializers) {
-				return std::make_shared<SimpleCompilerAdapter>(fn(initializers));
+			[fn=std::move(fn), targetCode](const auto& initializers) {
+				TRY {
+
+					return std::make_shared<SimpleCompilerAdapter>(fn(initializers), targetCode);
+
+				} CATCH (const Exceptions::ExceptionWithDepVal& e) {
+
+					// transform exceptions into something we can store in an artifact
+					return std::make_shared<SimpleCompilerAdapter>(
+						SerializedTarget {
+							PortableVector<SerializedArtifact> { AsSerializedArtifact(e) },
+							e.GetDependencyValidation()
+						},
+						targetCode);
+
+				} CATCH (const std::exception& e) {
+
+					return std::make_shared<SimpleCompilerAdapter>(
+						SerializedTarget {
+							PortableVector<SerializedArtifact> { AsSerializedArtifact(e) },
+							DependencyValidation{}
+						},
+						targetCode);
+
+				} CATCH_END
 			},
 			std::move(archiveNameDelegate)};
 	}
