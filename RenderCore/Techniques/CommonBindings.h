@@ -75,6 +75,7 @@ namespace RenderCore { namespace Techniques
         constexpr auto PIXELPOSITION = ConstHash64("PIXELPOSITION");
         constexpr auto TEXCOORD = ConstHash64("TEXCOORD");
 		constexpr auto COLOR = ConstHash64("COLOR");
+        constexpr auto COLOR_SRGB = ConstHash64("COLOR_SRGB");
 		constexpr auto NORMAL = ConstHash64("NORMAL");
 		constexpr auto TEXTANGENT = ConstHash64("TEXTANGENT");
 		constexpr auto TEXBITANGENT = ConstHash64("TEXBITANGENT");

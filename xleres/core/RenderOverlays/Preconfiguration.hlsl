@@ -16,6 +16,21 @@
 	#endif
 #endif
 
+#if GEO_HAS_COLOR_SRGB
+	#if !defined(VSOUT_HAS_COLOR_LINEAR)
+		#define VSOUT_HAS_COLOR_LINEAR 1
+	#endif
+	#if !defined(VSOUT_HAS_VERTEX_ALPHA)
+		#define VSOUT_HAS_VERTEX_ALPHA 1
+	#endif
+#endif
+
+#if GEO_HAS_COLOR_SRGB1
+	#if !defined(VSOUT_HAS_COLOR_LINEAR1)
+		#define VSOUT_HAS_COLOR_LINEAR1 1
+	#endif
+#endif
+
 #if GEO_HAS_TEXCOORD1
 	#if !defined(VSOUT_HAS_TEXCOORD1)
 		#define VSOUT_HAS_TEXCOORD1 1

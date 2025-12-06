@@ -27,6 +27,14 @@ struct VSIN //////////////////////////////////////////////////////
 		float4 color1 : COLOR1;
 	#endif
 
+	#if GEO_HAS_COLOR_SRGB
+		float4 color_srgb : COLOR_SRGB;
+	#endif
+
+	#if GEO_HAS_COLOR_SRGB1
+		float4 color_srgb1 : COLOR_SRGB1;
+	#endif
+
 	#if GEO_HAS_TEXCOORD
 		float2 texCoord : TEXCOORD;
 	#endif
@@ -92,12 +100,16 @@ struct VSIN //////////////////////////////////////////////////////
 
 #if GEO_HAS_COLOR ////////////////////////////////////////////////
 	float4 VSIN_GetColor0(VSIN input) { return input.color; }
+#elif GEO_HAS_COLOR_SRGB /////////////////////////////////////////
+	float4 VSIN_GetColor0(VSIN input) { return input.color_srgb; }
 #else
 	float4 VSIN_GetColor0(VSIN input) { return 1.0.xxxx; }
 #endif //////////////////////////////////////////////////////////////
 
 #if GEO_HAS_COLOR1 ///////////////////////////////////////////////
 	float4 VSIN_GetColor1(VSIN input) { return input.color1; }
+#elif GEO_HAS_COLOR_SRGB1 /////////////////////////////////////////
+	float4 VSIN_GetColor1(VSIN input) { return input.color_srgb1; }
 #else
 	float4 VSIN_GetColor1(VSIN input) { return 1.0.xxxx; }
 #endif //////////////////////////////////////////////////////////////

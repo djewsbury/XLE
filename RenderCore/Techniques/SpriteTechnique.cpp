@@ -700,7 +700,7 @@ void LocalToWorldP3D(
 	out float3 worldPosition : WORLDPOSITION,
 	float3 position : POSITION)
 {
-	worldPosition = position;
+	worldPosition = mul(SysUniform_GetLocalToWorld(), float4(position,1));
 }
 
 void LocalToWorldP3D_ViaTransform(
@@ -801,6 +801,12 @@ void PixelPositionOutput(
 }
 
 void ColorSRGBToColorLinear(out float4 colorLinear : COLOR, float4 colorSRGB : COLOR_SRGB)
+{
+	colorLinear.rgb = SRGBToLinear_Formal(colorSRGB.rgb);
+	colorLinear.a = colorSRGB.a;
+}
+
+void ColorSRGBToColorLinear1(out float4 colorLinear : COLOR1, float4 colorSRGB : COLOR_SRGB1)
 {
 	colorLinear.rgb = SRGBToLinear_Formal(colorSRGB.rgb);
 	colorLinear.a = colorSRGB.a;

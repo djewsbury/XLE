@@ -171,13 +171,13 @@ WorkingVertex WorkingVertex_DefaultInitialize(VSIN input)
 		#error Expecting both "TEXCOORD" and "TEXCOORD1", or neither
 	#endif
 
-	#if GEO_HAS_COLOR
+	#if GEO_HAS_COLOR || GEO_HAS_COLOR_SRGB
 		// Note that we're kind of forced to do srgb -> linear conversion here, because we'll loose precision
 		// assuming 8 bit color inputs	
 		result.color0.rgb = SRGBToLinear(VSIN_GetColor0(input).rgb);
 		result.color0.a = VSIN_GetColor0(input).a;
 
-		#if GEO_HAS_COLOR1
+		#if GEO_HAS_COLOR1 || GEO_HAS_COLOR_SRGB1
 			result.color1.rgb = SRGBToLinear(VSIN_GetColor1(input).rgb);
 			result.color1.a = VSIN_GetColor1(input).a;
 			result.colorCount = 2;
