@@ -37,14 +37,14 @@ namespace RenderOverlays
 	static MiniInputElementDesc Vertex_PCR_inputElements3D[] = 
 	{
 		MiniInputElementDesc{ Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT },
-		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
+		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR_SRGB, Format::R8G8B8A8_UNORM },
 		MiniInputElementDesc{ Techniques::CommonSemantics::RADIUS, Format::R32_FLOAT }
 	};
 
 	static MiniInputElementDesc Vertex_PCR_inputElements2D[] = 
 	{
 		MiniInputElementDesc{ Techniques::CommonSemantics::PIXELPOSITION, Format::R32G32B32_FLOAT },
-		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM },
+		MiniInputElementDesc{ Techniques::CommonSemantics::COLOR_SRGB, Format::R8G8B8A8_UNORM },
 		MiniInputElementDesc{ Techniques::CommonSemantics::RADIUS, Format::R32_FLOAT }
 	};
 

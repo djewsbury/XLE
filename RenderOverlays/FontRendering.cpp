@@ -93,7 +93,7 @@ namespace RenderOverlays
 	RenderCore::MiniInputElementDesc WorkingVertexSetFontResource::s_inputElements[] = 
 	{
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
-		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB, RenderCore::Format::R8G8B8A8_UNORM },
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::FONTTABLE, RenderCore::Format::R16G16B16A16_UINT },
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::FONTTABLE+1, RenderCore::Format::R32_UINT }
 	};
@@ -204,7 +204,7 @@ namespace RenderOverlays
 	static RenderCore::MiniInputElementDesc s_inputElements3D[] = 
 	{
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::POSITION, RenderCore::Format::R32G32B32_FLOAT },
-		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB, RenderCore::Format::R8G8B8A8_UNORM },
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::FONTTABLE, RenderCore::Format::R16G16B16A16_UINT },
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::FONTTABLE+1, RenderCore::Format::R32_UINT }
 	};
@@ -306,7 +306,7 @@ namespace RenderOverlays
 	RenderCore::MiniInputElementDesc WorkingVertexSetPCT::s_inputElements[] = 
 	{
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
-		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB, RenderCore::Format::R8G8B8A8_UNORM },
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
 	};
 

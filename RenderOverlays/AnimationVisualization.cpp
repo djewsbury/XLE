@@ -29,7 +29,7 @@ namespace RenderOverlays
 
 	static MiniInputElementDesc s_vertexInputLayout[] = {
         MiniInputElementDesc{ Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT },
-        MiniInputElementDesc{ Techniques::CommonSemantics::COLOR, Format::R8G8B8A8_UNORM }
+        MiniInputElementDesc{ Techniques::CommonSemantics::COLOR_SRGB, Format::R8G8B8A8_UNORM }
     };
 
 	class SkeletonPreviewResourceBox

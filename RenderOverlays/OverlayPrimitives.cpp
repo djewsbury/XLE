@@ -7,9 +7,6 @@
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/Types.h"
-#include "../../Utility/Streams/PathUtils.h"
-#include "../../Utility/StringFormat.h"
-#include <sstream>
 
 namespace RenderOverlays
 {
@@ -39,14 +36,14 @@ namespace RenderOverlays
 	static RenderCore::MiniInputElementDesc Vertex_PCT_inputElements2D[] =
 	{
 		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
-		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB, RenderCore::Format::R8G8B8A8_UNORM },
 		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
 	};
 
 	static RenderCore::MiniInputElementDesc Vertex_PCT_inputElements3D[] = 
 	{
 		{ RenderCore::Techniques::CommonSemantics::POSITION, RenderCore::Format::R32G32B32_FLOAT },
-		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB, RenderCore::Format::R8G8B8A8_UNORM },
 		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
 	};
 	
@@ -56,13 +53,13 @@ namespace RenderOverlays
 	static RenderCore::MiniInputElementDesc Vertex_PC_inputElements2D[] =
 	{
 		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
-		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM }
+		{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB, RenderCore::Format::R8G8B8A8_UNORM }
 	};
 
 	static RenderCore::MiniInputElementDesc Vertex_PC_inputElements3D[] = 
 	{
 		{ RenderCore::Techniques::CommonSemantics::POSITION, RenderCore::Format::R32G32B32_FLOAT },
-		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM }
+		{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB, RenderCore::Format::R8G8B8A8_UNORM }
 	};
 
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PC::s_inputElements2D = Vertex_PC_inputElements2D;
@@ -86,8 +83,8 @@ namespace RenderOverlays
 	static RenderCore::MiniInputElementDesc Vertex_PCCTT_inputElements2D[] =
 	{
 		{ RenderCore::Techniques::CommonSemantics::PIXELPOSITION, RenderCore::Format::R32G32B32_FLOAT },
-		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
-		{ RenderCore::Techniques::CommonSemantics::COLOR+1, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB+1, RenderCore::Format::R8G8B8A8_UNORM },
 		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT },
 		{ RenderCore::Techniques::CommonSemantics::TEXCOORD+1, RenderCore::Format::R32G32_FLOAT }
 	};
@@ -95,8 +92,8 @@ namespace RenderOverlays
 	static RenderCore::MiniInputElementDesc Vertex_PCCTT_inputElements3D[] = 
 	{
 		{ RenderCore::Techniques::CommonSemantics::POSITION, RenderCore::Format::R32G32B32_FLOAT },
-		{ RenderCore::Techniques::CommonSemantics::COLOR, RenderCore::Format::R8G8B8A8_UNORM },
-		{ RenderCore::Techniques::CommonSemantics::COLOR+1, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB, RenderCore::Format::R8G8B8A8_UNORM },
+		{ RenderCore::Techniques::CommonSemantics::COLOR_SRGB+1, RenderCore::Format::R8G8B8A8_UNORM },
 		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT },
 		{ RenderCore::Techniques::CommonSemantics::TEXCOORD+1, RenderCore::Format::R32G32_FLOAT }
 	};
