@@ -422,13 +422,20 @@ namespace Assets
 		, _depVal(depVal)
 		, _actualizationLog(actualizationLog)
         {
-			std::stringstream str;
-			if (_actualizationLog) {
-				str << "Invalid asset (" << Initializer() << "):" << MakeStringSection((const char*)AsPointer(_actualizationLog->begin()), (const char*)AsPointer(_actualizationLog->end()));
-			} else {
-				str << "Invalid asset (" << Initializer() << ")";
-			}
-			_whatString = str.str();
+			
+            if (_actualizationLog) {
+                if (Initializer()[0]) {
+                    std::stringstream str;
+                    str << "Invalid asset (" << Initializer() << "):" << MakeStringSection((const char*)AsPointer(_actualizationLog->begin()), (const char*)AsPointer(_actualizationLog->end()));
+                    _whatString = str.str();
+                } else {
+                    _whatString = ::Assets::AsString(_actualizationLog);
+                }
+            } else {
+                std::stringstream str;
+                str << "Invalid asset (" << Initializer() << ")";
+                _whatString = str.str();
+            }
 		}
 
         bool InvalidAsset::CustomReport() const
@@ -500,9 +507,7 @@ namespace Assets
         {
             static char buffer[4096];
             if (_actualizationLog) {
-                XlCopyString(buffer, "Error during asset construction: ");
                 auto* d = buffer;
-                while (*d) ++d;
                 auto* end = &buffer[dimof(buffer)-2];
                 for (auto s:*_actualizationLog) {
                     if (d == end) break;
