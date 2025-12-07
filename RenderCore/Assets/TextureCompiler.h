@@ -145,7 +145,7 @@ namespace RenderCore { namespace Assets
 		~TextureCompilerRegistrar();
 
 	protected:
-		Threading::Mutex _mutex;
+		Threading::ReadWriteMutex _readWriteLock;
 		std::vector<std::pair<RegistrationId, std::function<SubCompilerFunctionSig>>> _fns;
 		RegistrationId _nextRegistrationId;
 	};

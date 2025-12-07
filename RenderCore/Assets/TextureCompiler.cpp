@@ -639,7 +639,7 @@ namespace RenderCore { namespace Assets
 
 	auto TextureCompilerRegistrar::Register(std::function<SubCompilerFunctionSig>&& sig) -> RegistrationId
 	{
-		ScopedLock(_mutex);
+		ScopedModifyLock(_readWriteLock);
 		auto result = ++_nextRegistrationId;
 		_fns.emplace_back(result, std::move(sig));
 		return result;
@@ -647,7 +647,7 @@ namespace RenderCore { namespace Assets
 
 	void TextureCompilerRegistrar::Deregister(RegistrationId id)
 	{
-		ScopedLock(_mutex);
+		ScopedModifyLock(_readWriteLock);
 		_fns.erase(
 			std::remove_if(_fns.begin(), _fns.end(), [id](const auto& q) { return q.first == id; }),
 			_fns.end());
@@ -657,7 +657,7 @@ namespace RenderCore { namespace Assets
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer)
 	{
-		ScopedLock(_mutex);
+		ScopedReadLock(_readWriteLock);
 		for (const auto& f:_fns)
 			if (auto compiler = f.second(util, indexer))
 				return compiler;
