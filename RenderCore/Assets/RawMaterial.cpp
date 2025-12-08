@@ -12,7 +12,6 @@
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/IArtifact.h"
-#include "../../Assets/AssetMixins.h"
 #include "../../Assets/CompoundAsset.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/TextOutputFormatter.h"
@@ -572,6 +571,7 @@ namespace RenderCore { namespace Assets
 
     void MaterialCompoundScaffold_ConstructToPromise(
         std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
+        std::shared_ptr<::Assets::OperationContext> opContext,
         StringSection<> initializer)
     {
         if (IsMaterialFile(MakeFileNameSplitter(initializer).Extension())) {
@@ -585,12 +585,12 @@ namespace RenderCore { namespace Assets
                 });
 		} else {
             ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
-                [promise=std::move(promise), init=initializer.AsString()]() mutable {
+                [promise=std::move(promise), opContext=std::move(opContext), init=initializer.AsString()]() mutable {
                     TRY {
                         ::Assets::DefaultCompilerConstructionSynchronously(
                             std::move(promise),
                             s_RawMaterial_CompileProcessType,
-                            ::Assets::InitializerPack{init});
+                            ::Assets::InitializerPack{init}, opContext.get());
                     } CATCH (...) {
                         promise.set_exception(std::current_exception());
                     } CATCH_END
@@ -600,6 +600,7 @@ namespace RenderCore { namespace Assets
 
     void MaterialCompoundScaffold_ConstructToPromise2(
         std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
+        std::shared_ptr<::Assets::OperationContext> opContext,
         StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg)
     {
         ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
@@ -622,7 +623,7 @@ namespace RenderCore { namespace Assets
     {
         auto splitName = MakeFileNameSplitter(initializer);
         auto containerInitializer = splitName.AllExceptParameters();
-        ::Assets::WhenAll(::Assets::GetAssetFutureFn< MaterialCompoundScaffold_ConstructToPromise > (containerInitializer)).ThenConstructToPromise(
+        ::Assets::WhenAll(::Assets::GetAssetFutureFn< MaterialCompoundScaffold_ConstructToPromise > (util->_opContext, containerInitializer)).ThenConstructToPromise(
             std::move(promise),
             [util=std::move(util), mat=splitName.Parameters().AsString()](auto&& promise, const auto& scaffold) {
                 util->ConstructToCachedPromise(

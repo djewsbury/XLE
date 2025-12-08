@@ -6,19 +6,16 @@
 
 #include "ShaderPatchCollection.h"
 #include "../StateDesc.h"
-#if !defined(__CLR_VER)
-    #include "../../Assets/AssetMixins.h"
-#endif
 #include "../../Utility/ParameterBox.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
 #include <vector>
 #include <string>
-#include <future>
 
-namespace Assets { class DependencyValidation; class DirectorySearchRules; }
+namespace Assets { class DependencyValidation; class DirectorySearchRules; class OperationContext; }
 namespace AssetsNew { class CompoundAssetScaffold; class CompoundAssetUtil; }
 namespace Formatters { class TextOutputFormatter; }
+namespace std { template<typename T> class promise; template<typename T> class shared_future; }
 
 namespace RenderCore { namespace Assets
 {
@@ -197,10 +194,12 @@ namespace RenderCore { namespace Assets
 
     void MaterialCompoundScaffold_ConstructToPromise(
         std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
+        std::shared_ptr<::Assets::OperationContext> opContext,
         StringSection<> initializer);
 
     void MaterialCompoundScaffold_ConstructToPromise2(
         std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
+        std::shared_ptr<::Assets::OperationContext> opContext,
         StringSection<> initializer, std::shared_ptr<ModelCompilationConfiguration> cfg);
 
     std::shared_future<::Assets::AssetWrapper<RawMaterial>> GetResolvedMaterialFuture(std::shared_ptr<::AssetsNew::CompoundAssetUtil> util, StringSection<>);

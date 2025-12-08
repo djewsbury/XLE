@@ -39,6 +39,8 @@
 #include "../../RenderCore/ResourceDesc.h"
 #include "../../PlatformRig/InputContext.h"
 #include "../../Assets/Assets.h"
+#include "../../Assets/Continuation.h"
+#include "../../ConsoleRig/GlobalServices.h"
 #include "../../Math/Transformations.h"
 #include "../../Utility/FunctionUtils.h"
 #include <chrono>

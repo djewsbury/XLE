@@ -9,6 +9,7 @@
 #include "../../Assets/AssetServices.h"
 #include "../../Assets/OperationContext.h"
 #include "../../Assets/IntermediateCompilers.h"
+#include "../../ConsoleRig/GlobalServices.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/Streams/PathUtils.h"
 #include <stack>

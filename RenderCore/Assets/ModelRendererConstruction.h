@@ -6,7 +6,6 @@
 
 #include "ModelCompilationConfiguration.h"
 #include "../../Assets/AssetsCore.h"
-#include "../../Assets/AssetMixins.h"
 #include "../../Math/Matrix.h"
 #include "../../Utility/StringUtils.h"
 #include <memory>

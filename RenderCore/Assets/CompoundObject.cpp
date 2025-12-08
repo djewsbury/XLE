@@ -4,31 +4,35 @@
 
 #include "CompoundObject.h"
 #include "ModelRendererConstruction.h"
-#include "../../Formatters/IDynamicFormatter.h"
-#include "../../Math/Transformations.h"
-#include "../../Math/MathSerialization.h"
 #include "../../Assets/ConfigFileContainer.h"
+#include "../../Assets/CompoundAsset.h"
+#include "../../Assets/IArtifact.h"
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/TextOutputFormatter.h"
 #include "../../Formatters/FormatterUtils.h"
+#include "../../Formatters/IDynamicFormatter.h"
+#include "../../Math/Transformations.h"
+#include "../../Math/MathSerialization.h"
 
 namespace RenderCore { namespace Assets
 {
 	template<typename Formatter>
-		static NascentCompoundObject::DrawModelCommand DeserializeDrawModelCommand(Formatter& formatter);
+		static NascentCompoundObject::DrawModelCommand DeserializeDrawModelCommand(Formatter& formatter, const ::Assets::DirectorySearchRules&);
 
 	template<typename Formatter>
 		void DeserializeModelRendererConstruction(
 			ModelRendererConstruction& result,
-			Formatter& fmttr)
+			Formatter& fmttr,
+			const ::Assets::DirectorySearchRules& searchRules)
 	{
+		char buffer[MaxPath];
 		StringSection<> keyname;
 		while (fmttr.TryKeyedItem(keyname)) {
 			switch (fmttr.PeekNext()) {
 			case Formatters::FormatterBlob::BeginElement:
 				RequireBeginElement(fmttr);
 				if (XlEqStringI(keyname, "DrawModel")) {
-					auto modelCommand = DeserializeDrawModelCommand(fmttr);
+					auto modelCommand = DeserializeDrawModelCommand(fmttr, searchRules);
 					auto newElement = result.AddElement();
 					if (modelCommand._model.empty())
 						Throw(std::runtime_error("Missing model name in DrawModel command"));
@@ -53,8 +57,8 @@ namespace RenderCore { namespace Assets
 
 			case Formatters::FormatterBlob::Value:
 				if (XlEqString(keyname, "Skeleton")) {
-					auto skeletonName = RequireStringValue(fmttr).AsString();
-					result.SetSkeletonScaffold(skeletonName);
+					searchRules.ResolveFile(buffer, RequireStringValue(fmttr));
+					result.SetSkeletonScaffold(buffer);
 				} else
 					Throw(Formatters::FormatException("Unexpected attribute in CompoundObject", fmttr.GetLocation()));
 				break;
@@ -67,19 +71,15 @@ namespace RenderCore { namespace Assets
 
 	template void DeserializeModelRendererConstruction(
 		ModelRendererConstruction&,
-		Formatters::IDynamicInputFormatter&);
+		Formatters::IDynamicInputFormatter&,
+		const ::Assets::DirectorySearchRules&);
 
 	template void DeserializeModelRendererConstruction(
 		ModelRendererConstruction&,
-		Formatters::TextInputFormatter<>&);
+		Formatters::TextInputFormatter<>&,
+		const ::Assets::DirectorySearchRules&);
 
 	uint64_t CompoundObjectScaffold::GetHash() const { return _modelRendererConstruction->GetHash(); }
-
-	Formatters::TextInputFormatter<> CompoundObjectScaffold::OpenConfiguration() const
-	{
-		auto container = ::Assets::ConfigFileContainer<>(_blob, _depVal);
-		return container.GetRootFormatter();
-	}
 
 	bool CompoundObjectScaffold::AreScaffoldsInvalidated() const
 	{
@@ -96,26 +96,83 @@ namespace RenderCore { namespace Assets
 	CompoundObjectScaffold::CompoundObjectScaffold() {}
 	CompoundObjectScaffold::CompoundObjectScaffold(
 		std::shared_ptr<ModelRendererConstruction> modelRendererConstruction,
-		::Assets::Blob blob,
 		::Assets::DependencyValidation depVal)
 	: _modelRendererConstruction(std::move(modelRendererConstruction))
-	, _blob(std::move(blob))
 	, _depVal(std::move(depVal))
 	{}
 
-	CompoundObjectScaffold::CompoundObjectScaffold(const ::Assets::Blob& blob, const ::Assets::DependencyValidation& depVal, StringSection<>)
-	: _blob(blob)
-	, _depVal(depVal)
+	CompoundObjectScaffold::CompoundObjectScaffold(
+		Formatters::TextInputFormatter<char>& fmttr,
+		const ::Assets::DirectorySearchRules& searchRules,
+		const ::Assets::DependencyValidation& depVal)
+	: _depVal(depVal)
 	{
-		auto container = ::Assets::ConfigFileContainer<>(_blob, _depVal);
-		auto fmttr = container.GetRootFormatter();
 		_modelRendererConstruction = std::make_shared<ModelRendererConstruction>();
-		// todo _modelRendererConstruction->SetOperationContext(...);
-		DeserializeModelRendererConstruction(*_modelRendererConstruction, fmttr);
+		DeserializeModelRendererConstruction(*_modelRendererConstruction, fmttr, searchRules);
+	}
+
+	CompoundObjectScaffold::CompoundObjectScaffold(
+		Formatters::IDynamicInputFormatter& fmttr,
+		const ::Assets::DirectorySearchRules& searchRules,
+		const ::Assets::DependencyValidation& depVal)
+	: _depVal(depVal)
+	{
+		_modelRendererConstruction = std::make_shared<ModelRendererConstruction>();
+		DeserializeModelRendererConstruction(*_modelRendererConstruction, fmttr, searchRules);
 	}
 
 	CompoundObjectScaffold::~CompoundObjectScaffold() {}
 
+	static bool IsCompoundFile(StringSection<> extension) { return XlEqStringI(extension, "compound") || XlEqStringI(extension, "hlsl"); }
+
+	static void CompoundObjectScaffold_ConstructToPromisedCompoundAsset(
+		std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
+		std::shared_ptr<::Assets::OperationContext> opContext,
+		StringSection<> initializer)
+	{
+		if (IsCompoundFile(MakeFileNameSplitter(initializer).Extension())) {
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+				[init=initializer.AsString(), promise=std::move(promise)]() mutable {
+					TRY {
+						promise.set_value(::Assets::AutoConstructAsset<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>(init));
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		} else {
+			ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+				[promise=std::move(promise), opContext=std::move(opContext), init=initializer.AsString()]() mutable {
+					TRY {
+						::Assets::DefaultCompilerConstructionSynchronously(
+							std::move(promise),
+							s_CompoundObjectScaffold_CompileProcessType,
+							::Assets::InitializerPack{init}, opContext.get());
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
+	}
+
+	static void CompoundObjectScaffold_ConstructToPromise(
+		std::promise<CompoundObjectScaffold>&& promise,
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		StringSection<> initializer)
+	{
+		auto splitName = MakeFileNameSplitter(initializer);
+		auto containerInitializer = splitName.AllExceptParameters();
+		::Assets::WhenAll(::Assets::GetAssetFutureFn< CompoundObjectScaffold_ConstructToPromisedCompoundAsset > (util->_opContext, containerInitializer)).ThenConstructToPromise(
+			std::move(promise),
+			[util=std::move(util), mat=splitName.Parameters().AsString()](auto&& promise, const auto& scaffold) {
+				util->ConstructToCachedPromise(
+					std::move(promise), s_CompoundObjectScaffold_ComponentName, ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(mat) DEBUG_ONLY(, mat)});
+			});
+	}
+
+	std::shared_future<CompoundObjectScaffold> GetResolvedCompoundObjectScaffoldFuture(std::shared_ptr<::AssetsNew::CompoundAssetUtil> util, StringSection<> initializer)
+	{
+		return ::Assets::GetAssetFutureFn< CompoundObjectScaffold_ConstructToPromise > (util, initializer);
+	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -133,9 +190,10 @@ namespace RenderCore { namespace Assets
 	}
 
 	template<typename Formatter>
-		static NascentCompoundObject::DrawModelCommand DeserializeDrawModelCommand(Formatter& formatter)
+		static NascentCompoundObject::DrawModelCommand DeserializeDrawModelCommand(Formatter& formatter, const ::Assets::DirectorySearchRules& searchRules)
 	{
 		NascentCompoundObject::DrawModelCommand result;
+		char buffer[MaxPath];
 
 		while (formatter.PeekNext() == Formatters::FormatterBlob::KeyedItem) {
 			auto name = RequireKeyedItem(formatter);
@@ -147,9 +205,11 @@ namespace RenderCore { namespace Assets
 			case Formatters::FormatterBlob::Value:
 				{
 					if (XlEqString(name, "Model")) {
-						result._model = RequireStringValue(formatter).AsString();
+						searchRules.ResolveFile(buffer, RequireStringValue(formatter));
+						result._model = buffer;
 					} else if (XlEqString(name, "Material")) {
-						result._material = RequireStringValue(formatter).AsString();
+						searchRules.ResolveFile(buffer, RequireStringValue(formatter));
+						result._material = buffer;
 					} else if (XlEqString(name, "Scale")) {
 						result._scale = Formatters::RequireCastValue<Float3>(formatter);
 					} else if (XlEqString(name, "Translation")) {
@@ -157,7 +217,8 @@ namespace RenderCore { namespace Assets
 					} else if (XlEqString(name, "DeformerBindPoint")) {
 						result._deformerBindPoint = RequireStringValue(formatter).AsString();
 					} else if (XlEqString(name, "CompilationConfiguration")) {
-						result._compilationConfiguration = RequireStringValue(formatter).AsString();
+						searchRules.ResolveFile(buffer, RequireStringValue(formatter));
+						result._compilationConfiguration = buffer;
 					} else 
 						Throw(Formatters::FormatException(StringMeld<512>() << "Unknown attribute (" << name << ") while serializing DrawModelCommand", formatter.GetLocation()));
 				}
@@ -183,7 +244,7 @@ namespace RenderCore { namespace Assets
 			case Formatters::FormatterBlob::BeginElement:
 				RequireBeginElement(formatter);
 				if (XlEqStringI(name, "DrawModel")) {
-					_commands.emplace_back(DeserializeDrawModelCommand(formatter));
+					_commands.emplace_back(DeserializeDrawModelCommand(formatter, {}));
 				} else {
 					SkipElement(formatter);    // skip the whole element; it's not required
 				}

@@ -5,7 +5,6 @@
 #pragma once
 
 #include "../../Assets/IntermediateCompilers.h"
-#include "../../Assets/AssetMixins.h"
 #include "../../Assets/ICompileOperation.h"
 #include <memory>
 #include <vector>

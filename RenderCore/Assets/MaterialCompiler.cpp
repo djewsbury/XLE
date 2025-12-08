@@ -240,8 +240,8 @@ namespace RenderCore { namespace Assets
 
 		static sp<::Assets::Marker<ContextImbuedMaterialSet>> MakeModelMatFuture(std::string sourceModel, sp<ModelCompilationConfiguration> sourceModelConfiguration)
 		{
-			if (sourceModelConfiguration) return ::Assets::GetAssetMarkerFn<MaterialCompoundScaffold_ConstructToPromise2>(sourceModel, sourceModelConfiguration);
-			else return ::Assets::GetAssetMarkerFn<MaterialCompoundScaffold_ConstructToPromise>(sourceModel);
+			if (sourceModelConfiguration) return ::Assets::GetAssetMarkerFn<MaterialCompoundScaffold_ConstructToPromise2>(nullptr, sourceModel, sourceModelConfiguration);
+			else return ::Assets::GetAssetMarkerFn<MaterialCompoundScaffold_ConstructToPromise>(nullptr, sourceModel);
 		}
 
 
