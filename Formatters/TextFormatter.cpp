@@ -79,7 +79,8 @@ namespace Formatters
 
     auto TextOutputFormatter::BeginKeyedElement(StringSection<> name) -> ElementId
     {
-        DoNewLine();
+        if (_hotLine != HotLine::DanglingKey)
+            DoNewLine();
 
         // _hotLine = true; DoNewLine<CharType>(); // (force extra new line before new element)
 
@@ -96,7 +97,7 @@ namespace Formatters
         _stream->put('=');
         _stream->put(FormatterConstants<utf8>::ElementPrefix);
 
-        _hotLine = true;
+        _hotLine = HotLine::Hot;
         _currentLineLength += unsigned(name.size() + 2);
         ++_currentIndentLevel;
 		_indentLevelAtStartOfLine = _currentIndentLevel;
@@ -117,7 +118,7 @@ namespace Formatters
         _stream->put('=');
         _stream->put(FormatterConstants<utf8>::ElementPrefix);
 
-        _hotLine = true;
+        _hotLine = HotLine::Hot;
         _currentLineLength += 2;
         ++_currentIndentLevel;
 		_indentLevelAtStartOfLine = _currentIndentLevel;
@@ -137,7 +138,7 @@ namespace Formatters
 
         _stream->put(FormatterConstants<utf8>::ElementPrefix);
 
-        _hotLine = true;
+        _hotLine = HotLine::Hot;
         _currentLineLength += 2;
         ++_currentIndentLevel;
 		_indentLevelAtStartOfLine = _currentIndentLevel;
@@ -153,17 +154,18 @@ namespace Formatters
 
     void TextOutputFormatter::DoNewLine()
     {
+        assert(_hotLine != HotLine::DanglingKey);
         if (_pendingHeader) {
             WriteConst(*_stream, FormatterConstants<utf8>::HeaderPrefix, _currentLineLength);
             StringMeld<128, utf8> buffer;
             buffer << "Format=2; Tab=" << TabWidth;
             _stream->write(buffer.AsStringSection().begin(), buffer.AsStringSection().size());
 
-            _hotLine = true;
+            _hotLine = HotLine::Hot;
             _pendingHeader = false;
         }
 
-        if (_hotLine) {
+        if (_hotLine != HotLine::Cold) {
             WriteConst(*_stream, FormatterConstants<utf8>::EndLine, _currentLineLength);
             
             utf8 tabBuffer[64];
@@ -171,7 +173,7 @@ namespace Formatters
                 Throw(::Exceptions::BasicLabel("Excessive indent level found in OutputStreamFormatter (%i)", _currentIndentLevel));
             std::fill(tabBuffer, &tabBuffer[_currentIndentLevel], FormatterConstants<utf8>::Tab);
             _stream->write(tabBuffer, _currentIndentLevel);
-            _hotLine = false;
+            _hotLine = HotLine::Cold;
             _currentLineLength = _currentIndentLevel * TabWidth;
         }
     }
@@ -186,9 +188,10 @@ namespace Formatters
             || _pendingHeader
 			|| _currentIndentLevel < _indentLevelAtStartOfLine;
 
-        if (forceNewLine) {
+        if (_hotLine == HotLine::DanglingKey) {
+        } else if (forceNewLine) {
             DoNewLine();
-        } else if (_hotLine) {
+        } else if (_hotLine != HotLine::Cold) {
             _stream->put(';');
             _stream->put(' ');
             _currentLineLength += 2;
@@ -215,7 +218,7 @@ namespace Formatters
         }
 
         _currentLineLength += unsigned(value.size() + name.size() + 1);
-        _hotLine = true;
+        _hotLine = HotLine::Hot;
     }
 
     void TextOutputFormatter::WriteSequencedValue(
@@ -233,9 +236,10 @@ namespace Formatters
             || _pendingHeader
 			|| _currentIndentLevel < _indentLevelAtStartOfLine;
 
-        if (forceNewLine) {
+        if (_hotLine == HotLine::DanglingKey) {
+        } else if (forceNewLine) {
             DoNewLine();
-        } else if (_hotLine) {
+        } else if (_hotLine != HotLine::Cold) {
             _stream->put(';');
             _stream->put(' ');
             _currentLineLength += 2;
@@ -250,7 +254,7 @@ namespace Formatters
         }
 
         _currentLineLength += unsigned(value.size());
-        _hotLine = true;
+        _hotLine = HotLine::Hot;
     }
 
     auto TextOutputFormatter::BeginKeyedElement(StringSection<> name0, StringSection<> name1) -> ElementId
@@ -282,7 +286,7 @@ namespace Formatters
         _stream->put('=');
         _stream->put(FormatterConstants<utf8>::ElementPrefix);
 
-        _hotLine = true;
+        _hotLine = HotLine::Hot;
         _currentLineLength += unsigned(name0.size() + 1 + name1.size() + 2);
 
         ++_currentIndentLevel;
@@ -300,19 +304,8 @@ namespace Formatters
     
     void TextOutputFormatter::WriteDanglingKey(StringSection<> name)
     {
-        const unsigned idealLineLength = 100;
-        bool forceNewLine = 
-            (_currentLineLength + name.size() + 3) > idealLineLength
-            || _pendingHeader
-			|| _currentIndentLevel < _indentLevelAtStartOfLine;
-
-        if (forceNewLine) {
-            DoNewLine();
-        } else if (_hotLine) {
-            _stream->put(';');
-            _stream->put(' ');
-            _currentLineLength += 2;
-        }
+        if (_hotLine != HotLine::DanglingKey)
+            DoNewLine();        // always write a newline before a "dangling key"
 
         if (!name.IsEmpty()) {
             if (IsSimpleString(name)) {
@@ -327,7 +320,7 @@ namespace Formatters
         _stream->put('=');
 
         _currentLineLength += unsigned(name.size() + 1);
-        _hotLine = true;
+        _hotLine = HotLine::DanglingKey;
     }
 
     void TextOutputFormatter::EndElement(ElementId id)
@@ -357,7 +350,7 @@ namespace Formatters
     {
         _currentIndentLevel = 0;
 		_indentLevelAtStartOfLine = 0;
-        _hotLine = false;
+        _hotLine = HotLine::Cold;
         _currentLineLength = 0;
         _pendingHeader = true;
     }

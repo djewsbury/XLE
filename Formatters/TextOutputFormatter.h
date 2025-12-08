@@ -45,7 +45,8 @@ namespace Formatters
 		std::ostream*   _stream;
 		unsigned        _currentIndentLevel;
 		unsigned		_indentLevelAtStartOfLine;
-		bool            _hotLine;
+		enum class HotLine { Cold, Hot, DanglingKey };
+		HotLine         _hotLine = HotLine::Cold;
 		unsigned        _currentLineLength;
 		bool            _pendingHeader;
 
