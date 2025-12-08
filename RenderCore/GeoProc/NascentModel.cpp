@@ -535,8 +535,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		::Assets::BlockSerializer serializer;
 		auto recall = serializer.CreateRecall(sizeof(unsigned));
 		
-		CmdStreamSerializationHelper mainStreamHelper;
-		bool assignedMainStream = false;
 		std::vector<::Assets::BlockSerializer> generatedCmdStreams;
 		std::vector<CmdStreamSerializationHelper> cmdStreamDehashHelpers;
 		GeometrySerializationHelper geoObjects;
@@ -551,10 +549,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		if (cmdStreams.empty())
 			cmdStreams.emplace_back(0, CmdStreamMode::Normal);
 
+		CmdStreamSerializationHelper helper;		// share input interface between command streams
 		bool buildTopologicalIndexBuffers = std::find_if(cmdStreams.begin(), cmdStreams.end(), [](const auto& q) { return q.second == CmdStreamMode::Topological; }) != cmdStreams.end();
 		for (auto cmdStream:cmdStreams) {
 			::Assets::BlockSerializer cmdStreamSerializer;
-			CmdStreamSerializationHelper helper;
 			bool isTopologicalStream = cmdStream.second == CmdStreamMode::Topological;
 
 			std::optional<unsigned> currentTransformMarker;
@@ -659,11 +657,6 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			#if defined(_DEBUG)
 				cmdStreamDehashHelpers.emplace_back(CmdStreamSerializationHelper{helper});
 			#endif
-
-			if (!assignedMainStream) {
-				mainStreamHelper = std::move(helper);		// always assigned to the first cmdStream
-				assignedMainStream = true;
-			}
 		}
 
 		// "large resources" --> created from the objects in geoObjects
@@ -748,7 +741,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 
 		{
-			auto defaultPoseData = CalculateDefaultPoseData(embeddedSkeleton, geoObjects, mainStreamHelper);
+			auto defaultPoseData = CalculateDefaultPoseData(embeddedSkeleton, geoObjects, helper);
 			serializer << MakeCmdAndSerializable(ScaffoldCommand::DefaultPoseData, defaultPoseData);
 		}
 
