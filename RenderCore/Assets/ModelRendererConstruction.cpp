@@ -3,8 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ModelRendererConstruction.h"
-#include "ModelMachine.h"
-#include "AssetUtils.h"
 #include "ModelScaffold.h"
 #include "CompiledMaterialSet.h"
 #include "ModelCompilationConfiguration.h"

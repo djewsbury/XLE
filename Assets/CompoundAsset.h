@@ -156,6 +156,7 @@ namespace AssetsNew
 		std::vector<StringSection<>> _inheritLists;
 
 		bool HasComponent(uint64_t entityName, uint64_t componentTypeName);
+		StringSection<> GetChunk(uint64_t entityName, uint64_t componentTypeName);
 
 		::Assets::Blob _blob;
 		uint64_t _uniqueId;
@@ -219,6 +220,21 @@ namespace AssetsNew
 		}
 
 		return false;
+	}
+
+	inline StringSection<> CompoundAssetScaffold::GetChunk(uint64_t entityName, uint64_t componentTypeName)
+	{
+		auto i = LowerBound(_entityLookup, entityName);
+		auto i2 = LowerBound(_components, componentTypeName);
+		if (	i == _entityLookup.end() || i->first != entityName
+			|| 	i2 == _components.end() || i2->first != componentTypeName)
+			return {};
+		
+		auto entityIdx = i->second._componentTableIdx;
+		if (entityIdx >= i2->second._inlineChunks.size())
+			return {};
+
+		return i2->second._inlineChunks[entityIdx];
 	}
 
 	inline auto CompoundAssetUtil::GetCachedFutureScaffold(StringSection<> initializer) -> std::shared_future<ContextImbuedScaffold>

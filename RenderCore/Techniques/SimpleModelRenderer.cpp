@@ -27,6 +27,7 @@
 #include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../Math/Matrix.h"
 #include "../../Math/Transformations.h"
 #include "../../Utility/ArithmeticUtils.h"
@@ -652,28 +653,10 @@ namespace RenderCore { namespace Techniques
 
 	SimpleModelRenderer::~SimpleModelRenderer() {}
 
-	static std::future<std::shared_ptr<DrawableConstructor>> ToFuture(DrawableConstructor& construction)
-	{
-		std::promise<std::shared_ptr<DrawableConstructor>> promise;
-		auto result = promise.get_future();
-		construction.FulfillWhenNotPending(std::move(promise));
-		return result;
-	}
-
-	static std::future<std::shared_ptr<DeformerConstruction>> ToFuture(DeformerConstruction& construction)
-	{
-		std::promise<std::shared_ptr<DeformerConstruction>> promise;
-		auto result = promise.get_future();
-		construction.FulfillWhenNotPending(std::move(promise));
-		return result;
-	}
-
-	std::shared_ptr<DeformerConstruction> CreateDefaultDeformConstruction(
-		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
-		const std::shared_ptr<Assets::ModelRendererConstruction>& rendererConstruction)
+	std::shared_ptr<DeformerConstruction> CreateDefaultDeformConstruction(const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool, const std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>& mrc)
 	{
 		// The default deform accelerators just contains a skinning deform operation
-		auto deformerConstruction = std::make_shared<DeformerConstruction>(deformAcceleratorPool->GetDevice(), rendererConstruction);
+		auto deformerConstruction = std::make_shared<DeformerConstruction>(mrc);
 		if (auto* skinConfigure = Services::GetInstance().FindDeformConfigure("gpu_skin"))
 			skinConfigure->Configure(*deformerConstruction);
 		if (deformerConstruction->IsEmpty()) return {};
@@ -687,7 +670,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<std::shared_ptr<DeformAccelerator>> promise;
 		auto result = promise.get_future();
 
-		::Assets::WhenAll(ToFuture(deformConstruction)).ThenConstructToPromise(
+		::Assets::WhenAll(ToFuture(deformConstruction, deformAcceleratorPool->GetDevice())).ThenConstructToPromise(
 			std::move(promise),
 			[pool=std::weak_ptr<IDeformAcceleratorPool>(deformAcceleratorPool)](auto deformerConstructionActual) {
 				auto l = pool.lock();
@@ -815,9 +798,12 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IDeformAcceleratorPool> deformAcceleratorPool,
 		StringSection<> modelScaffoldName)
 	{
+		assert(0);	// todo -- merge with GetResolvedCompoundObjectScaffoldFuture
+#if 0
 		if (::Assets::Services::GetIntermediateCompilers().HasAssociatedCompiler(GetCompileProcessType((Assets::CompoundObjectScaffold*)nullptr), modelScaffoldName)) {
 			// This is a compound object
-			::Assets::WhenAll(::Assets::GetAssetFuture<Assets::CompoundObjectScaffold>(modelScaffoldName)).ThenConstructToPromise(
+			auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
+			::Assets::WhenAll(Assets::GetResolvedCompoundObjectScaffoldFuture(util, modelScaffoldName)).ThenConstructToPromise(
 				std::move(promise),
 				[pipelineAcceleratorPool=std::move(pipelineAcceleratorPool), drawablesPool=std::move(drawablesPool), deformAcceleratorPool=std::move(deformAcceleratorPool)](auto&& promise, const Assets::CompoundObjectScaffold& actualCompoundObject) mutable {
 					// have to wait on the model renderer construction before we can call DeserializeDeformerConstruction
@@ -826,7 +812,9 @@ namespace RenderCore { namespace Techniques
 					YieldToPool(rendererConstructionFuture);
 					rendererConstructionFuture.get();
 
-					auto cfg = actualCompoundObject.OpenConfiguration();
+					// auto cfg = actualCompoundObject.OpenConfiguration();
+					assert(0);		// handle deformer configuration -- moved to compound asset style construction
+					Formatters::TextInputFormatter<char> cfg;
 					auto deformerConstruction = DeserializeDeformerConstruction(pipelineAcceleratorPool->GetDevice(), rendererConstruction, cfg);
 
 					ConstructToPromise(
@@ -842,6 +830,7 @@ namespace RenderCore { namespace Techniques
 				std::move(drawablesPool), std::move(pipelineAcceleratorPool), nullptr, std::move(construction),
 				std::move(deformAcceleratorPool), nullptr);
 		}
+#endif
 	}
 
 	ICustomDrawDelegate::~ICustomDrawDelegate() {}

@@ -5,8 +5,12 @@
 #include "DeformerConstruction.h"
 #include "DeformGeometryInfrastructure.h"
 #include "Services.h"
+#include "../Assets/ModelRendererConstruction.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/ContinuationUtil.h"
+#include "../../Assets/ConfigFileContainer.h"
+#include "../../Assets/CompoundAsset.h"
+#include "../../Assets/IArtifact.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Formatters/FormatterUtils.h"
 #include "../../Formatters/TextFormatter.h"
@@ -83,7 +87,7 @@ namespace RenderCore { namespace Techniques
 		_storedUniformsEntry._deformer = std::move(deformer);
 	}
 
-	void DeformerConstruction::FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise)
+	void DeformerConstruction::FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise, std::shared_ptr<IDevice> device)
 	{
 		_sealed = true;
 
@@ -104,7 +108,7 @@ namespace RenderCore { namespace Techniques
 				}
 				return ::Assets::PollStatus::Finish;
 			},
-			[strongThis]() mutable {
+			[strongThis, device=std::move(device)]() mutable {
 				std::vector<std::shared_ptr<IGeoDeformer>> newFinishedDeformers;
 				newFinishedDeformers.reserve(strongThis->_deformerMarkers.size());
 				for (auto& f:strongThis->_deformerMarkers) {
@@ -120,7 +124,7 @@ namespace RenderCore { namespace Techniques
 				}
 
 				strongThis->_completedGeoAttachment = CreateGeoDeformerConductor(
-					*strongThis->_device, *strongThis->_rendererConstruction, *strongThis);
+					*device, *strongThis->_rendererConstruction, *strongThis);
 
 				return std::move(strongThis);
 			});
@@ -133,15 +137,13 @@ namespace RenderCore { namespace Techniques
 		return 0;
 	}
 
-	DeformerConstruction::DeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> rendererConstruction)
-	: _device(device), _rendererConstruction(rendererConstruction) {}
+	DeformerConstruction::DeformerConstruction(std::shared_ptr<Assets::ModelRendererConstruction> rendererConstruction) : _rendererConstruction(std::move(rendererConstruction)) {}
 	DeformerConstruction::DeformerConstruction() = default;
 	DeformerConstruction::~DeformerConstruction() = default;
 
 	template<typename Formatter>
-		void DeserializeDeformerConstruction(
+		void DeserializeDeformerConstruction_Internal(
 			RenderCore::Techniques::DeformerConstruction& result,
-			const RenderCore::Assets::ModelRendererConstruction& rendererConstruction,
 			Formatter& fmttr)
 	{
 		auto& techniqueServices = Services::GetInstance();
@@ -177,26 +179,91 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	template void DeserializeDeformerConstruction(
-		DeformerConstruction& dst,
-		const Assets::ModelRendererConstruction&,
+	template void DeserializeDeformerConstruction_Internal(
+		DeformerConstruction&,
 		Formatters::TextInputFormatter<>&);
 
-	auto DeserializeDeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> modelRendererConstruction, Formatters::TextInputFormatter<>& cfg) -> std::shared_ptr<DeformerConstruction>
+	void DeserializeDeformerConstruction(Formatters::TextInputFormatter<>& cfg, DeformerConstruction& dst)
 	{
-		auto deformerConstruction = std::make_shared<DeformerConstruction>(device, modelRendererConstruction);
-		DeserializeDeformerConstruction(*deformerConstruction, *modelRendererConstruction, cfg);
+		DeserializeDeformerConstruction_Internal(dst, cfg);
 
 		if (auto* skinConfigure = Services::GetInstance().FindDeformConfigure("gpu_skin"))
-			skinConfigure->Configure(*deformerConstruction);
-
-		return deformerConstruction;
+			skinConfigure->Configure(dst);
 	}
 
 	Formatters::TextInputFormatter<char>& IDeformConfigure::EmptyFormatter()
 	{
 		static Formatters::TextInputFormatter<char> dummy;
 		return dummy;
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	static bool IsCompoundFile(StringSection<> extension) { return XlEqStringI(extension, "compound") || XlEqStringI(extension, "hlsl"); }
+
+	static constexpr uint64_t s_DeformerConstruction_ComponentName = ConstHash64("DeformerConstruction");
+	static constexpr uint64_t s_CompoundObjectScaffold_CompileProcessType = ConstHash64Legacy<'Comp', 'ound'>::Value;
+
+	static void DeformerConstruction_ConstructToPromisedCompoundAsset(
+		std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
+		std::shared_ptr<::Assets::OperationContext> opContext,
+		StringSection<> initializer)
+	{
+		if (IsCompoundFile(MakeFileNameSplitter(initializer).Extension())) {
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+				[init=initializer.AsString(), promise=std::move(promise)]() mutable {
+					TRY {
+						promise.set_value(::Assets::AutoConstructAsset<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>(init));
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		} else {
+			ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
+				[promise=std::move(promise), opContext=std::move(opContext), init=initializer.AsString()]() mutable {
+					TRY {
+						::Assets::DefaultCompilerConstructionSynchronously(
+							std::move(promise),
+							s_CompoundObjectScaffold_CompileProcessType,
+							::Assets::InitializerPack{init}, opContext.get());
+					} CATCH (...) {
+						promise.set_exception(std::current_exception());
+					} CATCH_END
+				});
+		}
+	}
+
+	static void DeformerConstruction_ConstructToPromise(
+		std::promise<::Assets::AssetWrapper<std::shared_ptr<DeformerConstruction>>>&& promise,
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		std::shared_ptr<Assets::ModelRendererConstruction> mrc, StringSection<> initializer)
+	{
+		auto splitName = MakeFileNameSplitter(initializer);
+		auto containerInitializer = splitName.AllExceptParameters();
+		::Assets::WhenAll(::Assets::GetAssetFutureFn< DeformerConstruction_ConstructToPromisedCompoundAsset > (util->_opContext, containerInitializer)).ThenConstructToPromise(
+			std::move(promise),
+			[mrc=std::move(mrc), util=std::move(util), mat=splitName.Parameters().AsString()](const auto& scaffold) mutable {
+				auto chunk = scaffold.get()->GetChunk(Hash64(mat), s_DeformerConstruction_ComponentName);
+				Formatters::TextInputFormatter<char> fmttr{ chunk };
+				auto construction = std::make_shared<DeformerConstruction>(std::move(mrc));
+				DeserializeDeformerConstruction(fmttr, *construction);
+				return ::Assets::AssetWrapper<std::shared_ptr<DeformerConstruction>> { std::move(construction), std::get<::Assets::DependencyValidation>(scaffold) };
+			});
+	}
+
+	std::shared_future<::Assets::AssetWrapper<std::shared_ptr<DeformerConstruction>>> GetResolvedDeformerConfigurationFuture(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
+		std::shared_ptr<Assets::ModelRendererConstruction> mrc, StringSection<> initializer)
+	{
+		return ::Assets::GetAssetFutureFn< DeformerConstruction_ConstructToPromise > (util, mrc, initializer);
+	}
+
+	std::future<std::shared_ptr<DeformerConstruction>> ToFuture(DeformerConstruction& construction, std::shared_ptr<IDevice> device)
+	{
+		std::promise<std::shared_ptr<DeformerConstruction>> promise;
+		auto result = promise.get_future();
+		construction.FulfillWhenNotPending(std::move(promise), std::move(device));
+		return result;
 	}
 
 	IDeformConfigure::~IDeformConfigure() = default;

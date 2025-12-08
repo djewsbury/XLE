@@ -27,6 +27,7 @@ namespace SceneEngine
 		virtual OpaquePtr CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>) = 0;
 		virtual OpaquePtr CreateModel(StringSection<> compoundObjectSrc) = 0;
 		virtual OpaquePtr CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction>) = 0;
+		virtual OpaquePtr CreateDeformers(StringSection<> compoundObjectSrc, const OpaquePtr& model) = 0;
 		virtual OpaquePtr CreateAnimationSet(StringSection<>) = 0;
 		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) = 0;
 

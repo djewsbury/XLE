@@ -64,39 +64,10 @@ namespace RenderCore { namespace Assets
 
 	constexpr uint64_t GetCompileProcessType(NascentCompoundObject*) { return ConstHash64Legacy<'Comp', 'ound'>::Value; }
 
-	class CompoundObjectScaffold
-	{
-	public:
-		auto GetModelRendererConstruction() const -> const std::shared_ptr<ModelRendererConstruction>& { return _modelRendererConstruction; }
-
-		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
-		uint64_t GetHash() const;
-
-		bool AreScaffoldsInvalidated() const;
-		::Assets::DependencyValidation MakeScaffoldsDependencyValidation() const;
-
-		CompoundObjectScaffold(
-			Formatters::TextInputFormatter<char>&,
-			const ::Assets::DirectorySearchRules&,
-			const ::Assets::DependencyValidation&);
-		CompoundObjectScaffold(
-			Formatters::IDynamicInputFormatter&,
-			const ::Assets::DirectorySearchRules&,
-			const ::Assets::DependencyValidation&);
-		CompoundObjectScaffold();
-		CompoundObjectScaffold(
-			std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> modelRendererConstruction,
-			::Assets::DependencyValidation depVal);
-		~CompoundObjectScaffold();
-	private:
-		std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> _modelRendererConstruction;
-		::Assets::DependencyValidation _depVal;
-	};
-
 	static constexpr uint64_t s_CompoundObjectScaffold_ComponentName = ConstHash64("ModelRendererConstruction");
 	static constexpr uint64_t s_CompoundObjectScaffold_CompileProcessType = ConstHash64Legacy<'Comp', 'ound'>::Value;
 
-	std::shared_future<CompoundObjectScaffold> GetResolvedCompoundObjectScaffoldFuture(
+	std::shared_future<::Assets::AssetWrapper<std::shared_ptr<ModelRendererConstruction>>> GetResolvedCompoundObjectScaffoldFuture(
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util, StringSection<>);
 
 	template<typename Formatter>

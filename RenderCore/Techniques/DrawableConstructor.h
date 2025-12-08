@@ -108,4 +108,6 @@ namespace RenderCore { namespace Techniques
 		return Assets::MakeScaffoldCmdRange(MakeIteratorRange(_translatedCmdStream));
 	}
 
+	std::future<std::shared_ptr<DrawableConstructor>> ToFuture(DrawableConstructor& construction);
+
 }}

@@ -12,6 +12,7 @@
 
 namespace RenderCore { namespace Assets { class ModelRendererConstruction; }}
 namespace Formatters { template<typename T> class TextInputFormatter; }
+namespace AssetsNew { class CompoundAssetUtil; }
 
 namespace RenderCore { namespace Techniques 
 {
@@ -62,18 +63,17 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IUniformsDeformerConductor> GetUniformsAttachment() const;
 		std::shared_ptr<IGeoDeformerConductor> GetGeoAttachment() const;
 
-		void FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise);
+		void FulfillWhenNotPending(std::promise<std::shared_ptr<DeformerConstruction>>&& promise, std::shared_ptr<IDevice> device);
 		bool IsEmpty() const;
 		uint64_t GetHash() const;
 
-		DeformerConstruction(std::shared_ptr<IDevice> device, std::shared_ptr<Assets::ModelRendererConstruction> rendererConstruction);
+		DeformerConstruction(std::shared_ptr<Assets::ModelRendererConstruction> rendererConstruction);
 		DeformerConstruction();
 		~DeformerConstruction();
 	private:
 		bool _sealed = false;
 		std::vector<::Assets::PtrToMarkerPtr<IGeoDeformer>> _deformerMarkers;
 		std::vector<std::shared_ptr<IGeoDeformer>> _deformers;
-		std::shared_ptr<IDevice> _device;
 		std::shared_ptr<Assets::ModelRendererConstruction> _rendererConstruction;
 
 		struct StoredGeoEntry
@@ -94,14 +94,18 @@ namespace RenderCore { namespace Techniques
 	};
 
 	// caller should wait on the renderer construction before calling DeserializeDeformerConstruction();
-	std::shared_ptr<RenderCore::Techniques::DeformerConstruction> DeserializeDeformerConstruction(
-		std::shared_ptr<RenderCore::IDevice>, std::shared_ptr<Assets::ModelRendererConstruction>, Formatters::TextInputFormatter<char>& cfg);
+	void DeserializeDeformerConstruction(Formatters::TextInputFormatter<char>&, DeformerConstruction& dst);
+
+	std::shared_future<::Assets::AssetWrapper<std::shared_ptr<DeformerConstruction>>> GetResolvedDeformerConfigurationFuture(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil>,
+		std::shared_ptr<Assets::ModelRendererConstruction>, StringSection<>);
 
 	template<typename Formatter>
 		void DeserializeDeformerConstruction(
-			RenderCore::Techniques::DeformerConstruction& dst,
-			const RenderCore::Assets::ModelRendererConstruction&,
+			DeformerConstruction& dst,
 			Formatter&);
+
+	std::future<std::shared_ptr<DeformerConstruction>> ToFuture(DeformerConstruction&, std::shared_ptr<IDevice>);
 
 	class IDeformConfigure
 	{

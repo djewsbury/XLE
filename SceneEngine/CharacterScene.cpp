@@ -27,6 +27,7 @@
 #include "../Assets/ConfigFileContainer.h"
 #include "../Assets/Continuation.h"
 #include "../Assets/IArtifact.h"
+#include "../Assets/CompoundAsset.h"
 #include "../Math/ProjectionMath.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Utility/BitUtils.h"
@@ -42,9 +43,6 @@ namespace SceneEngine
 
 			// Construction direct from ModelRendererConstruction
 			std::shared_ptr<RenderCore::Assets::ModelRendererConstruction> _referenceHolder;
-
-			// Construction via CompoundObjectScaffold by filename
-			std::shared_future<RenderCore::Assets::CompoundObjectScaffold> _compoundObjectScaffold;
 		};
 
 		struct DeformerEntry
@@ -120,6 +118,7 @@ namespace SceneEngine
 		OpaquePtr CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>) override;
 		OpaquePtr CreateModel(StringSection<> compoundObjectSrc) override;
 		OpaquePtr CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction>) override;
+		OpaquePtr CreateDeformers(StringSection<> compoundObjectSrc, const OpaquePtr& model) override;
 		OpaquePtr CreateAnimationSet(StringSection<>) override;
 		OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, OpaquePtr animationSet) override;
 
@@ -144,6 +143,7 @@ namespace SceneEngine
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAcceleratorPool;
 		std::shared_ptr<RenderCore::Techniques::ResourceConstructionContext> _constructionContext;
 		std::shared_ptr<Assets::OperationContext> _loadingContext;
+		std::shared_ptr<::AssetsNew::AssetHeap> _utilityHeap;
 
 		Threading::Mutex _poolLock;
 		
@@ -191,14 +191,17 @@ namespace SceneEngine
 		}
 
 		auto newEntry = std::make_shared<CharacterSceneInternal::ModelEntry>();
-		newEntry->_compoundObjectScaffold = ::Assets::ConstructToFuture<RenderCore::Assets::CompoundObjectScaffold>(_loadingContext, compoundObjectSrc);
+		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>(_utilityHeap);
+		util->_opContext = _loadingContext;
+		auto compoundObjectScaffold = RenderCore::Assets::GetResolvedCompoundObjectScaffoldFuture(util, compoundObjectSrc);
 
 		std::promise<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> promise;
 		newEntry->_completedConstruction = promise.get_future();
-		::Assets::WhenAll(newEntry->_compoundObjectScaffold).ThenConstructToPromise(
+		::Assets::WhenAll(compoundObjectScaffold).ThenConstructToPromise(
 			std::move(promise),
 			[](auto&& promise, const auto& compoundObjectScaffold) {
-				compoundObjectScaffold.GetModelRendererConstruction()->FulfillWhenNotPending(std::move(promise));
+				// todo -- we can get the dep val at this point: std::get<::Assets::DependencyValidation()>(compoundObjectScaffold)
+				compoundObjectScaffold.get()->FulfillWhenNotPending(std::move(promise));
 			});
 
 		if (i != _modelEntries.end() && i->first == hash) {
@@ -217,8 +220,39 @@ namespace SceneEngine
 		auto newEntry = std::make_shared<CharacterSceneInternal::DeformerEntry>();
 		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
 		newEntry->_completedConstruction = promise.get_future();
-		construction->FulfillWhenNotPending(std::move(promise));
+		construction->FulfillWhenNotPending(std::move(promise), std::move(_deformAcceleratorPool->GetDevice()));
 		newEntry->_referenceHolder = std::move(construction);
+		
+		ScopedLock(_poolLock);
+		_deformerEntries.emplace_back(newEntry);
+		return std::move(newEntry);
+	}
+
+	std::shared_ptr<void> CharacterScene::CreateDeformers(StringSection<> compoundObjectSrc, const OpaquePtr& opaqueModel)
+	{
+		// we can't hash this, so we always allocate a new one
+		auto model = std::static_pointer_cast<CharacterSceneInternal::ModelEntry>(opaqueModel);
+
+		auto newEntry = std::make_shared<CharacterSceneInternal::DeformerEntry>();
+		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>(_utilityHeap);
+		util->_opContext = _loadingContext;
+	
+		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
+		newEntry->_completedConstruction = promise.get_future();
+		::Assets::WhenAll(model->_completedConstruction).ThenConstructToPromise(
+			std::move(promise),
+			[device=_deformAcceleratorPool->GetDevice(), util, src=compoundObjectSrc.AsString()](auto&& promise, const auto& completedMRC) mutable {
+				TRY {
+					auto futureDeformer = RenderCore::Techniques::GetResolvedDeformerConfigurationFuture(util, completedMRC, src);
+					YieldToPool(futureDeformer);
+					auto construction = futureDeformer.get();
+
+					// todo -- we can get the dep val at this point: std::get<::Assets::DependencyValidation()>(compoundObjectScaffold)
+					construction.get()->FulfillWhenNotPending(std::move(promise), std::move(device));
+				} CATCH (...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+			});
 		
 		ScopedLock(_poolLock);
 		_deformerEntries.emplace_back(newEntry);
@@ -249,14 +283,6 @@ namespace SceneEngine
 		return std::move(newEntry);
 	}
 
-	static std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>> ToFuture(RenderCore::Techniques::DrawableConstructor& construction)
-	{
-		std::promise<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>> promise;
-		auto result = promise.get_future();
-		construction.FulfillWhenNotPending(std::move(promise));
-		return result;
-	}
-
 	static std::future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> CreateDefaultDeformerConstruction(
 		std::shared_ptr<RenderCore::IDevice> device,
 		std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> rendererConstruction)
@@ -266,35 +292,15 @@ namespace SceneEngine
 		::Assets::WhenAll(std::move(rendererConstruction)).ThenConstructToPromise(
 			std::move(promise),
 			[device=std::move(device)](auto&& promise, auto completedRendererConstruction) {
-				auto deformerConstruction = std::make_shared<RenderCore::Techniques::DeformerConstruction>(device, completedRendererConstruction);
+				auto deformerConstruction = std::make_shared<RenderCore::Techniques::DeformerConstruction>(completedRendererConstruction);
 				if (auto* skinConfigure = RenderCore::Techniques::Services::GetInstance().FindDeformConfigure("gpu_skin"))
 					skinConfigure->Configure(*deformerConstruction);
 				if (!deformerConstruction->IsEmpty()) {
 					// fulfill directly into the original promise
-					deformerConstruction->FulfillWhenNotPending(std::move(promise));
+					deformerConstruction->FulfillWhenNotPending(std::move(promise), device);
 				} else {
 					promise.set_value(nullptr);
 				}
-			});
-		return result;
-	}
-
-	static std::future<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> CreateDeformerConstruction(
-		std::shared_ptr<RenderCore::IDevice> device,
-		std::shared_future<RenderCore::Assets::CompoundObjectScaffold> compoundObjectFuture)
-	{
-		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
-		auto result = promise.get_future();
-		::Assets::WhenAll(std::move(compoundObjectFuture)).ThenConstructToPromise(
-			std::move(promise),
-			[device=std::move(device)](auto&& promise, auto actualCompoundObject) mutable {
-				auto futureConstruction = RenderCore::Assets::ToFuture(*actualCompoundObject.GetModelRendererConstruction());
-				YieldToPool(futureConstruction);
-
-				auto cfg = actualCompoundObject.OpenConfiguration();
-				auto deformerConstruction = RenderCore::Techniques::DeserializeDeformerConstruction(std::move(device), futureConstruction.get(), cfg);
-				// Note -- relying on the promise holding a strong reference while it's completing
-				deformerConstruction->FulfillWhenNotPending(std::move(promise));
 			});
 		return result;
 	}
@@ -332,9 +338,6 @@ namespace SceneEngine
 			// custom deformers given by caller
 			newEntry->_deformer = std::static_pointer_cast<CharacterSceneInternal::DeformerEntry>(deformers);
 			deformerConstructionFuture = newEntry->_deformer->_completedConstruction;
-		} else if (newEntry->_model->_compoundObjectScaffold.valid()) {
-			// deformer configuration out the compound object scaffold
-			deformerConstructionFuture = CreateDeformerConstruction(_pipelineAcceleratorPool->GetDevice(), newEntry->_model->_compoundObjectScaffold);
 		} else {
 			// no explicit deformers -- we must use the defaults
 			deformerConstructionFuture = CreateDefaultDeformerConstruction(_pipelineAcceleratorPool->GetDevice(), newEntry->_model->_completedConstruction);
@@ -732,6 +735,7 @@ namespace SceneEngine
 				BufferUploads::CreateBatchedResources(*_pipelineAcceleratorPool->GetDevice(), bufferUploads, BindFlag::IndexBuffer, 1024*1024, RenderCore::BufferUploads::s_batchedResultsIndexAlignment));
 			_constructionContext = std::make_shared<Techniques::ResourceConstructionContext>(bufferUploads, std::move(repositionableGeometry));
 		}
+		_utilityHeap = std::make_shared<::AssetsNew::AssetHeap>();
 	}
 	CharacterScene::~CharacterScene() = default;
 	ICharacterScene::~ICharacterScene() = default;

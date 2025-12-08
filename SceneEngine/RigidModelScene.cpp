@@ -87,14 +87,6 @@ namespace SceneEngine
 		};
 	}
 
-	static std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>> ToFuture(RenderCore::Techniques::DrawableConstructor& construction)
-	{
-		std::promise<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>> promise;
-		auto result = promise.get_future();
-		construction.FulfillWhenNotPending(std::move(promise));
-		return result;
-	}
-
 	template<typename T>
 		std::future<void> AsOpaqueFuture(T inputFuture)
 		{
@@ -222,7 +214,7 @@ namespace SceneEngine
 			auto newEntry = std::make_shared<RigidModelSceneInternal::DeformerEntry>();
 			std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
 			newEntry->_completedConstruction = promise.get_future();
-			construction->FulfillWhenNotPending(std::move(promise));
+			construction->FulfillWhenNotPending(std::move(promise), _deformAcceleratorPool->GetDevice());
 			newEntry->_referenceHolder = std::move(construction);
 			
 			ScopedLock(_poolLock);
@@ -289,7 +281,7 @@ namespace SceneEngine
 								*completedConstruction, deformAcceleratorPool, deformAccelerator);
 
 							if (geoDeformer) {
-								::Assets::WhenAll(ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
+								::Assets::WhenAll(RenderCore::Techniques::ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
 									std::move(promise),
 									[geoDeformer, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
 										deformerInitFuture.get();	// propagate exceptions
@@ -307,7 +299,7 @@ namespace SceneEngine
 										return renderer;
 									});
 							} else {
-								::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
+								::Assets::WhenAll(RenderCore::Techniques::ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
 									std::move(promise),
 									[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
 										RigidModelSceneInternal::Renderer renderer;
@@ -340,7 +332,7 @@ namespace SceneEngine
 								drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
 								*completedConstruction);
 
-							::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
+							::Assets::WhenAll(RenderCore::Techniques::ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
 								std::move(promise),
 								[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
 									RigidModelSceneInternal::Renderer renderer;

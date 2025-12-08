@@ -999,4 +999,12 @@ namespace RenderCore { namespace Techniques
 
 	DrawableConstructor::~DrawableConstructor() {}
 
+	std::future<std::shared_ptr<DrawableConstructor>> ToFuture(DrawableConstructor& construction)
+	{
+		std::promise<std::shared_ptr<DrawableConstructor>> promise;
+		auto result = promise.get_future();
+		construction.FulfillWhenNotPending(std::move(promise));
+		return result;
+	}
+
 }}

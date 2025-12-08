@@ -79,53 +79,9 @@ namespace RenderCore { namespace Assets
 		Formatters::TextInputFormatter<>&,
 		const ::Assets::DirectorySearchRules&);
 
-	uint64_t CompoundObjectScaffold::GetHash() const { return _modelRendererConstruction->GetHash(); }
-
-	bool CompoundObjectScaffold::AreScaffoldsInvalidated() const
-	{
-		return _depVal.GetValidationIndex() != 0 || _modelRendererConstruction->AreScaffoldsInvalidated();
-	}
-
-	::Assets::DependencyValidation CompoundObjectScaffold::MakeScaffoldsDependencyValidation() const
-	{
-		auto scaffoldsDepVal = _modelRendererConstruction->MakeScaffoldsDependencyValidation();
-		::Assets::DependencyValidationMarker markers[] { _depVal, scaffoldsDepVal };
-		return ::Assets::GetDepValSys().MakeOrReuse(markers);
-	}
-
-	CompoundObjectScaffold::CompoundObjectScaffold() {}
-	CompoundObjectScaffold::CompoundObjectScaffold(
-		std::shared_ptr<ModelRendererConstruction> modelRendererConstruction,
-		::Assets::DependencyValidation depVal)
-	: _modelRendererConstruction(std::move(modelRendererConstruction))
-	, _depVal(std::move(depVal))
-	{}
-
-	CompoundObjectScaffold::CompoundObjectScaffold(
-		Formatters::TextInputFormatter<char>& fmttr,
-		const ::Assets::DirectorySearchRules& searchRules,
-		const ::Assets::DependencyValidation& depVal)
-	: _depVal(depVal)
-	{
-		_modelRendererConstruction = std::make_shared<ModelRendererConstruction>();
-		DeserializeModelRendererConstruction(*_modelRendererConstruction, fmttr, searchRules);
-	}
-
-	CompoundObjectScaffold::CompoundObjectScaffold(
-		Formatters::IDynamicInputFormatter& fmttr,
-		const ::Assets::DirectorySearchRules& searchRules,
-		const ::Assets::DependencyValidation& depVal)
-	: _depVal(depVal)
-	{
-		_modelRendererConstruction = std::make_shared<ModelRendererConstruction>();
-		DeserializeModelRendererConstruction(*_modelRendererConstruction, fmttr, searchRules);
-	}
-
-	CompoundObjectScaffold::~CompoundObjectScaffold() {}
-
 	static bool IsCompoundFile(StringSection<> extension) { return XlEqStringI(extension, "compound") || XlEqStringI(extension, "hlsl"); }
 
-	static void CompoundObjectScaffold_ConstructToPromisedCompoundAsset(
+	static void ModelRendererConstruction_ConstructToPromisedCompoundAsset(
 		std::promise<::Assets::ContextImbuedAsset<std::shared_ptr<::AssetsNew::CompoundAssetScaffold>>>&& promise,
 		std::shared_ptr<::Assets::OperationContext> opContext,
 		StringSection<> initializer)
@@ -154,24 +110,28 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
-	static void CompoundObjectScaffold_ConstructToPromise(
-		std::promise<CompoundObjectScaffold>&& promise,
+	static void ModelRendererConstruction_ConstructToPromise(
+		std::promise<::Assets::AssetWrapper<std::shared_ptr<ModelRendererConstruction>>>&& promise,
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		StringSection<> initializer)
 	{
 		auto splitName = MakeFileNameSplitter(initializer);
 		auto containerInitializer = splitName.AllExceptParameters();
-		::Assets::WhenAll(::Assets::GetAssetFutureFn< CompoundObjectScaffold_ConstructToPromisedCompoundAsset > (util->_opContext, containerInitializer)).ThenConstructToPromise(
+		::Assets::WhenAll(::Assets::GetAssetFutureFn< ModelRendererConstruction_ConstructToPromisedCompoundAsset > (util->_opContext, containerInitializer)).ThenConstructToPromise(
 			std::move(promise),
-			[util=std::move(util), mat=splitName.Parameters().AsString()](auto&& promise, const auto& scaffold) {
-				util->ConstructToCachedPromise(
-					std::move(promise), s_CompoundObjectScaffold_ComponentName, ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(mat) DEBUG_ONLY(, mat)});
+			[util=std::move(util), mat=splitName.Parameters().AsString()](const auto& scaffold) {
+				auto chunk = scaffold.get()->GetChunk(Hash64(mat), s_CompoundObjectScaffold_ComponentName);
+				auto construction = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
+				Formatters::TextInputFormatter<char> fmttr{ chunk };
+				DeserializeModelRendererConstruction(*construction, fmttr, std::get<::Assets::DirectorySearchRules>(scaffold));
+				return ::Assets::AssetWrapper<std::shared_ptr<ModelRendererConstruction>> { std::move(construction), std::get<::Assets::DependencyValidation>(scaffold) };
 			});
 	}
 
-	std::shared_future<CompoundObjectScaffold> GetResolvedCompoundObjectScaffoldFuture(std::shared_ptr<::AssetsNew::CompoundAssetUtil> util, StringSection<> initializer)
+	std::shared_future<::Assets::AssetWrapper<std::shared_ptr<ModelRendererConstruction>>> GetResolvedCompoundObjectScaffoldFuture(
+		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util, StringSection<> initializer)
 	{
-		return ::Assets::GetAssetFutureFn< CompoundObjectScaffold_ConstructToPromise > (util, initializer);
+		return ::Assets::GetAssetFutureFn< ModelRendererConstruction_ConstructToPromise > (util, initializer);
 	}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
