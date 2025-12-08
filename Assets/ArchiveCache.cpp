@@ -787,7 +787,7 @@ namespace Assets
 				auto i = std::find_if(
 					pendingCommit._data.begin(), pendingCommit._data.end(), 
 					[&r](const auto& c) { return c._chunkTypeCode == r->_chunkTypeCode; });
-				if (i == pendingCommit._data.end())
+				if (i == pendingCommit._data.end() && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob)
 					Throw(Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::MissingFile,
 						GetDependencyValidation_AlreadyLocked().first,
@@ -806,6 +806,10 @@ namespace Assets
 				auto i = std::find_if(
 					pendingCommit._data.begin(), pendingCommit._data.end(), 
 					[&r](const auto& c) { return c._chunkTypeCode == r._chunkTypeCode; });
+				if (r._dataType == ArtifactRequest::DataType::OptionalSharedBlob && i == pendingCommit._data.end()) {
+					result.emplace_back();
+					continue;
+				}
 				assert(i != pendingCommit._data.end());
 				result.emplace_back(MakeArtifactRequestResult(r._dataType, i->_data));
 			}

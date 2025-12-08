@@ -2,7 +2,7 @@
 
 #include "AssetHeapNew.h"
 #include "AssetsCore.h"
-#include "AssetMixins.h"
+#include "ContinuationUtil.h"
 #include "DepVal.h"
 #include "IFileSystem.h"
 #include "AssetTraits.h"		// for RemoveSmartPtr
@@ -16,6 +16,8 @@
 #include <future>
 #include <stdexcept>
 #include <variant>
+
+namespace Assets { class OperationContext; }
 
 namespace AssetsNew
 {
@@ -93,6 +95,8 @@ namespace AssetsNew
 			//			- this may cause some duplicate parsing, particular when specific entries are inherited by objects
 			//
 		explicit CompoundAssetUtil(std::shared_ptr<AssetHeap> =nullptr);
+
+		std::shared_ptr<::Assets::OperationContext> _opContext;
 
 		uint64_t GetGUID() const { return 0; }		// we just return 0, because the instance of the CompoundAssetUtil() shouldn't effect the content of any assets created
 

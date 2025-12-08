@@ -11,7 +11,6 @@
 #include "ChunkFileContainer.h"
 #include "IAsyncMarker.h"
 #include "AssetsCore.h"
-#include "Continuation.h"
 #include "ContinuationUtil.h"
 #include "OperationContext.h"
 #include "AssetTraits.h"
@@ -19,7 +18,6 @@
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/MemoryUtils.h"
 #include <memory>
-#include <functional>
 #include <future>
 
 namespace Assets

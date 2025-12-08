@@ -176,6 +176,14 @@ namespace Assets
 
 					}
 
+				} else if constexpr (
+					Internal::AssetTraits<AssetType>::IsContextImbue
+					&& Internal::HasConstructor_Formatter<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>) {
+
+					using InternalAssetType = typename Internal::AssetTraits<AssetType>::ContextImbueInternalType;
+					static_assert(!Internal::AssetMixinTraits<InternalAssetType>::HasDeserializeKey);		// HasDeserializeKey not implemented in this case
+					return { Internal::InvokeAssetConstructor<InternalAssetType>(fmttr, searchRules, depVal), searchRules, depVal, InheritList{} };
+
 				} else if constexpr (Internal::HasConstructor_Formatter<AssetType>) {
 
 					return Internal::InvokeAssetConstructor<AssetType>( fmttr, std::move(searchRules), depVal);
@@ -207,7 +215,7 @@ namespace Assets
 			static constexpr bool ValidForConstructFromFormatterSyncHelper
 				=  Internal::HasConstructor_Formatter<AssetType>
 				|| Internal::HasConstructor_SimpleFormatter<AssetType>
-				|| (Internal::AssetTraits<AssetType>::IsContextImbue && Internal::HasConstructor_SimpleFormatter<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>)
+				|| (Internal::AssetTraits<AssetType>::IsContextImbue && (Internal::HasConstructor_SimpleFormatter<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType> || Internal::HasConstructor_Formatter<typename Internal::AssetTraits<AssetType>::ContextImbueInternalType>))
 				|| Internal::AssetMixinTraits<AssetType>::HasDeserializationOperatorFromFormatter;
 	}
 
