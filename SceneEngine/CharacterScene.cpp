@@ -291,16 +291,20 @@ namespace SceneEngine
 		auto result = promise.get_future();
 		::Assets::WhenAll(std::move(rendererConstruction)).ThenConstructToPromise(
 			std::move(promise),
-			[device=std::move(device)](auto&& promise, auto completedRendererConstruction) {
-				auto deformerConstruction = std::make_shared<RenderCore::Techniques::DeformerConstruction>(completedRendererConstruction);
-				if (auto* skinConfigure = RenderCore::Techniques::Services::GetInstance().FindDeformConfigure("gpu_skin"))
-					skinConfigure->Configure(*deformerConstruction);
-				if (!deformerConstruction->IsEmpty()) {
-					// fulfill directly into the original promise
-					deformerConstruction->FulfillWhenNotPending(std::move(promise), device);
-				} else {
-					promise.set_value(nullptr);
-				}
+			[device=std::move(device)](auto&& promise, const auto& completedRendererConstruction) {
+				TRY {
+					auto deformerConstruction = std::make_shared<RenderCore::Techniques::DeformerConstruction>(completedRendererConstruction);
+					if (auto* skinConfigure = RenderCore::Techniques::Services::GetInstance().FindDeformConfigure("gpu_skin"))
+						skinConfigure->Configure(*deformerConstruction);
+					if (!deformerConstruction->IsEmpty()) {
+						// fulfill directly into the original promise
+						deformerConstruction->FulfillWhenNotPending(std::move(promise), device);
+					} else {
+						promise.set_value(nullptr);
+					}
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
 			});
 		return result;
 	}
@@ -344,9 +348,7 @@ namespace SceneEngine
 		}
 
 		std::promise<CharacterSceneInternal::Renderer> rendererPromise;
-		std::promise<CharacterSceneInternal::Animator> animatorPromise;
 		newEntry->_pendingRenderer = rendererPromise.get_future();
-		auto animatorFuture = animatorPromise.get_future();
 
 		::Assets::WhenAll(newEntry->_model->_completedConstruction, deformerConstructionFuture).ThenConstructToPromise(
 			std::move(rendererPromise),
@@ -354,54 +356,64 @@ namespace SceneEngine
 				auto&& promise, 
 				auto completedConstruction, auto completedDeformerConstruction) mutable {
 
-				std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
-				std::shared_ptr<RenderCore::Techniques::IGeoDeformerConductor> geoAttachment;
-				if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
-					deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
-					geoAttachment = completedDeformerConstruction->GetGeoAttachment();
-					if (geoAttachment)
-						deformAcceleratorPool->Attach(*deformAccelerator, geoAttachment);
-					if (auto uniformsAttachment = completedDeformerConstruction->GetUniformsAttachment())
-						deformAcceleratorPool->Attach(*deformAccelerator, std::move(uniformsAttachment));
-				}
+				TRY {
 
-				auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
-					drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
-					*completedConstruction, deformAcceleratorPool, deformAccelerator);
+					std::shared_ptr<RenderCore::Techniques::DeformAccelerator> deformAccelerator;
+					std::shared_ptr<RenderCore::Techniques::IGeoDeformerConductor> geoAttachment;
+					if (completedDeformerConstruction && !completedDeformerConstruction->IsEmpty()) {
+						deformAccelerator = deformAcceleratorPool->CreateDeformAccelerator();
+						geoAttachment = completedDeformerConstruction->GetGeoAttachment();
+						if (geoAttachment)
+							deformAcceleratorPool->Attach(*deformAccelerator, geoAttachment);
+						if (auto uniformsAttachment = completedDeformerConstruction->GetUniformsAttachment())
+							deformAcceleratorPool->Attach(*deformAccelerator, std::move(uniformsAttachment));
+					}
 
-				if (geoAttachment) {
-					::Assets::WhenAll(ToFuture(*drawableConstructor), geoAttachment->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
-						std::move(promise),
-						[geoAttachment, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
-							deformerInitFuture.get();	// propagate exceptions
+					auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
+						drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
+						*completedConstruction, deformAcceleratorPool, deformAccelerator);
 
-							CharacterSceneInternal::Renderer renderer;
-							renderer._drawableConstructor = drawableConstructorFuture.get();
-							renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoAttachment->GetCompletionCommandList());
-							renderer._deformAccelerator = deformAccelerator;
-							renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
-							if (completedConstruction->GetElementCount() != 0) {
-								renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
-								renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
-							} else {
-								renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
-							}
-							return renderer;
-						});
-				} else {
-					::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
-						std::move(promise),
-						[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
-							CharacterSceneInternal::Renderer renderer;
-							renderer._drawableConstructor = drawableConstructorFuture.get();
-							renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
-							renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
-							if (completedConstruction->GetElementCount() != 0)
-								renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
-							return renderer;
-						});
-				}
+					if (geoAttachment) {
+						::Assets::WhenAll(ToFuture(*drawableConstructor), geoAttachment->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
+							std::move(promise),
+							[geoAttachment, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
+								deformerInitFuture.get();	// propagate exceptions
+
+								CharacterSceneInternal::Renderer renderer;
+								renderer._drawableConstructor = drawableConstructorFuture.get();
+								renderer._completionCmdList = std::max(renderer._drawableConstructor->_completionCommandList, geoAttachment->GetCompletionCommandList());
+								renderer._deformAccelerator = deformAccelerator;
+								renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
+								if (completedConstruction->GetElementCount() != 0) {
+									renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
+									renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
+								} else {
+									renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
+								}
+								return renderer;
+							});
+					} else {
+						::Assets::WhenAll(ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
+							std::move(promise),
+							[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
+								CharacterSceneInternal::Renderer renderer;
+								renderer._drawableConstructor = drawableConstructorFuture.get();
+								renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
+								renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
+								if (completedConstruction->GetElementCount() != 0)
+									renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
+								return renderer;
+							});
+					}
+
+				} CATCH(...) {
+					promise.set_exception(std::current_exception());
+				} CATCH_END
+
 			});
+
+		std::promise<CharacterSceneInternal::Animator> animatorPromise;
+		auto animatorFuture = animatorPromise.get_future();
 
 		::Assets::WhenAll(newEntry->_pendingRenderer, newEntry->_animSet->_animSetFuture, newEntry->_model->_completedConstruction).ThenConstructToPromise(
 			std::move(animatorPromise),
@@ -431,20 +443,20 @@ namespace SceneEngine
 		::Assets::WhenAll(newEntry->_pendingRenderer, std::move(animatorFuture)).Then(
 			[dstEntryWeak=std::weak_ptr<CharacterSceneInternal::RendererEntry>(newEntry), sceneWeak=weak_from_this()](auto rendererFuture, auto animatorFuture) {
 				auto scene = sceneWeak.lock();
-				if (scene) {
-					ScopedLock(scene->_poolLock);
-					TRY {
-						auto renderer = rendererFuture.get();
-						auto animator = animatorFuture.get();
-						scene->_pendingUpdates.emplace_back(CharacterSceneInternal::PendingUpdate { dstEntryWeak, std::move(renderer), std::move(animator) });
-					} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
-						scene->_pendingExceptionUpdates.emplace_back(CharacterSceneInternal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
-					} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
-						scene->_pendingExceptionUpdates.emplace_back(CharacterSceneInternal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
-					} CATCH(const std::exception& e) {
-						scene->_pendingExceptionUpdates.emplace_back(CharacterSceneInternal::PendingExceptionUpdate { dstEntryWeak, ::Assets::AsBlob(e.what()) });
-					} CATCH_END
-				}
+				if (!scene) return;
+
+				ScopedLock(scene->_poolLock);
+				TRY {
+					auto renderer = rendererFuture.get();
+					auto animator = animatorFuture.get();
+					scene->_pendingUpdates.emplace_back(CharacterSceneInternal::PendingUpdate { dstEntryWeak, std::move(renderer), std::move(animator) });
+				} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
+					scene->_pendingExceptionUpdates.emplace_back(CharacterSceneInternal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
+				} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
+					scene->_pendingExceptionUpdates.emplace_back(CharacterSceneInternal::PendingExceptionUpdate { dstEntryWeak, e.GetActualizationLog(), e.GetDependencyValidation() });
+				} CATCH(const std::exception& e) {
+					scene->_pendingExceptionUpdates.emplace_back(CharacterSceneInternal::PendingExceptionUpdate { dstEntryWeak, ::Assets::AsBlob(e.what()) });
+				} CATCH_END
 			});
 
 		_renderers.emplace_back(newEntry);

@@ -470,6 +470,12 @@ namespace RenderCore { namespace Techniques
 
 			}
 
+			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry).IsEmpty())
+				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry));
+
+			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Pixel).IsEmpty())
+				nascentDesc->_shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Pixel));
+
 			nascentDesc->_depVal = _depVal;
 			return nascentDesc;
 		}
@@ -948,6 +954,7 @@ namespace RenderCore { namespace Techniques
 				}
 
 				nascentDesc->_manualSelectorFiltering.SetSelector("UTILITY_SHADER", (unsigned)_utilityType);
+				nascentDesc->_manualSelectorFiltering.EnforceSelectorRelevance("UTILITY_SHADER", "1");
 
 			}
 

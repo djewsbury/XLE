@@ -31,6 +31,7 @@ namespace ShaderSourceParser
 
 		const ParameterBox& GetSetSelectors() const { return _setValues; }
 		const std::unordered_map<std::string, std::string>& GetRelevanceMap() const { return _relevanceMap; }
+		void EnforceSelectorRelevance(std::string selector, std::string relevance);
 
 		ManualSelectorFiltering();
 		~ManualSelectorFiltering();
@@ -60,6 +61,11 @@ namespace ShaderSourceParser
 	{
 		_setValues.SetParameter(name, std::move(value));
 		_hash = 0ull;
+	}
+
+	inline void ManualSelectorFiltering::EnforceSelectorRelevance(std::string selector, std::string relevance)
+	{
+		_relevanceMap[selector] = relevance;
 	}
 
 }
