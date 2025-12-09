@@ -134,7 +134,7 @@ namespace RenderCore { namespace Assets
 	std::optional<DDSBreakdown> BuildDDSBreakdown(IteratorRange<const void*> data, StringSection<> filename)
 	{
 		DirectX::TexMetadata texMetadata;
-		auto hres = DirectX::GetMetadataFromDDSMemory(data.begin(), data.size(), DirectX::DDS_FLAGS_NO_LEGACY_EXPANSION, texMetadata);
+		auto hres = DirectX::GetMetadataFromDDSMemory((const uint8_t*)data.begin(), data.size(), DirectX::DDS_FLAGS_NO_LEGACY_EXPANSION, texMetadata);
 		if (!SUCCEEDED(hres))
 			return {};
 
@@ -182,7 +182,8 @@ namespace RenderCore { namespace Assets
 			Throw(std::runtime_error("3D DDS textures encountered while reading (" + filename.AsString() + "). Reading this type of texture is not supported."));
 
 		size_t pixelSize, nimages;
-		if (!DirectX::_DetermineImageArray(texMetadata, DirectX::CP_FLAGS_NONE, nimages, pixelSize))
+		hres = DirectX::Internal::DetermineImageArray(texMetadata, DirectX::CP_FLAGS_NONE, nimages, pixelSize);
+		if (!SUCCEEDED(hres))
 			Throw(std::runtime_error("Could not determine image offsets when loading DDS file (" + filename.AsString() + "). This file may be truncated?"));
 
 		size_t offset = sizeof(uint32_t) + sizeof(DirectX::DDS_HEADER);
@@ -194,7 +195,7 @@ namespace RenderCore { namespace Assets
 			Throw(std::runtime_error("DDS file appears truncating when reading (" + filename.AsString() + ")"));
 
 		VLA(DirectX::Image, dximages, nimages);
-		if (!_SetupImageArray(
+		if (!DirectX::Internal::SetupImageArray(
 			(uint8_t*)pixels,
 			pixelSize,
 			texMetadata,
@@ -248,13 +249,13 @@ namespace RenderCore { namespace Assets
 								// Sometimes we can get here if the file requires some conversion at load in. For example, there are some legacy formats (such as R8G8B8 formats)
 								// that are valid in DDS, but aren't supported by modern DX/DXGI. To support these, we need to drop back to a less efficient way of loading
 								// the file. But this is much less efficient, and really not recommended
-								auto hres = DirectX::GetMetadataFromDDSMemory(that->_file.GetData().begin(), that->_file.GetSize(), DirectX::DDS_FLAGS_NONE, that->_fallbackTexMetadata);
+								auto hres = DirectX::GetMetadataFromDDSMemory((const uint8_t*)that->_file.GetData().begin(), that->_file.GetSize(), DirectX::DDS_FLAGS_NONE, that->_fallbackTexMetadata);
 								if (!SUCCEEDED(hres))
 									Throw(std::runtime_error("Failed while attempting reading header from DDS file (" + that->_filename + ")"));
 
 								// We succeeded after allowing conversions. Let's use the fallback path
 								Log(Warning) << "Falling back to inefficient path for loading DDS file (" << that->_filename << "). This usually means that the file is using a legacy pixel format that isn't natively supported by modern hardware and graphics APIs. This path is not recommended because it can result in slowdowns and memory spikes during loading." << std::endl;
-								hres = LoadFromDDSMemory(that->_file.GetData().begin(), that->_file.GetSize(), DirectX::DDS_FLAGS_NONE, &that->_fallbackTexMetadata, that->_fallbackScratchImage);
+								hres = LoadFromDDSMemory((const uint8_t*)that->_file.GetData().begin(), that->_file.GetSize(), DirectX::DDS_FLAGS_NONE, &that->_fallbackTexMetadata, that->_fallbackScratchImage);
 								if (!SUCCEEDED(hres))
 									Throw(std::runtime_error("Failed while attempting reading header from DDS file (" + that->_filename + ") in fallback phase"));
 								that->_fallbackTexMetadata = that->_fallbackScratchImage.GetMetadata();
@@ -415,15 +416,15 @@ namespace RenderCore { namespace Assets
 							auto fmt = GetTexFmt(that->_filename);
 							HRESULT hresult = -1;
 							if (fmt == TexFmt::DDS) {
-								hresult = LoadFromDDSMemory(file.GetData().begin(), file.GetSize(), DDS_FLAGS_NONE, &that->_texMetadata, that->_image);
+								hresult = LoadFromDDSMemory((const uint8_t*)file.GetData().begin(), file.GetSize(), DDS_FLAGS_NONE, &that->_texMetadata, that->_image);
 							} else if (fmt == TexFmt::TGA) {
-								hresult = LoadFromTGAMemory(file.GetData().begin(), file.GetSize(), &that->_texMetadata, that->_image);
+								hresult = LoadFromTGAMemory((const uint8_t*)file.GetData().begin(), file.GetSize(), &that->_texMetadata, that->_image);
 
 								// Erase SRGB/linear flag (because the TGA loader won't assign that -- but DDS loader will)
 								that->_texMetadata.format = (DXGI_FORMAT)AsTypelessFormat((Format)that->_texMetadata.format);
 							} else {
 								assert(fmt == TexFmt::WIC);
-								hresult = LoadFromWICMemory(file.GetData().begin(), file.GetSize(), WIC_FLAGS_NONE, &that->_texMetadata, that->_image);
+								hresult = LoadFromWICMemory((const uint8_t*)file.GetData().begin(), file.GetSize(), WIC_FLAGS_NONE, &that->_texMetadata, that->_image);
 								
 								// Erase SRGB/linear flag (because the WIC loader won't assign that -- but DDS loader will)
 								// But only do this for 8-bit formats, because we need to retain float/unorm/uint type suffixes for high precision inputs
@@ -740,11 +741,11 @@ namespace RenderCore { namespace Assets
 		headerSize = 0;
 		auto directXFlags = DirectX::DDS_FLAGS_NONE;
 		if (tDesc._dimensionality != TextureDesc::Dimensionality::T2D) directXFlags |= DirectX::DDS_FLAGS_FORCE_DX10_EXT;		// we need to use DX10_EXT to write 1D, 3D flag (etc)
-		auto hr = DirectX::_EncodeDDSHeader(metadata, directXFlags, nullptr, 0, headerSize);
+		auto hr = DirectX::EncodeDDSHeader(metadata, directXFlags, nullptr, 0, headerSize);
 		assert(SUCCEEDED(hr));
 
 		auto result = std::make_shared<std::vector<uint8_t>>(dstSize+headerSize);
-		DirectX::_EncodeDDSHeader(metadata, directXFlags, result->data(), result->size(), headerSize);
+		DirectX::EncodeDDSHeader(metadata, directXFlags, result->data(), result->size(), headerSize);
 		assert(SUCCEEDED(hr));
 
 		return result;
