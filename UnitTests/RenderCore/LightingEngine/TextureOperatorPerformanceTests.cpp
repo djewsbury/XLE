@@ -249,8 +249,6 @@ namespace UnitTests
 		}
 
 		if (0) {
-			UniformsStreamInterface usi;
-			UniformsStream us;
 			Techniques::PixelOutputStates outputStates;
 			outputStates.Bind(rpi);
 			outputStates.Bind(Techniques::CommonResourceBox::s_dsDisable);
@@ -261,10 +259,10 @@ namespace UnitTests
 				Techniques::FullViewportOperatorSubType::DisableDepth,
 				"ut-data/pattern1.pixel.hlsl:main",
 				{}, testApparatus._metalTestHelper->_pipelineLayout,
-				outputStates, usi);
+				outputStates);
 
 			REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
-			op->Actualize()->Draw(parsingContext, us);
+			op->Actualize()->Draw(parsingContext);
 		}
 	}
 
@@ -295,10 +293,10 @@ namespace UnitTests
 			Techniques::FullViewportOperatorSubType::DisableDepth,
 			"ut-data/downsample.pixel.hlsl:main",
 			{}, testApparatus._metalTestHelper->_pipelineLayout,
-			outputStates, usi);
+			outputStates);
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
-		op->Actualize()->Draw(parsingContext, us);
+		op->Actualize()->Draw(parsingContext, &usi, us);
 	}
 
 	static void ComputeShaderBasedDownsample(
@@ -327,14 +325,14 @@ namespace UnitTests
 			testApparatus._pipelineCollection,
 			pipelineLayouts->GetPipelineLayout(),
 			"ut-data/downsample.compute.hlsl:main",
-			{}, usi);
+			{});
 
 		REQUIRE(op->StallWhilePending().value() == ::Assets::AssetState::Ready);
 		op->Actualize()->Dispatch(
 			parsingContext,
 			// 640/16, 360/8, 1,
 			640/2, 360/2, 1,
-			us);
+			&usi, us);
 	}
 
 	static RenderCore::Techniques::CameraDesc SetupCamera(UInt2 workingRes)
@@ -536,8 +534,7 @@ namespace UnitTests
 			testApparatus._pipelineCollection,
 			RENDEROVERLAYS_SEPARABLE_FILTER ":GaussianRGB",
 			std::move(selectors),
-			GENERAL_OPERATOR_PIPELINE ":ComputeMain",
-			gaussianFilterUsi);
+			GENERAL_OPERATOR_PIPELINE ":ComputeMain");
 		gaussianFilterOperatorFuture->StallWhilePending();
 		auto gaussianFilterOperator = gaussianFilterOperatorFuture->Actualize();
 
@@ -781,7 +778,7 @@ namespace UnitTests
 
 			{
 				ResourceViewStream uniforms { *downsampleSrcSRV, *rpi.GetNonFrameBufferAttachmentView(0) };
-				auto dispatchHelper = gaussianFilterOperator->BeginDispatches(parsingContext, uniforms);
+				auto dispatchHelper = gaussianFilterOperator->BeginDispatches(parsingContext, &gaussianFilterUsi, uniforms);
 				for (unsigned c=0; c<iterationCount; ++c) {
 					const unsigned blockSize = 16;
 					dispatchHelper.Dispatch(

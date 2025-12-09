@@ -100,7 +100,6 @@ namespace UnitTests
 	static void BlackOutSky(RenderCore::Techniques::ParsingContext& parsingContext)
 	{
 		using namespace RenderCore;
-		UniformsStreamInterface usi;
 
 		parsingContext.GetUniformDelegateManager()->BringUpToDateGraphics(parsingContext);
 
@@ -116,9 +115,9 @@ namespace UnitTests
 			BASIC_PIXEL_HLSL ":blackOpaque",
 			ParameterBox{},
 			GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-			po, usi);
+			po);
 		futureShader->StallWhilePending();
-		futureShader->Actualize()->Draw(parsingContext, {});
+		futureShader->Actualize()->Draw(parsingContext);
 	}
 
 	void ParseScene(RenderCore::LightingEngine::SequencePlayback& lightingIterator, ToolsRig::IDrawablesWriter& drawableWriter)

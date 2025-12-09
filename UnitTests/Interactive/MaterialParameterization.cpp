@@ -161,10 +161,9 @@ namespace UnitTests
 						BASIC_PIXEL_HLSL ":blackOpaque",
 						ParameterBox{},
 						GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-						outputStates,
-						{});
+						outputStates);
 					if (auto* op = futureOp->TryActualize())
-						(*op)->Draw(*step._parsingContext, {});
+						(*op)->Draw(*step._parsingContext);
 				}
 			}
 		}

@@ -2,6 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#include "RenderCore/UniformsStream.h"
 #include "TechniqueTestsHelper.h"
 #include "../ReusableDataFiles.h"
 #include "../../UnitTestHelper.h"
@@ -106,15 +107,13 @@ namespace UnitTests
 			Techniques::PixelOutputStates outputStates;
 			outputStates.Bind(stitch._fbDesc, 0);
 			outputStates._attachmentBlendStates = {&Techniques::CommonResourceBox::s_abOpaque, &Techniques::CommonResourceBox::s_abOpaque+1};
-			UniformsStreamInterface usi;
 			auto opMarker = Techniques::CreateFullViewportOperator(
 				pipelineCollection,
 				Techniques::FullViewportOperatorSubType::DisableDepth,
 				"ut-data/operator-test.pixel.hlsl:prime_attachment",
 				{},
 				GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-				outputStates,
-				usi);
+				outputStates);
 			opMarker->StallWhilePending();
 			operator0 = opMarker->Actualize();
 		}
@@ -123,16 +122,13 @@ namespace UnitTests
 			Techniques::PixelOutputStates outputStates;
 			outputStates.Bind(stitch._fbDesc, 1);
 			outputStates._attachmentBlendStates = {&Techniques::CommonResourceBox::s_abOpaque, &Techniques::CommonResourceBox::s_abOpaque+1};
-			UniformsStreamInterface usi;
-			usi.BindResourceView(0, "SubpassInputAttachment"_h);
 			auto opMarker = Techniques::CreateFullViewportOperator(
 				pipelineCollection,
 				Techniques::FullViewportOperatorSubType::DisableDepth,
 				"ut-data/operator-test.pixel.hlsl:copy_inputattachment",
 				{},
 				GENERAL_OPERATOR_PIPELINE ":GraphicsMain",
-				outputStates,
-				usi);
+				outputStates);
 			opMarker->StallWhilePending();
 			operator1 = opMarker->Actualize();
 		}
@@ -148,7 +144,9 @@ namespace UnitTests
 			parsingContext.GetUniformDelegateManager()->BringUpToDateGraphics(parsingContext);
 			operator0->Draw(parsingContext, {});
 			rpi.NextSubpass();
-			operator1->Draw(parsingContext, ResourceViewStream{*rpi.GetInputAttachmentView(0)});
+			UniformsStreamInterface usi;
+			usi.BindResourceView(0, "SubpassInputAttachment"_h);
+			operator1->Draw(parsingContext, &usi, ResourceViewStream{*rpi.GetInputAttachmentView(0)});
 			outputResource = rpi.GetOutputAttachmentResource(0);
 
 			if (parsingContext._requiredBufferUploadsCommandList)

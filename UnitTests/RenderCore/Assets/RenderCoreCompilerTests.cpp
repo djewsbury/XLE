@@ -218,7 +218,7 @@ namespace UnitTests
 
 		SECTION("Get material settings from a model file")
 		{
-			auto cfgs = ::Assets::ActualizeAssetFn<RenderCore::Assets::MaterialCompoundScaffold_ConstructToPromise>("fake-model").get();
+			auto cfgs = ::Assets::ActualizeAssetFn<RenderCore::Assets::MaterialCompoundScaffold_ConstructToPromise>(nullptr, "fake-model").get();
 			REQUIRE(cfgs->_entityLookup.size() == 2);
 			REQUIRE(cfgs->_entityLookup[0].second._name.AsString() == "Material0");
 			REQUIRE(cfgs->_entityLookup[1].second._name.AsString() == "Material1");

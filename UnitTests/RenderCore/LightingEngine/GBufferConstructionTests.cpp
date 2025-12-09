@@ -265,9 +265,9 @@ namespace UnitTests
 			pipelinePool,
 			RenderCore::Techniques::FullViewportOperatorSubType::DisableDepth,
 			pixelShader, selectors, pipelayoutLayoutAsset,
-			outputStates, usi);
+			outputStates);
 		op->StallWhilePending();
-		op->Actualize()->Draw(parsingContext, us);
+		op->Actualize()->Draw(parsingContext, &usi, us);
 	}
 
 	static void CalculateSimularity(IteratorRange<const Float4*> A, IteratorRange<const Float4*> B)

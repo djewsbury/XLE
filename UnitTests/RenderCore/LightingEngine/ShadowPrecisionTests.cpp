@@ -360,9 +360,9 @@ namespace UnitTests
 		AttachmentBlendDesc blendStates[] { Techniques::CommonResourceBox::s_abStraightAlpha };
 		outputStates.Bind(MakeIteratorRange(blendStates));
 		auto op = CreateFullViewportOperator(
-			pipelinePool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":col_vis_pass", {}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain", outputStates, usi);
+			pipelinePool, Techniques::FullViewportOperatorSubType::DisableDepth, CASCADE_VIS_HLSL ":col_vis_pass", {}, GENERAL_OPERATOR_PIPELINE ":GraphicsMain", outputStates);
 		op->StallWhilePending();
-		op->Actualize()->Draw(parsingContext, us);
+		op->Actualize()->Draw(parsingContext, &usi, us);
 	}
 
 	static void WriteFrustumListToPLY(std::ostream& str, IteratorRange<const Float4x4*> worldToProjs)

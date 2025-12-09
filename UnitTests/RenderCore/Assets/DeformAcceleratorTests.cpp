@@ -4,6 +4,7 @@
 
 #include "../../UnitTestHelper.h"
 #include "../../EmbeddedRes.h"
+#include "RenderCore/IDevice.h"
 #include "TechniqueTestsHelper.h"
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderCore/Assets/ModelScaffold.h"
@@ -404,11 +405,11 @@ namespace UnitTests
 		future.wait();
 	}
 
-	static void StallWhilePending(RenderCore::Techniques::DeformerConstruction& construction)
+	static void StallWhilePending(RenderCore::Techniques::DeformerConstruction& construction, std::shared_ptr<IDevice> device)
 	{
 		std::promise<std::shared_ptr<RenderCore::Techniques::DeformerConstruction>> promise;
 		auto future = promise.get_future();
-		construction.FulfillWhenNotPending(std::move(promise));
+		construction.FulfillWhenNotPending(std::move(promise), std::move(device));
 		future.wait();
 	}
 
@@ -430,15 +431,15 @@ namespace UnitTests
 		rendererConstruction->AddElement().SetModel(modelScaffold);
 		StallWhilePending(*rendererConstruction);
 		
-		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device, techniqueTestHelper._drawablesPool, techniqueTestHelper._pipelineLayoutDelegate);
+		auto pool = Techniques::CreateDeformAcceleratorPool(testHelper->_device, techniqueTestHelper._drawablesPool);
 		
 		{
 			auto cpuAccelerator = pool->CreateDeformAccelerator();
 			REQUIRE(cpuAccelerator);
 
-			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>(testHelper->_device, rendererConstruction);
+			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>(rendererConstruction);
 			cpuConfigure->Configure(*deformerConstruction);
-			StallWhilePending(*deformerConstruction);
+			StallWhilePending(*deformerConstruction, testHelper->_device);
 
 			auto cpuGeoDeformAttachment = Techniques::CreateGeoDeformerConductor(*testHelper->_device, *rendererConstruction, *deformerConstruction);
 			REQUIRE(cpuGeoDeformAttachment);
@@ -453,9 +454,9 @@ namespace UnitTests
 			auto gpuAccelerator = pool->CreateDeformAccelerator();
 			REQUIRE(gpuAccelerator);
 
-			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>(testHelper->_device, rendererConstruction);
+			auto deformerConstruction = std::make_shared<Techniques::DeformerConstruction>(rendererConstruction);
 			gpuConfigure->Configure(*deformerConstruction);
-			StallWhilePending(*deformerConstruction);
+			StallWhilePending(*deformerConstruction, testHelper->_device);
 			
 			auto gpuGeoDeformAttachment = Techniques::CreateGeoDeformerConductor(*testHelper->_device, *rendererConstruction, *deformerConstruction);
 			REQUIRE(gpuGeoDeformAttachment);
