@@ -1509,7 +1509,7 @@ namespace RenderCore { namespace Techniques
 								auto entryPipelineLayout = result._entries.back().second._delegateConfig.GetPipelineLayout();
 								if (!entryPipelineLayout.IsEmpty()) {
 									if (!pipelineLayoutName.IsEmpty() && !XlEqString(entryPipelineLayout, pipelineLayoutName))
-										std::runtime_error("Pipeline layout name disagreement in technique delegate file: " + pipelineLayoutName.AsString() + ", and " + entryPipelineLayout.AsString());
+										Throw(std::runtime_error("Pipeline layout name disagreement in technique delegate file: " + pipelineLayoutName.AsString() + ", and " + entryPipelineLayout.AsString()));
 									pipelineLayoutName = entryPipelineLayout;
 								}
 							}
