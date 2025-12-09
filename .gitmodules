@@ -60,7 +60,7 @@
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
 [submodule "Foreign/wildcards"]
 	path = Foreign/wildcards
-	url = git@github.com:zemasoft/wildcards
+	url = git@github.com:djewsbury/wildcards
 [submodule "Foreign/ctti"]
 	path = Foreign/ctti
 	url = git@github.com:djewsbury/ctti.git
