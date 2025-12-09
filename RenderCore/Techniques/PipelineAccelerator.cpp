@@ -3,6 +3,8 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "PipelineAccelerator.h"
+#include "Assets/AssetHeap.h"
+#include "ConsoleRig/AttachablePtr.h"
 #include "PipelineAcceleratorInternal.h"
 #include "PipelineCollection.h"
 #include "DescriptorSetAccelerator.h"
@@ -25,6 +27,7 @@
 #include "../../Utility/StringFormat.h"
 #include <sstream>
 #include <iomanip>
+#include <thread>
 
 #define PA_SEPARATE_CONTINUATIONS 1		// Set to use a dedicated continuation executor for internal pipeline accelerator pool work. This can help by avoiding interfering with the continuation executor
 #if defined(PA_SEPARATE_CONTINUATIONS)
@@ -588,24 +591,45 @@ namespace RenderCore { namespace Techniques
 	};
 
 	#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-		static thread_local std::vector<const PipelineAcceleratorPool*> s_poolsLockedForThread;
+		static std::vector<const PipelineAcceleratorPool*>* CreatePoolsLockedForThread()
+		{
+			struct PADebugHelper
+			{
+				using ResultType = std::vector<const PipelineAcceleratorPool*>;
+				std::vector<std::pair<std::thread::id, std::unique_ptr<ResultType>>> _recordedResults;
+				Threading::Mutex _lock;
+			};
+			
+			static ConsoleRig::AttachablePtr<PADebugHelper> helper;
+			if (!helper) helper = std::make_shared<PADebugHelper>();		// not perfectly thread safe
+			ScopedLock(helper->_lock);
+			auto id = std::this_thread::get_id();
+			auto i = std::find_if(helper->_recordedResults.begin(), helper->_recordedResults.end(), [id](const auto& q) { return q.first == id; });
+			if (i != helper->_recordedResults.end())
+				return i->second.get();
+			helper->_recordedResults.emplace_back(id, std::make_unique<PADebugHelper::ResultType>());
+			return helper->_recordedResults.back().second.get();
+		}
+		static thread_local std::vector<const PipelineAcceleratorPool*>* s_poolsLockedForThread = nullptr;
 	#endif
 
 	void PipelineAcceleratorPool::LockForReading() const
 	{
 		_pipelineUsageLock.lock_shared();
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			assert(std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this) == s_poolsLockedForThread.end());
-			s_poolsLockedForThread.push_back(this);
+			if (!s_poolsLockedForThread) s_poolsLockedForThread = CreatePoolsLockedForThread();
+			assert(std::find(s_poolsLockedForThread->begin(), s_poolsLockedForThread->end(), this) == s_poolsLockedForThread->end());
+			s_poolsLockedForThread->push_back(this);
 		#endif
 	}
 
 	void PipelineAcceleratorPool::UnlockForReading() const
 	{
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			auto i = std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this);
-			assert(i != s_poolsLockedForThread.end());
-			s_poolsLockedForThread.erase(i);
+			if (!s_poolsLockedForThread) s_poolsLockedForThread = CreatePoolsLockedForThread();
+			auto i = std::find(s_poolsLockedForThread->begin(), s_poolsLockedForThread->end(), this);
+			assert(i != s_poolsLockedForThread->end());
+			s_poolsLockedForThread->erase(i);
 		#endif
 		_pipelineUsageLock.unlock_shared();	
 	}
@@ -613,7 +637,8 @@ namespace RenderCore { namespace Techniques
 	#if defined(PA_ADDITIONAL_THREADING_CHECKS)
 		void AssertPipelineUsageLock(const PipelineAcceleratorPool& pool)
 		{
-			assert(std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), &pool) != s_poolsLockedForThread.end());
+			if (!s_poolsLockedForThread) s_poolsLockedForThread = CreatePoolsLockedForThread();
+			assert(std::find(s_poolsLockedForThread->begin(), s_poolsLockedForThread->end(), &pool) != s_poolsLockedForThread->end());
 		}
 	#endif
 
@@ -660,13 +685,14 @@ namespace RenderCore { namespace Techniques
 		ScopedLock(_constructionLock);
 
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			assert(std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this) == s_poolsLockedForThread.end());
-			s_poolsLockedForThread.push_back(this);
+			if (!s_poolsLockedForThread) s_poolsLockedForThread = CreatePoolsLockedForThread();
+			assert(std::find(s_poolsLockedForThread->begin(), s_poolsLockedForThread->end(), this) == s_poolsLockedForThread->end());
+			s_poolsLockedForThread->push_back(this);
 			auto cleanup = AutoCleanup(
 				[this]() {
-					auto i = std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this);
-					assert(i != s_poolsLockedForThread.end());
-					s_poolsLockedForThread.erase(i);
+					auto i = std::find(s_poolsLockedForThread->begin(), s_poolsLockedForThread->end(), this);
+					assert(i != s_poolsLockedForThread->end());
+					s_poolsLockedForThread->erase(i);
 				});
 		#endif
 
@@ -1334,13 +1360,14 @@ namespace RenderCore { namespace Techniques
 		ScopedLock(_constructionLock);
 
 		#if defined(PA_ADDITIONAL_THREADING_CHECKS)
-			assert(std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this) == s_poolsLockedForThread.end());
-			s_poolsLockedForThread.push_back(this);
+			if (!s_poolsLockedForThread) s_poolsLockedForThread = CreatePoolsLockedForThread();
+			assert(std::find(s_poolsLockedForThread->begin(), s_poolsLockedForThread->end(), this) == s_poolsLockedForThread->end());
+			s_poolsLockedForThread->push_back(this);
 			auto cleanup = AutoCleanup(
 				[this]() {
-					auto i = std::find(s_poolsLockedForThread.begin(), s_poolsLockedForThread.end(), this);
-					assert(i != s_poolsLockedForThread.end());
-					s_poolsLockedForThread.erase(i);
+					auto i = std::find(s_poolsLockedForThread->begin(), s_poolsLockedForThread->end(), this);
+					assert(i != s_poolsLockedForThread->end());
+					s_poolsLockedForThread->erase(i);
 				});
 		#endif
 
