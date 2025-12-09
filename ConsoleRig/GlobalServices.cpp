@@ -130,12 +130,11 @@ namespace ConsoleRig
             // logging
         auto& serv = CrossModule::GetInstance()._services;
 		OSServices::ModuleId mainModuleId = 0;
-        if (serv.TryCall(Fn_ConsoleMainModule, mainModuleId) && mainModuleId == OSServices::GetCurrentModuleId()) {
+        if (serv.TryCall(mainModuleId, Fn_ConsoleMainModule) && mainModuleId == OSServices::GetCurrentModuleId()) {
             serv.Remove(Fn_GetConsole);
             serv.Remove(Fn_ConsoleMainModule);
-        }
-
-		serv.InvalidateCurrentModule();
+        } else
+    		serv.InvalidateCurrentModule();     // don't invalidate the main module -- because we'll have some registration from before MainRig_Attach
 
 		Console::SetInstance(nullptr);
 
