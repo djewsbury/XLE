@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.3)
+cmake_minimum_required (VERSION 3.15)
 
 add_custom_command(
 	OUTPUT ${XLE_BINARY_OUTPUT_DIR_${CMAKE_BUILD_TYPE}}/base.pak
