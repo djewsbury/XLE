@@ -10,18 +10,10 @@
 #define HAS_SPIRV_HEADERS
 #if defined(HAS_SPIRV_HEADERS)
 
-#include "../../../OSServices/Log.h"
 #include "../../../Utility/MemoryUtils.h"
 #include "../../../Utility/StringFormat.h"
 #include "../../../Utility/FastParseValue.h"
-
-// Vulkan SDK includes -- 
-#pragma push_macro("new")
-#undef new
-#define ENABLE_OPT 1
-#include "glslang/SPIRV/spirv.hpp"
-#include "glslang/SPIRV/SpvTools.h"
-#pragma pop_macro("new")
+#include "spirv-headers/spirv.hpp"
 
 namespace RenderCore { namespace Metal_Vulkan
 {
