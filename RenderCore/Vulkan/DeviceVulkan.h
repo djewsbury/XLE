@@ -56,15 +56,19 @@ namespace RenderCore { namespace ImplVulkan
         const TextureDesc& GetBufferDesc() { return _bufferDesc; }
 
 		void PresentToQueue(Metal_Vulkan::SubmissionQueue& queue, IteratorRange<const VkSemaphore*>);
-        std::shared_ptr<IResource> AcquireNextImage(Metal_Vulkan::SubmissionQueue&, HierarchicalCPUProfiler*);
+
+        struct AcquireResult
+        {
+            std::shared_ptr<IResource> _image;
+            VkSemaphore _onAcquireComplete;
+            VkSemaphore _onCommandBufferComplete;
+        };
+        AcquireResult AcquireNextImage(Metal_Vulkan::SubmissionQueue&, HierarchicalCPUProfiler*);
 
 		struct PresentImageAttachedSyncs
 		{
-			VulkanUniquePtr<VkSemaphore>    _onAcquireComplete;
 			VulkanUniquePtr<VkSemaphore>    _onCommandBufferComplete;
         };
-
-		PresentImageAttachedSyncs& GetPresentImageAttachedSyncs() { return _presentImageAttachedSyncs[0]; }
 
         bool ReadyForRendering() const { return _swapChain != nullptr; }
 
@@ -87,7 +91,8 @@ namespace RenderCore { namespace ImplVulkan
         std::vector<std::shared_ptr<IResource>> _images;
         unsigned		_lastAcquiredImage;
 
-        PresentImageAttachedSyncs   _presentImageAttachedSyncs[3];      // zero always active
+        std::vector<PresentImageAttachedSyncs>   _presentImageAttachedSyncs;
+        VulkanUniquePtr<VkSemaphore>            _onAcquireComplete[3];
 
         std::weak_ptr<Device> _device;
 
@@ -176,7 +181,8 @@ namespace RenderCore { namespace ImplVulkan
 		Metal_Vulkan::ObjectFactory*	    _factory;
 		Metal_Vulkan::GlobalPools*			_globalPools;
 
-        VkSemaphore                         _nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
+        VkSemaphore     _nextQueueShouldWaitOnAcquire = VK_NULL_HANDLE;
+        VkSemaphore     _nextPresentCommandBufferSemaphore = VK_NULL_HANDLE;
 
         std::shared_ptr<PrimaryCommandBufferChain> _primaryCommandBufferChain;
         std::vector<Metal_Vulkan::CommandList> _interimCmdLists;

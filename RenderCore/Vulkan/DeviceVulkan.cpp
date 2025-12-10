@@ -2567,7 +2567,7 @@ namespace RenderCore { namespace ImplVulkan
         SwapChainProperties props;
 		if (desc._width*desc._height) {
 			props = DecideSwapChainProperties(_factory->GetPhysicalDevice(), _surface.get(), desc);
-			assert(props._desiredNumberOfImages <= dimof(_presentImageAttachedSyncs));
+			assert(props._desiredNumberOfImages <= dimof(_onAcquireComplete));
 		}
 
 		// wait for idle before we delete the old swap chain
@@ -2642,15 +2642,15 @@ namespace RenderCore { namespace ImplVulkan
 		*(list.end()-1) = std::move(temp);
 	}
 
-    auto PresentationChain::AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue, HierarchicalCPUProfiler* profiler) -> std::shared_ptr<IResource>
+    auto PresentationChain::AcquireNextImage(Metal_Vulkan::SubmissionQueue& queue, HierarchicalCPUProfiler* profiler) -> AcquireResult
     {
 		#if defined(_DEBUG)
 			if (!_swapChain)
 				Throw(std::runtime_error("Attempting to acquire image from zero-sized (or otherwise invalid) swapchain"));
 		#endif
 
-		RollList(MakeIteratorRange(_presentImageAttachedSyncs, &_presentImageAttachedSyncs[GetImageCount()]));
-        auto& imageAttachedSync = _presentImageAttachedSyncs[0];
+		// shift the next "_onAcquireComplete" semaphore into position zero
+		RollList(MakeIteratorRange(_onAcquireComplete, &_onAcquireComplete[GetImageCount()]));
 
 		// Note that vkAcquireNextImageKHR can be guaranteed to be non-blocking if 
 		// we have VK_PRESENT_MODE_MAILBOX_KHR, and surfCapabilities.minImageCount+1 images.
@@ -2665,7 +2665,7 @@ namespace RenderCore { namespace ImplVulkan
 			auto res = vkAcquireNextImageKHR(
 				_underlyingDevice, _swapChain.get(), 
 				timeout,
-				imageAttachedSync._onAcquireComplete.get(), VK_NULL_HANDLE,
+				_onAcquireComplete[0].get(), VK_NULL_HANDLE,
 				&nextImageIndex);
 			_lastAcquiredImage = nextImageIndex;
 
@@ -2675,7 +2675,11 @@ namespace RenderCore { namespace ImplVulkan
 				Throw(VulkanAPIFailure(res, "Failure during acquire next image"));
 		}
 
-		return _images[_lastAcquiredImage];
+		return AcquireResult {
+			_images[_lastAcquiredImage],
+			_onAcquireComplete[0].get(),
+			_presentImageAttachedSyncs[_lastAcquiredImage]._onCommandBufferComplete.get()
+		};
     }
 
     static std::vector<VkImage> GetImages(VkDevice dev, VkSwapchainKHR swapChain)
@@ -2731,7 +2735,7 @@ namespace RenderCore { namespace ImplVulkan
     {
         _lastAcquiredImage = ~0x0u;
         auto props = DecideSwapChainProperties(factory.GetPhysicalDevice(), _surface.get(), requestDesc);
-		assert(props._desiredNumberOfImages <= dimof(_presentImageAttachedSyncs));
+		assert(props._desiredNumberOfImages <= dimof(_onAcquireComplete));
         _swapChain = CreateUnderlyingSwapChain(_underlyingDevice, _surface.get(), nullptr, props);
 
 		_desc = AsPresentationChainDesc(props);
@@ -2748,10 +2752,11 @@ namespace RenderCore { namespace ImplVulkan
         // Create the synchronisation primitives
         // This pattern is similar to the "Hologram" sample in the Vulkan SDK
 		// We create all of the synchronization primitives for images because the count of images may change later
-        for (unsigned c=0; c<dimof(_presentImageAttachedSyncs); ++c) {
-            _presentImageAttachedSyncs[c]._onCommandBufferComplete = factory.CreateSemaphore();
-            _presentImageAttachedSyncs[c]._onAcquireComplete = factory.CreateSemaphore();
-		}
+		_presentImageAttachedSyncs.resize(_images.size());
+        for (auto& syncs:_presentImageAttachedSyncs)
+            syncs._onCommandBufferComplete = factory.CreateSemaphore();
+		for (auto& syncs:_onAcquireComplete)
+			syncs = factory.CreateSemaphore();
     }
 
     PresentationChain::~PresentationChain()
@@ -2916,8 +2921,9 @@ namespace RenderCore { namespace ImplVulkan
 		// If you trigger this assert, it means that we didn't get a successful Present() following the previous BeginFrame()
 		assert(_nextQueueShouldWaitOnAcquire == VK_NULL_HANDLE);
 		auto nextImage = swapChain->AcquireNextImage(*_submissionQueue, _cpuProfiler);
-		_nextQueueShouldWaitOnAcquire = swapChain->GetPresentImageAttachedSyncs()._onAcquireComplete.get();
-        return std::move(nextImage);
+		_nextQueueShouldWaitOnAcquire = nextImage._onAcquireComplete;
+		_nextPresentCommandBufferSemaphore = nextImage._onCommandBufferComplete;
+        return std::move(nextImage._image);
 	}
 
 	std::shared_ptr<Metal_Vulkan::DeviceContext> ThreadContext::BeginFrameRenderingCommandList()
@@ -2954,13 +2960,13 @@ namespace RenderCore { namespace ImplVulkan
 		assert(_primaryCommandBufferChain);
 
 		auto* swapChain = checked_cast<PresentationChain*>(&chain);
-		auto& presentImageSyncs = swapChain->GetPresentImageAttachedSyncs();
 		auto& cmdListSyncs = _primaryCommandBufferChain->GetCommandListAttachedSyncs();
 		assert(_metalContext->HasActiveCommandList());
 
 		//////////////////////////////////////////////////////////////////
 
-		std::pair<VkSemaphore, uint64_t> commandBufferSignal = std::make_pair(presentImageSyncs._onCommandBufferComplete.get(), 0);
+		assert(_nextPresentCommandBufferSemaphore);
+		std::pair<VkSemaphore, uint64_t> commandBufferSignal = std::make_pair(_nextPresentCommandBufferSemaphore, 0);
 		bool commandBufferSubmitted = false;
 		TRY {
 			auto immediateCommands = _metalContext->ResolveCommandList();
@@ -2975,6 +2981,8 @@ namespace RenderCore { namespace ImplVulkan
 			errorMsgBuffer = e.what();
 			cmdListSyncs._presentFenceWaitable = false;		// we cannot wait on this fence, because the cmd list was not submitted
 		} CATCH_END
+
+		_nextPresentCommandBufferSemaphore = VK_NULL_HANDLE;
 
 		PumpDestructionQueues();
 
