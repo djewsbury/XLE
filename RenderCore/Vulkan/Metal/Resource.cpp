@@ -870,7 +870,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (bufferDesc._type == Resource::Desc::Type::Texture)
 			mips = (unsigned)std::min(mips, bufferDesc._textureDesc._mipCount);
 		unsigned width = imageDesc._textureDesc._width, height = imageDesc._textureDesc._height, depth = imageDesc._textureDesc._depth;
-		auto minDims = (GetCompressionType(imageDesc._textureDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
+		auto compressionParam = GetCompressionParameters(imageDesc._textureDesc._format);
+		assert(compressionParam._blockBytes);
 		auto dstAspectMask = AsImageAspectMask(imageDesc._textureDesc._format);
 
 		// The buffer desc doesn't need to be registered as a "texture" type; but if it is, let's
@@ -892,8 +893,9 @@ namespace RenderCore { namespace Metal_Vulkan
 			for (unsigned a=0; a<arrayCount; ++a) {
 				auto& c = result[m+a*mips];
 				c.bufferOffset = mipOffset._offset + mipOffset._pitches._arrayPitch * a;
-				c.bufferRowLength = std::max(width, minDims);
-				c.bufferImageHeight = std::max(height, minDims);
+				assert(mipOffset._pitches._rowPitch && mipOffset._pitches._slicePitch);
+				c.bufferRowLength = mipOffset._pitches._rowPitch / compressionParam._blockBytes * compressionParam._blockWidth;
+				c.bufferImageHeight = mipOffset._pitches._slicePitch / mipOffset._pitches._rowPitch * compressionParam._blockHeight;
 				c.imageSubresource = VkImageSubresourceLayers{ dstAspectMask, m, a, 1 };
 				c.imageOffset = VkOffset3D{0,0,0};
 				c.imageExtent = VkExtent3D{std::max(width, 1u), std::max(height, 1u), std::max(depth, 1u)};
@@ -1164,7 +1166,8 @@ namespace RenderCore { namespace Metal_Vulkan
 					auto& copyOp = copyOps[m*arrayLayerCount+a];
 
 					auto dstSubResDesc = CalculateMipMapDesc(dstDesc._textureDesc, dst._subResource._mip+m);
-					auto minDims = (GetCompressionType(dstDesc._textureDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
+					auto compressionParam = GetCompressionParameters(dstDesc._textureDesc._format);
+					assert(compressionParam._blockBytes);
 
 					copyOp.imageSubresource = VkImageSubresourceLayers{ dstAspectMask, dst._subResource._mip+m, dst._subResource._arrayLayer+a, 1 };
 					copyOp.imageOffset = VkOffset3D{(int32_t)dst._leftTopFront[0], (int32_t)dst._leftTopFront[1], (int32_t)dst._leftTopFront[2]};
@@ -1176,8 +1179,9 @@ namespace RenderCore { namespace Metal_Vulkan
 						auto srcSubResDesc = CalculateMipMapDesc(srcDesc._textureDesc, dst._subResource._mip+m);
 
 						copyOp.bufferOffset += srcMipOffset._offset;
-						copyOp.bufferRowLength = std::max(srcSubResDesc._width, minDims);
-						copyOp.bufferImageHeight = std::max(srcSubResDesc._height, minDims);
+						assert(srcMipOffset._pitches._rowPitch && srcMipOffset._pitches._slicePitch);
+						copyOp.bufferRowLength = srcMipOffset._pitches._rowPitch / compressionParam._blockBytes * compressionParam._blockWidth;
+						copyOp.bufferImageHeight = srcMipOffset._pitches._slicePitch / srcMipOffset._pitches._rowPitch * compressionParam._blockHeight;
 
 						if (src._flags & CopyPartial_Src::Flags::EnablePartialSubresourceArea) {
 							assert(srcMipOffset._pitches == src._partialSubresourcePitches);
@@ -1195,16 +1199,17 @@ namespace RenderCore { namespace Metal_Vulkan
 					} else {
 						auto srcMipOffset = GetSubResourceOffset(dstDesc._textureDesc, src._subResource._mip+m, src._subResource._arrayLayer+a);
 						copyOp.bufferOffset += srcMipOffset._offset;
-						copyOp.bufferRowLength = std::max(dstSubResDesc._width, minDims);
-						copyOp.bufferImageHeight = std::max(dstSubResDesc._height, minDims);
+						assert(srcMipOffset._pitches._rowPitch && srcMipOffset._pitches._slicePitch);
+						copyOp.bufferRowLength = srcMipOffset._pitches._rowPitch / compressionParam._blockBytes * compressionParam._blockWidth;
+						copyOp.bufferImageHeight = srcMipOffset._pitches._slicePitch / srcMipOffset._pitches._rowPitch * compressionParam._blockHeight;
 
 						if (src._flags & CopyPartial_Src::Flags::EnablePartialSubresourceArea) {
 							auto bpp = BitsPerPixel(dstDesc._textureDesc._format);
 							assert((src._partialSubresourcePitches._rowPitch % (bpp / 8)) == 0);
 							assert((src._partialSubresourcePitches._slicePitch % src._partialSubresourcePitches._rowPitch) == 0);
 							assert((src._partialSubresourcePitches._arrayPitch % src._partialSubresourcePitches._slicePitch) == 0);
-							copyOp.bufferRowLength = src._partialSubresourcePitches._rowPitch / (bpp / 8);
-							copyOp.bufferImageHeight = src._partialSubresourcePitches._slicePitch / src._partialSubresourcePitches._rowPitch;
+							copyOp.bufferRowLength = src._partialSubresourcePitches._rowPitch / compressionParam._blockBytes * compressionParam._blockWidth;
+							copyOp.bufferImageHeight = src._partialSubresourcePitches._slicePitch / src._partialSubresourcePitches._rowPitch * compressionParam._blockHeight;
 							copyOp.bufferOffset += 
 								src._leftTopFront[2] * src._partialSubresourcePitches._slicePitch
 								+ src._leftTopFront[1] * src._partialSubresourcePitches._rowPitch
@@ -1258,7 +1263,8 @@ namespace RenderCore { namespace Metal_Vulkan
 					auto& copyOp = copyOps[m*arrayLayerCount+a];
 
 					auto srcSubResDesc = CalculateMipMapDesc(srcDesc._textureDesc, src._subResource._mip+m);
-					auto minDims = (GetCompressionType(srcSubResDesc._format) == FormatCompressionType::BlockCompression) ? 4u : 1u;
+					auto compressionParam = GetCompressionParameters(srcSubResDesc._format);
+					assert(compressionParam._blockBytes);
 
 					copyOp.bufferOffset = 0;
 					if (dst._leftTopFrontIsLinearBufferOffset)
@@ -1272,15 +1278,17 @@ namespace RenderCore { namespace Metal_Vulkan
 								  dst._leftTopFront[2] * destMipOffset._pitches._slicePitch
 								+ dst._leftTopFront[1] * destMipOffset._pitches._rowPitch
 								+ dst._leftTopFront[0] * BitsPerPixel(dstDesc._textureDesc._format) / 8;
-						auto dstSubResDesc = CalculateMipMapDesc(dstDesc._textureDesc, dst._subResource._mip+m);
-						copyOp.bufferRowLength = std::max(dstSubResDesc._width, minDims);
-						copyOp.bufferImageHeight = std::max(dstSubResDesc._height, minDims);
+						
+						assert(destMipOffset._pitches._rowPitch && destMipOffset._pitches._slicePitch);
+						copyOp.bufferRowLength = destMipOffset._pitches._rowPitch / compressionParam._blockBytes * compressionParam._blockWidth;
+						copyOp.bufferImageHeight = destMipOffset._pitches._slicePitch / destMipOffset._pitches._rowPitch * compressionParam._blockHeight;
 					} else {
 						auto destMipOffset = GetSubResourceOffset(srcDesc._textureDesc, dst._subResource._mip+m, dst._subResource._arrayLayer+a);
 						copyOp.bufferOffset += destMipOffset._offset;
 						assert(dst._leftTopFrontIsLinearBufferOffset || (dst._leftTopFront[0] == 0 && dst._leftTopFront[1] == 0 && dst._leftTopFront[2] == 0));
-						copyOp.bufferRowLength = std::max(srcSubResDesc._width, minDims);
-						copyOp.bufferImageHeight = std::max(srcSubResDesc._height, minDims);
+						assert(destMipOffset._pitches._rowPitch && destMipOffset._pitches._slicePitch);
+						copyOp.bufferRowLength = destMipOffset._pitches._rowPitch / compressionParam._blockBytes * compressionParam._blockWidth;
+						copyOp.bufferImageHeight = destMipOffset._pitches._slicePitch / destMipOffset._pitches._rowPitch * compressionParam._blockHeight;
 					}
 
 					copyOp.imageSubresource = VkImageSubresourceLayers{ srcAspectMask, 0, 0, 1 };

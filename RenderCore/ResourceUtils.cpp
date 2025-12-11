@@ -237,7 +237,7 @@ namespace RenderCore
                 if (mipIterator == mipIndex) {
                     mipOffset._offset = workingOffset;
                     mipOffset._size = mipSize;
-                    mipOffset._pitches._rowPitch = blockWidth * bbp * 16u / 8u;
+                    mipOffset._pitches._rowPitch = blockWidth * compressionParam._blockBytes;
                     mipOffset._pitches._slicePitch = mipOffset._pitches._rowPitch * blockHeight;
                 }
                 
