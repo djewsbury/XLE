@@ -21,6 +21,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../OSServices/Log.h"
+#include "../../ConsoleRig/Console.h"
 
 using namespace Utility::Literals;
 
@@ -329,7 +330,9 @@ namespace RenderCore { namespace LightingEngine
 			auto mergedFB = stitchingContext.TryStitchFrameBufferDesc(MakeIteratorRange(stitchOp), fbProps);
 
 			#if defined(_DEBUG)
-				Log(Warning) << "Merged fragment in lighting technique:" << std::endl << mergedFB._log << std::endl;
+				if (Tweakable("LightingTechniqueLogMergedFragment", false)) {
+					Log(Warning) << "Merged fragment in lighting technique:" << std::endl << mergedFB._log << std::endl;
+				}
 			#endif
 
 			stitchingContext.UpdateAttachments(mergedFB);
