@@ -7,6 +7,7 @@
 #pragma once
 
 #include "VulkanCore.h"
+#include "ExtensionFunctions.h"         // for VulkanDeviceFeatures
 #include "../../IDevice_Forward.h"
 #include "../../DeviceInitialization.h"     // for DeviceFeatures
 #include "../../ResourceDesc.h"     // for AllocationRules
@@ -162,6 +163,7 @@ namespace RenderCore { namespace Metal_Vulkan
         const VkPhysicalDeviceFeatures& GetPhysicalDeviceFeatures() const { return *_physDevFeatures; }
         ExtensionFunctions& GetExtensionFunctions() { return *_extensionFunctions; }
         const DeviceFeatures& GetXLEFeatures() const { return _xleFeatures; }
+        const VulkanDeviceFeatures& GetVulkanDeviceFeatures() const { return _vulkanDeviceFeatures; }
 
 		std::shared_ptr<IDestructionQueue> CreateMarkerTrackingDestroyer(const std::shared_ptr<IAsyncTracker>&);
 		void SetDefaultDestroyer(const std::shared_ptr<IDestructionQueue>&);
@@ -184,6 +186,7 @@ namespace RenderCore { namespace Metal_Vulkan
             VkInstance instance,
             VkPhysicalDevice physDev, VulkanSharedPtr<VkDevice> device,
             const DeviceFeatures& xleFeatures,
+            const VulkanDeviceFeatures& vulkanDeviceFeatures,
             std::shared_ptr<ExtensionFunctions> extensionFunctions);
 		ObjectFactory();
 		~ObjectFactory();
@@ -207,6 +210,7 @@ namespace RenderCore { namespace Metal_Vulkan
         std::unique_ptr<VkPhysicalDeviceFeatures> _physDevFeatures;
         std::shared_ptr<ExtensionFunctions> _extensionFunctions;
         DeviceFeatures _xleFeatures;
+        VulkanDeviceFeatures _vulkanDeviceFeatures;
 
         #if defined(_DEBUG)
             std::vector<std::weak_ptr<IDestructionQueue>> _associatedDestructionQueues;

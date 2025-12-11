@@ -613,6 +613,7 @@ namespace RenderCore { namespace Metal_Vulkan
     , _physDevFeatures(std::move(moveFrom._physDevFeatures))
     , _extensionFunctions(std::move(moveFrom._extensionFunctions))
     , _xleFeatures(std::move(moveFrom._xleFeatures))
+    , _vulkanDeviceFeatures(std::move(moveFrom._vulkanDeviceFeatures))
     , _vmaAllocator(std::move(moveFrom._vmaAllocator))
     {
         moveFrom._vmaAllocator = nullptr;
@@ -646,6 +647,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _physDevFeatures = std::move(moveFrom._physDevFeatures);
         _extensionFunctions = std::move(moveFrom._extensionFunctions);
         _xleFeatures = std::move(moveFrom._xleFeatures);
+        _vulkanDeviceFeatures = std::move(moveFrom._vulkanDeviceFeatures);
         _vmaAllocator = std::move(moveFrom._vmaAllocator); moveFrom._vmaAllocator = nullptr;
         #if defined(_DEBUG)
             _associatedDestructionQueues = std::move(moveFrom._associatedDestructionQueues);
@@ -656,8 +658,8 @@ namespace RenderCore { namespace Metal_Vulkan
         return *this;
     }
 
-    ObjectFactory::ObjectFactory(VkInstance instance,  VkPhysicalDevice physDev, VulkanSharedPtr<VkDevice> device, const DeviceFeatures& xleFeatures, std::shared_ptr<ExtensionFunctions> extensionFunctions)
-    : _physDev(physDev), _device(device), _extensionFunctions(extensionFunctions), _xleFeatures(xleFeatures)
+    ObjectFactory::ObjectFactory(VkInstance instance,  VkPhysicalDevice physDev, VulkanSharedPtr<VkDevice> device, const DeviceFeatures& xleFeatures, const VulkanDeviceFeatures& vulkanDeviceFeatures, std::shared_ptr<ExtensionFunctions> extensionFunctions)
+    : _physDev(physDev), _device(device), _extensionFunctions(extensionFunctions), _xleFeatures(xleFeatures), _vulkanDeviceFeatures(vulkanDeviceFeatures)
     {
         _memProps = std::make_unique<VkPhysicalDeviceMemoryProperties>(VkPhysicalDeviceMemoryProperties{});
         vkGetPhysicalDeviceMemoryProperties(physDev, _memProps.get());

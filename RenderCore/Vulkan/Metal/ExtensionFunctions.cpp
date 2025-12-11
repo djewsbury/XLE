@@ -7,7 +7,7 @@
 
 namespace RenderCore { namespace Metal_Vulkan
 {
-    ExtensionFunctions::ExtensionFunctions(VkInstance instance, const DeviceFeatures& xleFeatures)
+    ExtensionFunctions::ExtensionFunctions(VkInstance instance, const DeviceFeatures& xleFeatures, const VulkanDeviceFeatures& vulkanFeatures)
     : _instance(instance)
     {
         _beginTransformFeedback = (PFN_vkCmdBeginTransformFeedbackEXT)vkGetInstanceProcAddr(instance, "vkCmdBeginTransformFeedbackEXT");
@@ -24,7 +24,7 @@ namespace RenderCore { namespace Metal_Vulkan
         _signalSemaphore = (PFN_vkSignalSemaphoreKHR)vkGetInstanceProcAddr(instance, "vkSignalSemaphoreKHR");
         _waitSemaphores = (PFN_vkWaitSemaphoresKHR)vkGetInstanceProcAddr(instance, "vkWaitSemaphoresKHR");
 
-        if (xleFeatures._vulkanRenderPass2)
+        if (vulkanFeatures._renderPass2)
             _createRenderPass2 = (PFN_vkCreateRenderPass2KHR)vkGetInstanceProcAddr(instance, "vkCreateRenderPass2KHR");
         else
             _createRenderPass2 = nullptr;

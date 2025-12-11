@@ -11,15 +11,15 @@
 #include "Metal/ObjectFactory.h"
 #include "Metal/DeviceContext.h"
 #include "Metal/Pools.h"
-#include "Metal/IncludeVulkan.h"
 #include "Metal/FrameBuffer.h"
 #include "Metal/TextureView.h"
+#include "Metal/ExtensionFunctions.h"
+#include "Metal/IncludeVulkan.h"
 #include "../../ConsoleRig/AttachablePtr.h"
 #include "../../Utility/IntrusivePtr.h"
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
 #include <vector>
-#include <type_traits>
 
 namespace RenderCore { namespace Metal_Vulkan { class SubmissionQueue; class GlobalsContainer; }}
 
@@ -32,6 +32,9 @@ namespace RenderCore { namespace ImplVulkan
 		unsigned _graphicsQueueFamily = ~0u;
         unsigned _dedicatedTransferQueueFamily = ~0u;
         unsigned _dedicatedComputeQueueFamily = ~0u;
+
+        // queried Vulkan-specific configuration
+        Metal_Vulkan::VulkanDeviceFeatures _vulkanDeviceFeatures;
 	};
 
     template<typename Type>
@@ -241,7 +244,7 @@ namespace RenderCore { namespace ImplVulkan
 
         Device(
             VulkanSharedPtr<VkInstance> instance,
-            SelectedPhysicalDevice physDev,
+            const SelectedPhysicalDevice& physDev,
             const DeviceFeatures& xleFeatures,
             const APIFeatures& apiFeatures);
         ~Device();

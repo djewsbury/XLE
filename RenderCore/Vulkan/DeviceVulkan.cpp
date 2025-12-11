@@ -1310,7 +1310,7 @@ namespace RenderCore { namespace ImplVulkan
 	}
 
 	static VulkanSharedPtr<VkDevice> CreateUnderlyingDevice(
-		SelectedPhysicalDevice physDev,
+		const SelectedPhysicalDevice& physDev,
 		const DeviceFeatures& xleFeatures,
 		bool enableDebugLayer)
 	{
@@ -1474,7 +1474,7 @@ namespace RenderCore { namespace ImplVulkan
 		if (xleFeatures._viewInstancingRenderPasses)
 			deviceExtensions[deviceExtensionCount++] = VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME; 	// promoted to Vulkan 1.2, HLSL compiler likes to require it
 
-		if (xleFeatures._vulkanRenderPass2)
+		if (physDev._vulkanDeviceFeatures._renderPass2)
 			deviceExtensions[deviceExtensionCount++] = VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME; 	// promoted to Vulkan 1.2
 
 		if (enableDebugLayer)
@@ -1717,6 +1717,7 @@ namespace RenderCore { namespace ImplVulkan
 		bool hasRenderPass2Ext = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasMutableSwapchainFormat = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME); }) != ext._extensions.end();
 		bool hasMeshShaderExt = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_EXT_MESH_SHADER_EXTENSION_NAME); }) != ext._extensions.end();
+		bool hasSwapchainMaintenance1 = std::find_if(ext._extensions.begin(), ext._extensions.end(), [](const auto& q) { return XlEqString(q.extensionName, VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME); }) != ext._extensions.end();
 
 		DeviceFeatures result;
 
@@ -1770,7 +1771,8 @@ namespace RenderCore { namespace ImplVulkan
 		result._dedicatedTransferQueue = _physicalDevices[configurationIdx]._dedicatedTransferQueueFamily != ~0u;
 		result._dedicatedComputeQueue = _physicalDevices[configurationIdx]._dedicatedComputeQueueFamily != ~0u;
 
-		result._vulkanRenderPass2 = (props.properties.apiVersion >= VK_API_VERSION_1_2) || hasRenderPass2Ext;
+		_physicalDevices[configurationIdx]._vulkanDeviceFeatures._renderPass2 = (props.properties.apiVersion >= VK_API_VERSION_1_2) || hasRenderPass2Ext;
+		_physicalDevices[configurationIdx]._vulkanDeviceFeatures._hasSwapchainMaintenance1 = hasSwapchainMaintenance1;
 
 		return result;
 	}
@@ -2043,7 +2045,7 @@ namespace RenderCore { namespace ImplVulkan
 
     Device::Device(
 		VulkanSharedPtr<VkInstance> instance,
-    	SelectedPhysicalDevice physDev,
+    	const SelectedPhysicalDevice& physDev,
 		const DeviceFeatures& xleFeatures,
 		const APIFeatures& apiFeatures)
 	: _instance(std::move(instance))
@@ -2053,9 +2055,9 @@ namespace RenderCore { namespace ImplVulkan
 		_initializationThread = std::this_thread::get_id();
 
 		_underlying = CreateUnderlyingDevice(_physDev, xleFeatures, apiFeatures._debugValidation);
-		auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get(), xleFeatures);
+		auto extensionFunctions = std::make_shared<Metal_Vulkan::ExtensionFunctions>(_instance.get(), xleFeatures, physDev._vulkanDeviceFeatures);
 		_globalsContainer = std::make_shared<Metal_Vulkan::GlobalsContainer>();
-		_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_instance.get(), _physDev._dev, _underlying, xleFeatures, extensionFunctions};
+		_globalsContainer->_objectFactory = Metal_Vulkan::ObjectFactory{_instance.get(), _physDev._dev, _underlying, xleFeatures, physDev._vulkanDeviceFeatures, extensionFunctions};
 		auto& objFactory = _globalsContainer->_objectFactory;
 		auto& pools = _globalsContainer->_pools;
 

@@ -897,7 +897,7 @@ namespace RenderCore { namespace Metal_Vulkan
         const Metal_Vulkan::ObjectFactory& factory,
         const FrameBufferDesc& layout)
 	{
-		if (factory.GetXLEFeatures()._vulkanRenderPass2)
+		if (factory.GetVulkanDeviceFeatures()._renderPass2)
 			return CreateVulkanRenderPass_V2(factory, layout);
 		return CreateVulkanRenderPass_V1(factory, layout);
 	}

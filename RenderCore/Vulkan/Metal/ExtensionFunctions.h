@@ -11,6 +11,12 @@ namespace RenderCore { class DeviceFeatures; }
 
 namespace RenderCore { namespace Metal_Vulkan
 {
+    struct VulkanDeviceFeatures
+    {
+        bool _renderPass2 = false;
+        bool _hasSwapchainMaintenance1 = false;
+    };
+
     class ExtensionFunctions
     {
     public:
@@ -32,6 +38,6 @@ namespace RenderCore { namespace Metal_Vulkan
 
         VkInstance _instance = nullptr;
 
-        ExtensionFunctions(VkInstance instance, const DeviceFeatures& xleFeatures);
+        ExtensionFunctions(VkInstance instance, const DeviceFeatures& xleFeatures, const VulkanDeviceFeatures& vulkanFeatures);
     };
 }}
