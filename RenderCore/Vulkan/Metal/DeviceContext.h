@@ -376,6 +376,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			unsigned _minImageTransferGranularityX = 0;
 			unsigned _minImageTransferGranularityY = 0;
 			unsigned _minImageTransferGranularityZ = 0;
+			bool _transferQueueBufferOffsetRule = false;
 		};
 		DeviceContextRules _rules;
 

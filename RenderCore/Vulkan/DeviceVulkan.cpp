@@ -3224,9 +3224,11 @@ namespace RenderCore { namespace ImplVulkan
 	Metal_Vulkan::DeviceContext::DeviceContextRules ThreadContext::MakeDeviceContextRules() const
 	{
 		Metal_Vulkan::DeviceContext::DeviceContextRules rules;
-		rules._minImageTransferGranularityX = _submissionQueue->GetQueueFamilyProperties().minImageTransferGranularity.width;
-		rules._minImageTransferGranularityY = _submissionQueue->GetQueueFamilyProperties().minImageTransferGranularity.height;
-		rules._minImageTransferGranularityZ = _submissionQueue->GetQueueFamilyProperties().minImageTransferGranularity.depth;
+		auto& props = _submissionQueue->GetQueueFamilyProperties();
+		rules._minImageTransferGranularityX = props.minImageTransferGranularity.width;
+		rules._minImageTransferGranularityY = props.minImageTransferGranularity.height;
+		rules._minImageTransferGranularityZ = props.minImageTransferGranularity.depth;
+		rules._transferQueueBufferOffsetRule = (props.queueFlags & (VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)) == 0;
 		return rules;
 	}
 }}

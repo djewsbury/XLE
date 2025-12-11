@@ -739,6 +739,124 @@ namespace RenderCore { namespace Metal_Vulkan
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+	static bool ValidationFailure(
+		const VkBufferImageCopy& op,
+		Resource& texture, Resource& buffer,
+		StringSection<> msg)
+	{
+		Log(Warning) << "COPY OPERATION VALIDATION FAILURE (buffer and texture): " << msg << std::endl;
+		Log(Warning) << "BUFFER: " << buffer.GetName() << ", TEXTURE: " << texture.GetName() << std::endl;
+		Log(Warning) << "bufferOffset: " << op.bufferOffset << ", bufferRowLength: " << op.bufferRowLength << ", bufferImageHeight: " << op.bufferImageHeight << std::endl;
+		Log(Warning) << "imageOffset: " << op.imageOffset.x << "," << op.imageOffset.y << "," << op.imageOffset.z << ", imageExtent: " << op.imageExtent.width << "," << op.imageExtent.height << "," << op.imageExtent.depth << std::endl;
+		return false;
+	}
+
+	static bool ValidateOperations(
+		IteratorRange<const VkBufferImageCopy*> operations,
+		const DeviceContext::DeviceContextRules& rules,
+		const TextureDesc& tDesc,
+		Resource& texture, Resource& buffer)
+	{
+		if (rules._transferQueueBufferOffsetRule) {
+			/*
+			If the queue family used to create the VkCommandPool which commandBuffer was allocated
+			from does not support VK_QUEUE_GRAPHICS_BIT or VK_QUEUE_COMPUTE_BIT, the bufferOffset
+			member of any element of pRegions must be a multiple of 4
+			*/
+			for (auto& op:operations)
+				if ((op.bufferOffset&3) != 0) return ValidationFailure(op, texture, buffer, "bufferOffset must be multiple of 4");
+		}
+
+		/*
+		The imageOffset and imageExtent members of each element of pRegions must respect the
+		image transfer granularity requirements of commandBuffer’s command pool’s queue family,
+		as described in VkQueueFamilyProperties
+		*/
+		assert(rules._minImageTransferGranularityX != 0);
+		assert(rules._minImageTransferGranularityY != 0);
+		assert(rules._minImageTransferGranularityZ != 0);
+		for (auto& op:operations) {
+			if ((op.imageOffset.x % rules._minImageTransferGranularityX) != 0) return ValidationFailure(op, texture, buffer, "minImageTransferGranularity check");
+			if ((op.imageOffset.y % rules._minImageTransferGranularityY) != 0) return ValidationFailure(op, texture, buffer, "minImageTransferGranularity check");
+			if ((op.imageOffset.z % rules._minImageTransferGranularityZ) != 0) return ValidationFailure(op, texture, buffer, "minImageTransferGranularity check");
+			if ((op.imageExtent.width % rules._minImageTransferGranularityX) != 0) return ValidationFailure(op, texture, buffer, "minImageTransferGranularity check");
+			if ((op.imageExtent.height % rules._minImageTransferGranularityY) != 0) return ValidationFailure(op, texture, buffer, "minImageTransferGranularity check");
+			if ((op.imageExtent.depth % rules._minImageTransferGranularityZ) != 0) return ValidationFailure(op, texture, buffer, "minImageTransferGranularity check");
+		}
+
+		unsigned mipCount = (unsigned)tDesc._mipCount;
+		VLA(unsigned, mipWidths, mipCount);
+		VLA(unsigned, mipHeights, mipCount);
+		for (unsigned c=0; c<mipCount; ++c) {
+			auto desc = CalculateMipMapDesc(tDesc, c);
+			mipWidths[c] = desc._width; mipHeights[c] = desc._height; 
+		}
+
+		/*
+		For each element of pRegions, bufferRowLength must be a multiple of the texel block extent
+		width/height of the VkFormat of dstImage
+		(also for bufferImageHeight, imageOffset.xyz)
+
+		also
+		For each element of pRegions, if the sum of imageOffset.x and extent.width does not equal
+		the width of the the subresource specified by srcSubresource, extent.width must be a
+		multiple of the texel block extent width of the VkFormat of dstImage
+		*/
+		auto compressionParams = GetCompressionParameters(tDesc._format);
+		if (compressionParams._blockWidth*compressionParams._blockHeight != 1) {
+			for (auto& op:operations) {
+				if ((op.bufferRowLength % compressionParams._blockWidth) != 0) return ValidationFailure(op, texture, buffer, "bufferRowLength must be multiple of blockWidth");
+				if ((op.bufferImageHeight % compressionParams._blockHeight) != 0) return ValidationFailure(op, texture, buffer, "bufferImageHeight must be multiple of blockHeight");
+				if ((op.imageOffset.x % compressionParams._blockWidth) != 0) return ValidationFailure(op, texture, buffer, "imageOffset.x must be multiple of blockWidth");
+				if ((op.imageOffset.y % compressionParams._blockHeight) != 0) return ValidationFailure(op, texture, buffer, "imageOffset.y must be multiple of blockHeight");
+
+				auto x2 = op.imageOffset.x + op.imageExtent.width, y2 = op.imageOffset.y + op.imageExtent.height;
+				if (op.imageSubresource.mipLevel >= mipCount) return ValidationFailure(op, texture, buffer, "mipLevel exceeds mipCount");
+				if (x2 != mipWidths[op.imageSubresource.mipLevel] && ((x2 % compressionParams._blockWidth) != 0)) return ValidationFailure(op, texture, buffer, "x2 must be multiple of blockWidth");
+				if (y2 != mipHeights[op.imageSubresource.mipLevel] && ((y2 % compressionParams._blockHeight) != 0)) return ValidationFailure(op, texture, buffer, "y2 must be multiple of blockHeight");
+			}
+		}
+
+		/*
+		For each element of pRegions, bufferOffset must be a multiple of the texel block size of the
+		VkFormat of dstImage
+		*/
+		for (auto& op:operations)
+			if ((op.bufferOffset % compressionParams._blockBytes) != 0) return ValidationFailure(op, texture, buffer, "bufferOffset must be a multiple of the texel block size");
+
+		/*
+		For each element of pRegions, imageOffset.x and (imageExtent.width + imageOffset.x) must
+		both be greater than or equal to 0 and less than or equal to the width of the specified
+		imageSubresource of dstImage
+		(same for y)
+		*/
+		for (auto& op:operations) {
+			auto x2 = op.imageOffset.x + op.imageExtent.width, y2 = op.imageOffset.y + op.imageExtent.height;
+			if (op.imageSubresource.mipLevel >= mipCount) return ValidationFailure(op, texture, buffer, "mipLevel exceeds mipCount");
+			if (op.imageOffset.x < 0 || op.imageOffset.x > mipWidths[op.imageSubresource.mipLevel]) return ValidationFailure(op, texture, buffer, "imageOffset.x bounds");
+			if (op.imageOffset.y < 0 || op.imageOffset.y > mipHeights[op.imageSubresource.mipLevel]) return ValidationFailure(op, texture, buffer, "imageOffset.y bounds");
+			if (x2 < 0 || x2 > mipWidths[op.imageSubresource.mipLevel]) return ValidationFailure(op, texture, buffer, "x2 bounds");
+			if (y2 < 0 || y2 > mipHeights[op.imageSubresource.mipLevel]) return ValidationFailure(op, texture, buffer, "y2 bounds");
+		}
+
+		/*
+		bufferRowLength must be 0, or greater than or equal to the width member of imageExtent
+
+		and
+		bufferImageHeight must be 0, or greater than or equal to the height member of imageExtent
+
+		and
+		imageExtent.width/height/depth must not be 0
+		*/
+		for (auto& op:operations) {
+			if (op.bufferRowLength != 0 && op.bufferRowLength < op.imageExtent.width) return ValidationFailure(op, texture, buffer, "bufferRowLength too small");
+			if (op.bufferImageHeight != 0 && op.bufferImageHeight < op.imageExtent.height) return ValidationFailure(op, texture, buffer, "bufferImageHeight too small");
+			if (op.imageExtent.width == 0 && op.imageExtent.height == 0 && op.imageExtent.depth == 0) return ValidationFailure(op, texture, buffer, "zero size image extent");
+		}
+
+		return true;
+	}
+
 	static std::vector<VkBufferImageCopy> GenerateBufferImageCopyOps(
 		const ResourceDesc& imageDesc, const ResourceDesc& bufferDesc)
 	{
@@ -863,12 +981,14 @@ namespace RenderCore { namespace Metal_Vulkan
             // This copy operation is typically used when initializing a texture via staging
             // resource.
             auto copyOps = GenerateBufferImageCopyOps(dst.AccessDesc(), src.AccessDesc());
+			ValidateOperations(copyOps, context._rules, dst.AccessDesc()._textureDesc, dst, src);
             context.GetActiveCommandList().CopyBufferToImage(
                 src.GetBuffer(),
                 dst.GetImage(), dstLayout,
                 (uint32_t)copyOps.size(), copyOps.data());
         } else {
             auto copyOps = GenerateBufferImageCopyOps(src.AccessDesc(), dst.AccessDesc());
+			ValidateOperations(copyOps, context._rules, dst.AccessDesc()._textureDesc, src, dst);
             context.GetActiveCommandList().CopyImageToBuffer(
                 src.GetImage(), srcLayout,
 				dst.GetBuffer(),
@@ -896,6 +1016,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		// 		minImageTransferGranularity property. See the entry in the vk spec for more details. Queues
 		// 		with this set to (1,1,1) are ideal, because that means no limitations -- however some queues
 		// 		can require that only full miplevels be copied at a time
+
+		const auto& devContextRules = context._rules;
 
         assert(src._resource && dst._resource);
 		auto dstResource = checked_cast<Resource*>(dst._resource);
@@ -1097,14 +1219,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					}
 				}
 
-			#if defined(_DEBUG)
-				auto alignmentRestriction = std::max(1u, BitsPerPixel(dstDesc._textureDesc._format)/8u);
-				for (unsigned c=0; c<arrayLayerCount*mipLevelCount; ++c) {
-					auto& op = copyOps[c];
-					assert((op.bufferOffset%alignmentRestriction) == 0);
-				}
-			#endif
-
+			assert(ValidateOperations(MakeIteratorRange(copyOps, copyOps+arrayLayerCount*mipLevelCount), devContextRules, dstDesc._textureDesc, *dstResource, *srcResource));
             context.GetActiveCommandList().CopyBufferToImage(
                 srcResource->GetBuffer(),
                 dstResource->GetImage(), dstLayout,
@@ -1183,6 +1298,7 @@ namespace RenderCore { namespace Metal_Vulkan
 					}
 				}
 
+			assert(ValidateOperations(MakeIteratorRange(copyOps, copyOps+arrayLayerCount*mipLevelCount), devContextRules, srcDesc._textureDesc, *srcResource, *dstResource));
             context.GetActiveCommandList().CopyImageToBuffer(
                 srcResource->GetImage(), srcLayout,
                 dstResource->GetBuffer(),
