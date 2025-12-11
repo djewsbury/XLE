@@ -397,6 +397,10 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _device = renderCoreContext.GetDevice().get();
         _threadContext = &renderCoreContext;
 		_optimalCopyBufferOffsetAlignment = _device->GetDeviceLimits()._copyBufferOffsetAlignment;
+        // On Vulkan, copying top/from a transfer queue (or more specifically, a non-graphics, non-compute queue) requires buffers
+        // to be aligned to 4 bytes. (see vkCmdCopyImageToBuffer in the spec)
+        // We'll enforce this alignment everywhere, because it won't be overly restrictive, anyway)
+        _optimalCopyBufferOffsetAlignment = std::max(4u, _optimalCopyBufferOffsetAlignment);
         _cmdListWriter = nullptr;
 	}
     ResourceUploadHelper::ResourceUploadHelper(IDevice& device, Metal::DeviceContext& metalContext)
@@ -404,12 +408,13 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         _device = &device;
         _threadContext = nullptr;
 		_optimalCopyBufferOffsetAlignment = _device->GetDeviceLimits()._copyBufferOffsetAlignment;
+        _optimalCopyBufferOffsetAlignment = std::max(4u, _optimalCopyBufferOffsetAlignment);        // (see note above)
         _cmdListWriter = &metalContext;
 	}
     ResourceUploadHelper::ResourceUploadHelper()
     {
         _cmdListWriter = nullptr; _threadContext = nullptr; _device = nullptr;
-        _optimalCopyBufferOffsetAlignment = 1;
+        _optimalCopyBufferOffsetAlignment = 4;
     }
     ResourceUploadHelper::~ResourceUploadHelper() {}
 
