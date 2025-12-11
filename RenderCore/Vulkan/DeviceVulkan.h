@@ -196,6 +196,8 @@ namespace RenderCore { namespace ImplVulkan
             IteratorRange<const std::pair<VkSemaphore, uint64_t>*> waitBeforeBegin,
             IteratorRange<const std::pair<VkSemaphore, uint64_t>*> signalOnCompletion,
             VkFence fenceOnCompletion);
+
+        Metal_Vulkan::DeviceContext::DeviceContextRules MakeDeviceContextRules() const;
     };
 
 ////////////////////////////////////////////////////////////////////////////////

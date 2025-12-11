@@ -178,11 +178,13 @@ namespace RenderCore { namespace Metal_Vulkan
 			IteratorRange<const VkSemaphore*> waitBeforePresent);
 
 		unsigned GetQueueFamilyIndex() const { return _queueFamilyIndex; }
+		const VkQueueFamilyProperties& GetQueueFamilyProperties() const { return _familyProps; }
 
 		SubmissionQueue(
 			ObjectFactory& factory,
 			VkQueue queue,
-			unsigned queueFamilyIndex);
+			unsigned queueFamilyIndex,
+			const VkQueueFamilyProperties& props);
 		~SubmissionQueue();
 		SubmissionQueue(SubmissionQueue&&) = delete;
 		SubmissionQueue& operator=(SubmissionQueue&&) = delete;
@@ -194,6 +196,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		unsigned _queueFamilyIndex;
 		uint64_t _maxInorderActuallySubmitted;
 		uint64_t _maxOutOfOrderActuallySubmitted;
+		VkQueueFamilyProperties _familyProps;
 	};
 }}
 

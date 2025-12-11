@@ -371,9 +371,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		bool IsInRenderPass() const;
 		void NextSubpass(VkSubpassContents);
 
+		struct DeviceContextRules
+		{
+			unsigned _minImageTransferGranularityX = 0;
+			unsigned _minImageTransferGranularityY = 0;
+			unsigned _minImageTransferGranularityZ = 0;
+		};
+		DeviceContextRules _rules;
+
 		DeviceContext(
 			ObjectFactory& factory, 
-			GlobalPools& globalPools);
+			GlobalPools& globalPools,
+			const DeviceContextRules& rules);
 		~DeviceContext();
 		DeviceContext(const DeviceContext&) = delete;
 		DeviceContext& operator=(const DeviceContext&) = delete;

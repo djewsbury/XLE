@@ -621,12 +621,14 @@ namespace RenderCore { namespace Metal_Vulkan
 	SubmissionQueue::SubmissionQueue(
 		ObjectFactory& factory,
 		VkQueue queue,
-		unsigned queueFamilyIndex)
+		unsigned queueFamilyIndex,
+		const VkQueueFamilyProperties& props)
 	: _underlying(queue) 
 	, _factory(&factory)
 	, _queueFamilyIndex(queueFamilyIndex)
 	, _maxInorderActuallySubmitted(0)
 	, _maxOutOfOrderActuallySubmitted(0)
+	, _familyProps(props)
 	{
 		if (factory.GetXLEFeatures()._timelineSemaphore) {
 			_gpuTracker = std::make_shared<Metal_Vulkan::SemaphoreBasedTracker>(*_factory);

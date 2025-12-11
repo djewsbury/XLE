@@ -1224,7 +1224,8 @@ namespace RenderCore { namespace Metal_Vulkan
 		return cmdList._attachedStorage.MapStorage(byteCount, type, alignment);
 	}
 
-	DeviceContext::DeviceContext(ObjectFactory& factory, GlobalPools& globalPools)
+	DeviceContext::DeviceContext(ObjectFactory& factory, GlobalPools& globalPools, const DeviceContextRules& rules)
+	: _rules(rules)
 	{
 		_sharedState = std::make_shared<VulkanEncoderSharedState>(factory, globalPools);
 	}

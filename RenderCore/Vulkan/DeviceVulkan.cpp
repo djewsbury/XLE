@@ -2061,13 +2061,17 @@ namespace RenderCore { namespace ImplVulkan
 		auto& objFactory = _globalsContainer->_objectFactory;
 		auto& pools = _globalsContainer->_pools;
 
-		_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._graphicsQueueFamily), _physDev._graphicsQueueFamily);
+		auto queueProps = EnumerateQueueFamilyProperties(_physDev._dev);
+		assert(_physDev._graphicsQueueFamily < queueProps.size());
+
+		_graphicsQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._graphicsQueueFamily), _physDev._graphicsQueueFamily, queueProps[_physDev._graphicsQueueFamily]);
 		_destrQueue = objFactory.CreateMarkerTrackingDestroyer(_graphicsQueue->GetTracker());
 		objFactory.SetDefaultDestroyer(_destrQueue);
 		objFactory._graphicsQueueFamily = _physDev._graphicsQueueFamily;
 
 		if (xleFeatures._dedicatedTransferQueue) {
-			_dedicatedTransferQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._dedicatedTransferQueueFamily), _physDev._dedicatedTransferQueueFamily);
+			assert(_physDev._dedicatedTransferQueueFamily < queueProps.size());
+			_dedicatedTransferQueue = std::make_shared<Metal_Vulkan::SubmissionQueue>(objFactory, GetQueue(_underlying.get(), _physDev._dedicatedTransferQueueFamily), _physDev._dedicatedTransferQueueFamily, queueProps[_physDev._dedicatedTransferQueueFamily]);
 			objFactory._dedicatedTransferQueueFamily = _physDev._dedicatedTransferQueueFamily;
 		}
 
@@ -3144,7 +3148,7 @@ namespace RenderCore { namespace ImplVulkan
 			_commandBufferPool = std::make_shared<Metal_Vulkan::CommandBufferPool>(
 				*_factory, queueFamilyIndex, false, _submissionQueue->GetTracker());
 
-		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
+		_metalContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools, MakeDeviceContextRules());
 	}
 
     ThreadContext::~ThreadContext() 
@@ -3198,7 +3202,7 @@ namespace RenderCore { namespace ImplVulkan
 	std::shared_ptr<Metal_Vulkan::DeviceContext> ThreadContext::BeginPrimaryCommandList()
     {
 		auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Primary);
-		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
+		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools, MakeDeviceContextRules());
 		deviceContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
 		#if defined(_DEBUG)
 			_submissionQueue->GetTracker()->AttachName(deviceContext->GetActiveCommandList().GetPrimaryTrackerMarker(), "BeginPrimaryCommandList");
@@ -3209,13 +3213,22 @@ namespace RenderCore { namespace ImplVulkan
 	std::shared_ptr<Metal_Vulkan::DeviceContext> ThreadContext::BeginSecondaryCommandList()
     {
 		auto cmdBuffer = _commandBufferPool->Allocate(Metal_Vulkan::CommandBufferType::Secondary);
-		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools);
+		auto deviceContext = std::make_shared<Metal_Vulkan::DeviceContext>(*_factory, *_globalPools, MakeDeviceContextRules());
 		deviceContext->BeginCommandList(std::move(cmdBuffer), _submissionQueue->GetTracker());
 		#if defined(_DEBUG)
 			_submissionQueue->GetTracker()->AttachName(deviceContext->GetActiveCommandList().GetPrimaryTrackerMarker(), "BeginSecondaryCommandList");
 		#endif
         return deviceContext;
     }
+
+	Metal_Vulkan::DeviceContext::DeviceContextRules ThreadContext::MakeDeviceContextRules() const
+	{
+		Metal_Vulkan::DeviceContext::DeviceContextRules rules;
+		rules._minImageTransferGranularityX = _submissionQueue->GetQueueFamilyProperties().minImageTransferGranularity.width;
+		rules._minImageTransferGranularityY = _submissionQueue->GetQueueFamilyProperties().minImageTransferGranularity.height;
+		rules._minImageTransferGranularityZ = _submissionQueue->GetQueueFamilyProperties().minImageTransferGranularity.depth;
+		return rules;
+	}
 }}
 
 namespace RenderCore
