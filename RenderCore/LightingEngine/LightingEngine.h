@@ -22,8 +22,6 @@ namespace RenderCore { namespace LightingEngine
 	class LightingEngineApparatus;
 	class SharedTechniqueDelegateBox;
 	class CompiledLightingTechnique;
-	struct LightSourceOperatorDesc;
-	struct ShadowOperatorDesc;
 
 	struct ChainedOperatorDesc
 	{

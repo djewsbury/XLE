@@ -21,8 +21,6 @@
 #include "../Utility/StringUtils.h"
 #include "../Formatters/TextFormatter.h"
 #include "../Formatters/FormatterUtils.h"
-#include "../Utility/Streams/PathUtils.h"
-#include "../Utility/Conversion.h"
 
 using namespace Utility::Literals;
  
@@ -95,7 +93,7 @@ namespace SceneEngine
         void        BindCfg(MergedLightingEngineCfg& cfg)
         {
             if (_desc._lightCount) {
-                RenderCore::LightingEngine::LightSourceOperatorDesc opDesc;
+                RenderCore::LightingEngine::PositionalLightOperatorDesc opDesc;
                 opDesc._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
                 _operatorId = cfg.Register(opDesc);
             }
@@ -150,8 +148,6 @@ namespace SceneEngine
         std::vector<unsigned> _lightSourcesInBoundScene;
 
         std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _lightOperatorHashToId;
-        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::ShadowOperatorId>> _shadowOperatorHashToId;
-        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::ShadowOperatorId>> _sunSourceHashToShadowOperatorId;
         uint64_t _ambientOperator = ~0ull;
 
         ::Assets::DependencyValidation _depVal;
@@ -193,7 +189,7 @@ namespace SceneEngine
             }
 
             if (light._operatorHash == _ambientOperator) {
-                auto newLight = lightScene.CreateAmbientLightSource();
+                auto newLight = lightScene.CreateLightSource(lightOperator->second);
                 _lightSourcesInBoundScene.push_back(newLight);
 
                 auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(newLight);
@@ -204,9 +200,6 @@ namespace SceneEngine
         }
 
         for (const auto& sunSource:_sunSourceFrustumSettingsInCfgFile._objects) {
-            auto op = LowerBound(_sunSourceHashToShadowOperatorId, sunSource.first);
-            if (op == _sunSourceHashToShadowOperatorId.end() || op->first != sunSource.first) continue;
-
             auto lightAssociation = std::find_if(
                 _shadowToAssociatedLight.begin(), _shadowToAssociatedLight.end(), 
                 [sunSource](const auto& c) { return c.first == sunSource.first; });
@@ -217,7 +210,6 @@ namespace SceneEngine
                 [lightAssociation](const auto& c) { return c.first == lightAssociation->second; });
             if (lightId == lightNameToId.end()) continue;        // couldn't find the associated light
             
-            lightScene.SetShadowOperator(lightId->second, op->second);
             RenderCore::LightingEngine::SetupSunSourceShadows(
                 lightScene, lightId->second, sunSource.second);
         }
@@ -251,19 +243,23 @@ namespace SceneEngine
     void BasicLightingStateDelegate::BindCfg(MergedLightingEngineCfg& cfg)
     {
         _lightOperatorHashToId.clear();
-        _shadowOperatorHashToId.clear();
         _ambientOperator = ~0ull;
-        _sunSourceHashToShadowOperatorId.clear();
 
         _lightOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
-        _shadowOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
-        for (const auto& c:_operatorResolveContext._lightSourceOperators._objects)
+        for (const auto& c:_operatorResolveContext._lightSourceOperators._objects) {
+            auto shadow = std::find_if(b2e(_operatorResolveContext._shadowOperators._objects), [n=c.first](const auto& q) { return q.first == n; });
+            if (shadow != _operatorResolveContext._shadowOperators._objects.end()) {
+                _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second, shadow->second));
+                continue;
+            }
+
+            auto shadow2 = std::find_if(b2e(_sunSourceFrustumSettingsInCfgFile._objects), [n=c.first](const auto& q) { return q.first == n; });
+            if (shadow2 != _sunSourceFrustumSettingsInCfgFile._objects.end()) {
+                auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(shadow2->second);
+                continue;
+            }
+
             _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second));
-        for (const auto& c:_operatorResolveContext._shadowOperators._objects)
-            _shadowOperatorHashToId.emplace_back(c.first, cfg.Register(c.second));
-        for (const auto& c:_sunSourceFrustumSettingsInCfgFile._objects) {
-            auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(c.second);
-            _sunSourceHashToShadowOperatorId.emplace_back(c.first, cfg.Register(shadowOperator));
         }
 
         if (!_operatorResolveContext._ambientOperators._objects.empty()) {
@@ -360,8 +356,6 @@ namespace SceneEngine
         _swirlingLights.BindCfg(cfg);
 
         std::sort(_lightOperatorHashToId.begin(), _lightOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
-        std::sort(_shadowOperatorHashToId.begin(), _shadowOperatorHashToId.end(), CompareFirst<uint64_t, unsigned>());
-        std::sort(_sunSourceHashToShadowOperatorId.begin(), _sunSourceHashToShadowOperatorId.end(), CompareFirst<uint64_t, unsigned>());
     }
 
     void BasicLightingStateDelegate::DeserializeLightSources(Formatters::IDynamicInputFormatter& formatter)
@@ -554,28 +548,54 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    unsigned MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::LightSourceOperatorDesc& operatorDesc)
+    MergedLightingEngineCfg::LightOperatorId MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::PositionalLightOperatorDesc& pos, const RenderCore::LightingEngine::ShadowOperatorDesc& shadow)
     {
-        assert(_lightHashes.size() == _lightResolveOperators.size());
-        auto hash = operatorDesc.GetHash();
-        auto i = std::find(_lightHashes.begin(), _lightHashes.end(), hash);
-        if (i != _lightHashes.end())
-            return (unsigned)std::distance(_lightHashes.begin(), i);
-        _lightResolveOperators.push_back(operatorDesc);
-        _lightHashes.push_back(hash);
-        return unsigned(_lightHashes.size()-1);
+        auto hash = pos.GetHash(shadow.GetHash());
+        auto i = std::find(b2e(_lightOperatorHashes), hash);
+        if (i != _lightOperatorHashes.end())
+            return (unsigned)std::distance(_lightOperatorHashes.begin(), i);
+
+        auto result = unsigned(_lightOperatorHashes.size());
+        _lightOperatorHashes.push_back(hash);
+
+        if (_reservedLightOperatorCount < dimof(_reservedLightOperators)) {
+            _reservedLightOperators[_reservedLightOperatorCount]._desc = {result, pos};
+            AddToOperatorList(_reservedLightOperators[_reservedLightOperatorCount]);
+            ++_reservedLightOperatorCount;
+        } else {
+            SetOperator<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::PositionalLightOperatorDesc>>({result, pos});
+        }
+
+        if (_reservedShadowOperatorCount < dimof(_reservedShadowOperators)) {
+            _reservedShadowOperators[_reservedShadowOperatorCount]._desc = {result, shadow};
+            AddToOperatorList(_reservedShadowOperators[_reservedShadowOperatorCount]);
+            ++_reservedShadowOperatorCount;
+        } else {
+            SetOperator<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::ShadowOperatorDesc>>({result, shadow});
+        }
+
+        return result;
     }
 
-    unsigned MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::ShadowOperatorDesc& operatorDesc)
+    unsigned MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::PositionalLightOperatorDesc& pos)
     {
-        assert(_shadowHashes.size() == _shadowResolveOperators.size());
-        auto hash = operatorDesc.GetHash();
-        auto i = std::find(_shadowHashes.begin(), _shadowHashes.end(), hash);
-        if (i != _shadowHashes.end())
-            return (unsigned)std::distance(_shadowHashes.begin(), i);
-        _shadowResolveOperators.push_back(operatorDesc);
-        _shadowHashes.push_back(hash);
-        return unsigned(_shadowHashes.size()-1);
+        auto hash = pos.GetHash();
+        auto i = std::find(b2e(_lightOperatorHashes), hash);
+        if (i != _lightOperatorHashes.end())
+            return (unsigned)std::distance(_lightOperatorHashes.begin(), i);
+
+        auto result = unsigned(_lightOperatorHashes.size());
+        _lightOperatorHashes.push_back(hash);
+
+        if (_reservedLightOperatorCount < dimof(_reservedLightOperators)) {
+            _reservedLightOperators[_reservedLightOperatorCount]._desc = {result, pos};
+            AddToOperatorList(_reservedLightOperators[_reservedLightOperatorCount]);
+            ++_reservedLightOperatorCount;
+        } else {
+            SetOperator<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::PositionalLightOperatorDesc>>({result, pos});
+        }
+
+        return result;
     }
 
     void MergedLightingEngineCfg::AddToOperatorList(RenderCore::LightingEngine::ChainedOperatorDesc& op)
@@ -917,23 +937,23 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::LightSourceOperatorDesc& desc,
+        RenderCore::LightingEngine::PositionalLightOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
         using namespace RenderCore::LightingEngine;
         switch (propertyNameHash) {
         case "Shape"_h:
-            SetViaEnumFn<LightSourceShape, AsLightSourceShape>(desc, &LightSourceOperatorDesc::_shape, data, type);
+            SetViaEnumFn<LightSourceShape, AsLightSourceShape>(desc, &PositionalLightOperatorDesc::_shape, data, type);
             return true;
         case "DiffuseModel"_h:
-            SetViaEnumFn<RenderCore::LightingEngine::DiffuseModel, AsDiffuseModel>(desc, &LightSourceOperatorDesc::_diffuseModel, data, type);
+            SetViaEnumFn<RenderCore::LightingEngine::DiffuseModel, AsDiffuseModel>(desc, &PositionalLightOperatorDesc::_diffuseModel, data, type);
             return true;
         case "DominantLight"_h:
             if (auto value = ConvertOrCast<unsigned>(data, type)) {
                 if (value.value()) {
-                    desc._flags |= RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
+                    desc._flags |= RenderCore::LightingEngine::PositionalLightOperatorDesc::Flags::DominantLight;
                 } else {
-                    desc._flags &= ~RenderCore::LightingEngine::LightSourceOperatorDesc::Flags::DominantLight;
+                    desc._flags &= ~RenderCore::LightingEngine::PositionalLightOperatorDesc::Flags::DominantLight;
                 }
                 return true;
             }

@@ -13,6 +13,24 @@ namespace RenderCore { namespace LightingEngine { class ShadowProbes; }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
+	class ILightBase
+	{
+	public:
+		virtual void* QueryInterface(uint64_t interfaceTypeCode) = 0;
+		virtual ~ILightBase();
+	};
+
+	class ILightSceneComponent
+	{
+	public:
+		using LightSetId = unsigned;
+		virtual void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) = 0;
+		virtual void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) = 0;
+		virtual bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) = 0;
+		virtual void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) = 0;
+		virtual ~ILightSceneComponent();
+	};
+
 	template<typename T>
 		class PageHeap
 	{
@@ -121,9 +139,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	protected:
 
 		// move the given lights into a set with the given shadow operator assignment (but do nothing else)
-		void ChangeLightsShadowOperator(
+		void ChangeOperatorId(
 			IteratorRange<const LightSourceId*> lights,
-			ShadowOperatorId shadowOperatorId);
+			LightOperatorId);
 
 		void ReserveLightSourceIds(unsigned idCount); 
 		unsigned GetLightSet(LightOperatorId);

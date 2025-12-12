@@ -120,14 +120,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		--_totalProjectionCount;
 	}
 
-	bool DynamicShadowProjectionScheduler::BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId shadowOperator, unsigned setIdx)
+	bool DynamicShadowProjectionScheduler::BindToSet(ILightScene::LightOperatorId opId, unsigned setIdx)
 	{
-		if (shadowOperator >= _operatorToPreparerIdMapping.size() || _operatorToPreparerIdMapping[shadowOperator] == ~0u) return false;
+		if (opId >= _operatorToPreparerIdMapping.size() || _operatorToPreparerIdMapping[opId] == ~0u) return false;
 		if (_sceneSets.size() <= setIdx)
 			_sceneSets.resize(setIdx+1);
 		_sceneSets[setIdx]._activeSet = true;
 		_sceneSets[setIdx]._preparers = _shadowPreparers;
-		_sceneSets[setIdx]._preparerId = _operatorToPreparerIdMapping[shadowOperator];
+		_sceneSets[setIdx]._preparerId = _operatorToPreparerIdMapping[opId];
 		return true;
 	}
 
@@ -574,9 +574,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 	}
 
-	bool SemiStaticShadowProbeScheduler::BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId shadowOperator, unsigned setIdx)
+	bool SemiStaticShadowProbeScheduler::BindToSet(ILightScene::LightOperatorId op, unsigned setIdx)
 	{
-		if (shadowOperator != _operatorId) return false;
+		if (op != _operatorId) return false;
 		if (_sceneSets.size() <= setIdx)
 			_sceneSets.resize(setIdx+1);
 		_sceneSets[setIdx]._activeSet = true;
@@ -603,7 +603,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return { p._attachedDatabaseIndex, p._fading };
 	}
 
-	SemiStaticShadowProbeScheduler::SemiStaticShadowProbeScheduler(std::shared_ptr<ShadowProbes> shadowProbes, ILightScene::ShadowOperatorId operatorId) 
+	SemiStaticShadowProbeScheduler::SemiStaticShadowProbeScheduler(std::shared_ptr<ShadowProbes> shadowProbes, ILightScene::LightOperatorId operatorId) 
 	: _shadowProbes(std::move(shadowProbes)), _operatorId(operatorId)
 	{
 		_probeSlotsCount = _shadowProbes->GetReservedProbeCount();
@@ -618,8 +618,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	SemiStaticShadowProbeScheduler::~SemiStaticShadowProbeScheduler() {}
 
 
-	DominantLightSet::DominantLightSet(ILightScene::LightOperatorId lightOpId, ILightScene::ShadowOperatorId shadowOpId)
-	: _lightOpId(lightOpId), _shadowOpId(shadowOpId)
+	DominantLightSet::DominantLightSet(ILightScene::LightOperatorId lightOpId)
+	: _lightOpId(lightOpId)
 	{}
 	DominantLightSet::~DominantLightSet() {}
 
@@ -639,9 +639,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_hasLight = false;
 	}
 
-	bool DominantLightSet::BindToSet(ILightScene::LightOperatorId opId, ILightScene::ShadowOperatorId shadowId, unsigned setIdx)
+	bool DominantLightSet::BindToSet(ILightScene::LightOperatorId opId, unsigned setIdx)
 	{
-		if (opId != _lightOpId || shadowId != _shadowOpId)
+		if (opId != _lightOpId)
 			return false;
 		assert(_setIdx == ~0u);
 		_setIdx = setIdx;

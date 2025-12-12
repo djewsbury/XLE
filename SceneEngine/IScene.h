@@ -16,11 +16,11 @@
 #include "../RenderCore/LightingEngine/SSAOOperator.h"
 #include "../RenderCore/LightingEngine/AAOperators.h"
 #include "../RenderCore/LightingEngine/PostProcessOperators.h"
-#include <any>
+#include "../RenderCore/LightingEngine/ShadowPreparer.h"        // to reserve ShadowOperatorDesc
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; class DeformersPacket; } }
-namespace RenderCore { namespace LightingEngine { class ILightScene; struct LightSourceOperatorDesc; struct ShadowOperatorDesc; class IProbeRenderingInstance; }}
+namespace RenderCore { namespace LightingEngine { class ILightScene; struct ShadowOperatorDesc; class IProbeRenderingInstance; }}
 namespace RenderOverlays { class FontRenderingManager; }
 namespace Assets { class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
@@ -85,8 +85,9 @@ namespace SceneEngine
     class MergedLightingEngineCfg
     {
     public:
-        unsigned Register(const RenderCore::LightingEngine::LightSourceOperatorDesc&);
-        unsigned Register(const RenderCore::LightingEngine::ShadowOperatorDesc&);
+        using LightOperatorId = unsigned;
+        LightOperatorId Register(const RenderCore::LightingEngine::PositionalLightOperatorDesc&, const RenderCore::LightingEngine::ShadowOperatorDesc&);
+        LightOperatorId Register(const RenderCore::LightingEngine::PositionalLightOperatorDesc&);
 
         void SetOperator(const RenderCore::LightingEngine::ForwardLightingTechniqueDesc&);
         void SetOperator(const RenderCore::LightingEngine::DeferredLightingTechniqueDesc&);
@@ -104,8 +105,6 @@ namespace SceneEngine
         template<typename T>
             void SetOperator(const T&);
 
-        IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> GetLightOperators() const { return _lightResolveOperators; }
-        IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> GetShadowOperators() const { return _shadowResolveOperators; }
         const RenderCore::LightingEngine::ChainedOperatorDesc* GetChainedGlobalOperators() const { return _firstChainedOperator; }
 
         MergedLightingEngineCfg();
@@ -113,9 +112,7 @@ namespace SceneEngine
         MergedLightingEngineCfg(MergedLightingEngineCfg&&) = delete;
         MergedLightingEngineCfg& operator=(MergedLightingEngineCfg&&) = delete;
     private:
-        std::vector<RenderCore::LightingEngine::LightSourceOperatorDesc> _lightResolveOperators;
-        std::vector<RenderCore::LightingEngine::ShadowOperatorDesc> _shadowResolveOperators;
-        std::vector<uint64_t> _lightHashes, _shadowHashes;
+        std::vector<uint64_t> _lightOperatorHashes;
 
         template<typename T> using ChainingTemplate = RenderCore::LightingEngine::ChainedOperatorTemplate<T>;
         ChainingTemplate<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> _forwardLightingOperator;
@@ -130,6 +127,9 @@ namespace SceneEngine
         ChainingTemplate<RenderCore::LightingEngine::TAAOperatorDesc> _taaOperator;
         ChainingTemplate<RenderCore::LightingEngine::SharpenOperatorDesc> _sharpenOperator;
         ChainingTemplate<RenderCore::LightingEngine::FilmGrainDesc> _filmGrainOperator;
+        ChainingTemplate<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::PositionalLightOperatorDesc>> _reservedLightOperators[8];
+        ChainingTemplate<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::ShadowOperatorDesc>> _reservedShadowOperators[8];
+        unsigned _reservedLightOperatorCount = 0, _reservedShadowOperatorCount = 0;
         std::vector<std::shared_ptr<void>> _typeErasedOperators;
         RenderCore::LightingEngine::ChainedOperatorDesc* _firstChainedOperator = nullptr;
 

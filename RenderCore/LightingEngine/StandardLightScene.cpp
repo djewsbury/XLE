@@ -123,7 +123,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 	}
 
-	void StandardLightScene::ChangeLightsShadowOperator(IteratorRange<const LightSourceId*> lights, ShadowOperatorId shadowOperatorId)
+	void StandardLightScene::ChangeOperatorId(IteratorRange<const LightSourceId*> lights, LightOperatorId shadowOperatorId)
 	{
 		// we could potentially do some optimizations here by sorting "lights" or by handling lights on a set by set basis
 		for (auto lightId:lights) {
@@ -134,24 +134,24 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 
 			auto* srcSet = &_lightSets[i->second._lightSet];
-			auto dstSetIdx = GetLightSet(srcSet->_operatorId, shadowOperatorId);
+			auto dstSetIdx = GetLightSet(srcSet->_operatorId);
 			if (i->second._lightSet == dstSetIdx) continue;	// no actual change
 
 			ChangeLightSet(i, dstSetIdx);
 		}
 	}
 
-	auto StandardLightScene::GetLightSet(LightOperatorId lightOperator, ShadowOperatorId shadowOperator) -> unsigned
+	auto StandardLightScene::GetLightSet(LightOperatorId lightOperator) -> unsigned
 	{
 		for (auto s=_lightSets.begin(); s!=_lightSets.end(); ++s)
-			if (s->_operatorId == lightOperator && s->_shadowOperatorId == shadowOperator)
+			if (s->_operatorId == lightOperator)
 				return (unsigned)std::distance(_lightSets.begin(), s);
-		_lightSets.push_back(LightSet{lightOperator, shadowOperator});
+		_lightSets.push_back(LightSet{lightOperator});
 		auto newSetIdx =  (unsigned)_lightSets.size()-1;
 		auto& newSet = _lightSets.back();
 		newSet._boundComponents.reserve(_components.size());
 		for (auto& comp:_components)
-			if (comp->BindToSet(newSet._operatorId, newSet._shadowOperatorId, newSetIdx))
+			if (comp->BindToSet(newSet._operatorId, newSetIdx))
 				newSet._boundComponents.push_back(comp);
 		for (auto& a:_associatedFlags)
 			if (a.first == lightOperator)
@@ -191,7 +191,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		for (unsigned setIdx=0; setIdx<_lightSets.size(); ++setIdx) {
 			auto& set = _lightSets[setIdx];
-			if (newComp->BindToSet(set._operatorId, set._shadowOperatorId, setIdx)) {
+			if (newComp->BindToSet(set._operatorId, setIdx)) {
 				set._boundComponents.push_back(newComp);
 				for (auto i=set._baseData.begin(); i!=set._baseData.end(); ++i)
 					newComp->RegisterLight(setIdx, i.GetIndex(), *i);
@@ -225,23 +225,15 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				set._flags |= flag;
 	}
 
-	auto StandardLightScene::CreateAmbientLightSource() -> LightSourceId
-	{
-		Throw(std::runtime_error("Ambient light sources not supported by this light scene"));
-	}
-
 	StandardLightScene::StandardLightScene()
 	{}
 	StandardLightScene::~StandardLightScene()
 	{}
-
-	ILightBase::~ILightBase() {}
-	ILightSceneComponent::~ILightSceneComponent() {}
 }}}
 
 namespace RenderCore { namespace LightingEngine
 {
-	uint64_t LightSourceOperatorDesc::GetHash(uint64_t seed) const
+	uint64_t PositionalLightOperatorDesc::GetHash(uint64_t seed) const
 	{
 		uint64_t h = 
 			(uint64_t(_shape) & 0xff) << 8ull | (uint64_t(_diffuseModel) & 0xff) | (uint64_t(_flags) << 16ull);

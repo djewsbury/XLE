@@ -38,7 +38,6 @@ namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	class ILightBase;
-	class ILightSceneComponent;
 
 	::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>);
@@ -92,10 +91,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		float _defaultNearRadius = 1.f;
 
 		// ILightSceneComponent
-		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
-		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
+		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) override;
+		void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
 		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
-		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
+		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
 	class DynamicShadowProjectionScheduler : public IDynamicShadowProjectionScheduler, public ILightSceneComponent
@@ -144,7 +143,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		unsigned _setIdx = ~0u;
 		bool _hasLight = false;
 		ILightScene::LightOperatorId _lightOpId;
-		ILightScene::ShadowOperatorId _shadowOpId;
 
 		DominantLightSet(ILightScene::LightOperatorId lightOpId);
 		~DominantLightSet();

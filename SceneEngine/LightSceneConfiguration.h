@@ -31,7 +31,7 @@ namespace SceneEngine
 
 	struct LightOperatorResolveContext
 	{
-		ObjectTable<RenderCore::LightingEngine::LightSourceOperatorDesc> _lightSourceOperators;
+		ObjectTable<RenderCore::LightingEngine::PositionalLightOperatorDesc> _lightSourceOperators;
 		ObjectTable<RenderCore::LightingEngine::ShadowOperatorDesc> _shadowOperators;
 		ObjectTable<RenderCore::LightingEngine::AmbientLightOperatorDesc> _ambientOperators;
 		ObjectTable<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> _forwardLightingOperators;
