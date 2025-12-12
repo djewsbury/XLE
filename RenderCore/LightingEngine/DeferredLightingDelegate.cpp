@@ -83,14 +83,6 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
-		ILightScene::LightSourceId CreateAmbientLightSource() override
-		{
-			if (_ambientLightEnabled)
-				Throw(std::runtime_error("Attempting to create multiple ambient light sources. Only one is supported at a time"));
-			_ambientLightEnabled = true;
-			return 0;
-		}
-
 		void DestroyLightSource(LightSourceId sourceId) override
 		{
 			if (sourceId == 0) {
@@ -417,11 +409,11 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<SkyTextureProcessorDesc> _skyTextureProcessor;
 		std::optional<SkyOperatorDesc> _sky;
 
-		std::vector<LightSourceOperatorDesc> _resolveOperators;
+		std::vector<PositionalLightOperatorDesc> _resolveOperators;
 		std::vector<ShadowOperatorDesc> _shadowOperators;
 
 		DeferredOperatorDigest(
-			IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
+			IteratorRange<const PositionalLightOperatorDesc*> resolveOperatorsInit,
 			IteratorRange<const ShadowOperatorDesc*> shadowOperatorsInit,
 			const ChainedOperatorDesc* globalOperatorsChain)
 		: _resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() }
@@ -458,14 +450,15 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelineCollection,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperatorsInit,
-		IteratorRange<const ShadowOperatorDesc*> shadowOperatorsInit,
 		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit,
 		DeferredLightingTechniqueFlags::BitField flags)
 	{
 		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferDelegateType::DepthNormalParameters);
 
+		assert(0);		//  -- these operators must come from the operators digest now
+		IteratorRange<const PositionalLightOperatorDesc*> resolveOperatorsInit;
+		IteratorRange<const ShadowOperatorDesc*> shadowOperatorsInit;
 		DeferredOperatorDigest digest { resolveOperatorsInit, shadowOperatorsInit, globalOperators };
 
 		std::promise<std::shared_ptr<DeferredLightScene>> lightScenePromise;

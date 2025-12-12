@@ -14,9 +14,6 @@ namespace std { template<typename T> class future; }
 
 namespace RenderCore { namespace LightingEngine
 {
-	struct LightSourceOperatorDesc;
-	struct ShadowOperatorDesc;
-
 	struct DeferredLightingTechniqueDesc
 	{
 	};
@@ -32,8 +29,6 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelineCollection,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		DeferredLightingTechniqueFlags::BitField flags = 0);

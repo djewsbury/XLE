@@ -452,7 +452,7 @@ namespace RenderCore { namespace LightingEngine
 					{
 						auto& op = Internal::ChainedOperatorCast<LightOperatorAssignment<PositionalLightOperatorDesc>>(*chain);
 						auto info = AsLightOperatorInfo(op._desc);
-						auto i = std::find_if(b2e(_lightOperatorsMapping._positionalLightOperators), info);
+						auto i = std::find(b2e(_lightOperatorsMapping._positionalLightOperators), info);
 						if (i == _lightOperatorsMapping._positionalLightOperators.end())
 							i = _lightOperatorsMapping._positionalLightOperators.insert(i, info);
 
@@ -488,7 +488,7 @@ namespace RenderCore { namespace LightingEngine
 							_lightOperatorsMapping._shadowProbesCfg = MakeShadowProbeConfiguration(op._desc);
 						} else {
 							auto h = op._desc.GetHash();
-							auto i = std::find_if(b2e(hashedShadowPreparers), h);
+							auto i = std::find(b2e(hashedShadowPreparers), h);
 							if (i == hashedShadowPreparers.end()) {
 								i = hashedShadowPreparers.insert(i, h);
 								_lightOperatorsMapping._shadowPreparers.push_back(op._desc);

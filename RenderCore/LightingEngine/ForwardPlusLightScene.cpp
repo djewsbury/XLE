@@ -60,8 +60,8 @@ namespace RenderCore { namespace LightingEngine
 		_pingPongCounter = 0;
 
 		// Default to using the first light operator & first shadow operator for the dominant light
-		if (_shadowPreparerIdMapping._dominantLightOperator != ~0u) {
-			_dominantLightSet = std::make_shared<Internal::DominantLightSet>(_shadowPreparerIdMapping._dominantLightOperator, _shadowPreparerIdMapping._dominantShadowOperator);
+		if (_LightOperatorsMapping._dominantLightOperator != ~0u) {
+			_dominantLightSet = std::make_shared<Internal::DominantLightSet>(_LightOperatorsMapping._dominantLightOperator);
 			RegisterComponent(_dominantLightSet);
 		}
 
@@ -69,30 +69,33 @@ namespace RenderCore { namespace LightingEngine
 			if (_lightOperatorInfo[op]._standardLightFlags)
 				AssociateFlag(op, _lightOperatorInfo[op]._standardLightFlags);
 
-		if (_shadowPreparerIdMapping._operatorForStaticProbes != ~0u) {
-			_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _shadowPreparerIdMapping._shadowProbesCfg);
-			_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, _shadowPreparerIdMapping._operatorForStaticProbes);
+		if (_LightOperatorsMapping._operatorForStaticProbes != ~0u) {
+			_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _LightOperatorsMapping._shadowProbesCfg);
+			_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, _LightOperatorsMapping._operatorForStaticProbes);
 			RegisterComponent(_shadowProbesManager);
 		}
 
 		bool atLeastOneShadowPreparer = false;
-		for (auto i:_shadowPreparerIdMapping._operatorToShadowPreparerId) atLeastOneShadowPreparer |= i != ~0u;
+		for (auto i:_LightOperatorsMapping._operatorToShadowPreparerId) atLeastOneShadowPreparer |= i != ~0u;
 
 		if (atLeastOneShadowPreparer) {
 			_shadowScheduler = std::make_shared<Internal::DynamicShadowProjectionScheduler>(
 				_pipelineAccelerators->GetDevice(), _shadowPreparers,
-				_shadowPreparerIdMapping._operatorToShadowPreparerId);
+				_LightOperatorsMapping._operatorToShadowPreparerId);
 			_shadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
 			RegisterComponent(_shadowScheduler);
 		}
 	}
 
-	ILightScene::LightSourceId ForwardPlusLightScene::CreateAmbientLightSource()
+	ILightScene::LightSourceId ForwardPlusLightScene::CreateLightSource(LightOperatorId op)
 	{
-		if (_ambientLight->_ambientLightEnabled)
-			Throw(std::runtime_error("Attempting to create multiple ambient light sources. Only one is supported at a time"));
-		_ambientLight->_ambientLightEnabled = true;
-		return 0;
+		if (_LightOperatorsMapping._ambientLightOperator == op) {
+			if (_ambientLight->_ambientLightEnabled)
+				Throw(std::runtime_error("Attempting to create multiple ambient light sources. Only one is supported at a time"));
+			_ambientLight->_ambientLightEnabled = true;
+			return 0;
+		} 
+		return Internal::StandardLightScene::CreateLightSource(op);
 	}
 
 	void ForwardPlusLightScene::DestroyLightSource(LightSourceId sourceId)
@@ -168,7 +171,7 @@ namespace RenderCore { namespace LightingEngine
 			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 				auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
 				auto op = _lightSets[setIdx]._operatorId;
-				assert(_lightSets[setIdx]._operatorId != _shadowPreparerIdMapping._dominantLightOperator);
+				assert(_lightSets[setIdx]._operatorId != _LightOperatorsMapping._dominantLightOperator);
 				auto& lightDesc = _lightSets[setIdx]._baseData.GetObject(lightIdx);
 				*i = MakeLightUniforms(lightDesc, _lightOperatorInfo[op]._uniformShapeCode);
 			}
@@ -177,7 +180,7 @@ namespace RenderCore { namespace LightingEngine
 				i = (Internal::CB_Light*)map.GetData().begin();
 				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
-					assert(_lightSets[setIdx]._operatorId != _shadowPreparerIdMapping._dominantLightOperator);
+					assert(_lightSets[setIdx]._operatorId != _LightOperatorsMapping._dominantLightOperator);
 					auto probe = _shadowProbesManager->GetAllocatedDatabaseEntry(setIdx, lightIdx);
 					i->_staticProbeDatabaseEntry = probe._databaseIndex;
 					++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinal
@@ -280,7 +283,7 @@ namespace RenderCore { namespace LightingEngine
 	bool ForwardPlusLightScene::ShadowProbesSupported() const
 	{
 		// returns true if we have an operator for shadow probes, even if the shadow probe database hasn't actually been created
-		return _shadowPreparerIdMapping._operatorForStaticProbes != ~0u;
+		return _LightOperatorsMapping._operatorForStaticProbes != ~0u;
 	}
 
 	void ForwardPlusLightScene::SetDiffuseSHCoefficients(const SHCoefficients& coeffients)
@@ -312,7 +315,7 @@ namespace RenderCore { namespace LightingEngine
 		const ConstructionServices& constructionServices,
 		std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
 		std::shared_ptr<RasterizationLightTileOperator> lightTiler,
-		ForwardPlusLightScene::ShadowPreparerIdMapping&& shadowPreparerMapping,
+		LightOperatorsMapping&& lightOperatorsMapping,
 		std::vector<LightOperatorInfo>&& lightOperatorInfo,
 		std::shared_ptr<IResourceView> glossLut,
 		BufferUploads::CommandListID glossLutCompletion,
@@ -320,7 +323,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		auto lightScene = std::make_shared<ForwardPlusLightScene>();
 		lightScene->_shadowPreparers = shadowPreparers;
-		lightScene->_shadowPreparerIdMapping = std::move(shadowPreparerMapping);
+		lightScene->_LightOperatorsMapping = std::move(lightOperatorsMapping);
 		lightScene->_pipelineAccelerators = constructionServices._pipelineAccelerators;
 		lightScene->_techDelBox = constructionServices._techDelBox;
 		lightScene->_lightOperatorInfo = std::move(lightOperatorInfo);
@@ -340,7 +343,7 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardPlusLightScene::ConstructToPromise(
 		std::promise<std::shared_ptr<ForwardPlusLightScene>>&& promise,
 		const ConstructionServices& constructionServices,
-		ShadowPreparerIdMapping&& shadowPreparerMapping,
+		LightOperatorsMapping&& lightOperatorsMapping,
 		std::vector<LightOperatorInfo>&& lightOperatorInfo,
 		const RasterizationLightTileOperatorDesc& tilerCfg,
 		const IntegrationParams& integrationParams)
@@ -354,7 +357,7 @@ namespace RenderCore { namespace LightingEngine
 		auto helper = std::make_shared<Helper>();
 
 		helper->_shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
-			shadowPreparerMapping._shadowPreparers,
+			lightOperatorsMapping._shadowPreparers,
 			constructionServices._pipelineAccelerators, constructionServices._techDelBox);
 
 		helper->_lightTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
@@ -370,7 +373,7 @@ namespace RenderCore { namespace LightingEngine
 				if (helper->_glossLUTFuture.valid() && Internal::MarkerTimesOut(helper->_glossLUTFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
-			[helper, shadowPreparerMapping=std::move(shadowPreparerMapping), lightOperatorInfo=std::move(lightOperatorInfo), constructionServices] () mutable
+			[helper, lightOperatorsMapping=std::move(lightOperatorsMapping), lightOperatorInfo=std::move(lightOperatorInfo), constructionServices] () mutable
 			{
 				std::shared_ptr<IResourceView> glossLut;
 				BufferUploads::CommandListID glossLutCompletion = 0;
@@ -384,7 +387,7 @@ namespace RenderCore { namespace LightingEngine
 				auto lightTiler = helper->_lightTilerFuture.get();
 				depVals[1] = lightTiler->GetDependencyValidation();
 				auto depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
-				return CreateInternal(constructionServices, helper->_shadowPreparationOperatorsFuture.get(), std::move(lightTiler), std::move(shadowPreparerMapping), std::move(lightOperatorInfo), glossLut, glossLutCompletion, std::move(depVal));
+				return CreateInternal(constructionServices, helper->_shadowPreparationOperatorsFuture.get(), std::move(lightTiler), std::move(lightOperatorsMapping), std::move(lightOperatorInfo), glossLut, glossLutCompletion, std::move(depVal));
 			});
 	}
 

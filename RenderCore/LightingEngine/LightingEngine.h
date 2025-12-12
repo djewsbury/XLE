@@ -22,6 +22,7 @@ namespace RenderCore { namespace LightingEngine
 	class LightingEngineApparatus;
 	class SharedTechniqueDelegateBox;
 	class CompiledLightingTechnique;
+	class ILightScene;
 
 	struct ChainedOperatorDesc
 	{
@@ -60,13 +61,11 @@ namespace RenderCore { namespace LightingEngine
 			OutputTarget outputTarget);
 
 		void CreateLightSceneToPromise(
-			std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
-			const ChainedOperatorDesc* globalOperators,
-			OutputTarget outputTarget);
+			std::promise<std::shared_ptr<ILightScene>>&& promise,
+			const ChainedOperatorDesc* globalOperators);
 
-		[[nodiscard]] std::future<std::shared_ptr<CompiledLightingTechnique>> CreateLightSceneToFuture(
-			const ChainedOperatorDesc* globalOperators,
-			OutputTarget outputTarget);
+		[[nodiscard]] std::future<std::shared_ptr<ILightScene>> CreateLightSceneToFuture(
+			const ChainedOperatorDesc* globalOperators);
 
 		CreationUtility(
 			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,

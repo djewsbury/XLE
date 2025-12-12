@@ -84,7 +84,7 @@ namespace RenderCore { namespace LightingEngine
 	static std::future<Techniques::GraphicsPipelineAndLayout> BuildLightResolveOperator(
 		Techniques::PipelineCollection& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const LightSourceOperatorDesc& desc,
+		const PositionalLightOperatorDesc& desc,
 		const Internal::ShadowResolveParam& shadowResolveParam,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
@@ -119,7 +119,7 @@ namespace RenderCore { namespace LightingEngine
 			pipelineDesc->_depthStencil = s_dsWriteNonSky;
 		}
 
-		if ((desc._flags & LightSourceOperatorDesc::Flags::NeverStencil) || desc._shape == LightSourceShape::Directional) {
+		if ((desc._flags & PositionalLightOperatorDesc::Flags::NeverStencil) || desc._shape == LightSourceShape::Directional) {
 			inputStates._inputAssembly = {};
 			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector"};
 			inputStates._topology = Topology::TriangleStrip;
@@ -180,7 +180,7 @@ namespace RenderCore { namespace LightingEngine
 		return future;
 	}
 
-	static bool IsCompatible(const LightSourceOperatorDesc& lightSource, const ShadowOperatorDesc& shadowOp)
+	static bool IsCompatible(const PositionalLightOperatorDesc& lightSource, const ShadowOperatorDesc& shadowOp)
 	{
 		if (shadowOp._resolveType != ShadowResolveType::Probe) {
 			switch (shadowOp._projectionMode) {
@@ -198,10 +198,12 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
+	using ShadowOperatorId = unsigned;
+
 	std::future<std::shared_ptr<LightResolveOperators>> BuildLightResolveOperators(
 		Techniques::PipelineCollection& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const PositionalLightOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,
@@ -210,12 +212,12 @@ namespace RenderCore { namespace LightingEngine
 	{
 		struct AttachedData
 		{
-			LightSourceOperatorDesc::Flags::BitField _flags = 0;
+			PositionalLightOperatorDesc::Flags::BitField _flags = 0;
 			LightSourceShape _stencilingShape = LightSourceShape::Sphere;
 		};
 		std::vector<std::future<Techniques::GraphicsPipelineAndLayout>> pipelineFutures;
 		std::vector<AttachedData> attachedData;
-		std::vector<std::tuple<ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned>> operatorToPipelineMap;
+		std::vector<std::tuple<ILightScene::LightOperatorId, ShadowOperatorId, unsigned>> operatorToPipelineMap;
 		bool enableShadowProbe = false;
 		
 		pipelineFutures.reserve(resolveOperators.size() * (1+shadowOperators.size()));
@@ -496,8 +498,9 @@ namespace RenderCore { namespace LightingEngine
 			if (set._operatorId == lightResolveOperators._operatorDescs.size())
 				continue;	// this is the ambient light
 
+			assert(0);		// todo -- must be updated for new light operator interface
 			auto lightShape = lightResolveOperators._pipelines[set._operatorId]._stencilingGeoShape;
-			auto shadowOperatorId = set._shadowOperatorId;
+			auto shadowOperatorId = ~0u; // set._shadowOperatorId;
 			auto lightOperatorId = set._operatorId;
 		
 			const LightResolveOperators::Pipeline* pipeline;
@@ -552,7 +555,7 @@ namespace RenderCore { namespace LightingEngine
 				uniformsStream._resourceViews = MakeIteratorRange(srvs);
 				boundUniforms.ApplyLooseUniforms(metalContext, encoder, uniformsStream);
 
-				if ((pipeline->_flags & LightSourceOperatorDesc::Flags::NeverStencil) || pipeline->_stencilingGeoShape == LightSourceShape::Directional) {
+				if ((pipeline->_flags & PositionalLightOperatorDesc::Flags::NeverStencil) || pipeline->_stencilingGeoShape == LightSourceShape::Directional) {
 					encoder.Draw(*pipeline->_pipeline, 4);
 				} else {
 					if (pipeline->_stencilingGeoShape == LightSourceShape::Sphere) {

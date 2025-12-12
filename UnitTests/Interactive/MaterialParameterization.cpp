@@ -224,11 +224,11 @@ namespace UnitTests
 				globalChain1._next = &globalChain2;
 			}
 
-			LightingEngine::LightSourceOperatorDesc lightOperators[] {
-				LightingEngine::LightSourceOperatorDesc{}
+			LightingEngine::PositionalLightOperatorDesc lightOperators[] {
+				LightingEngine::PositionalLightOperatorDesc{}
 			};
 			_futureLightingTechnique = LightingEngine::CreationUtility{*_apparatus}
-				.CreateToFuture(lightOperators, {}, &globalChain0, {_preRegs});
+				.CreateTechniqueToFuture(&globalChain0, {_preRegs});
 
 			if (specularLight) {
 				auto technique = _futureLightingTechnique.get();		// stall

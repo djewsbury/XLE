@@ -23,8 +23,6 @@ namespace RenderCore { namespace LightingEngine
     class CompiledLightingTechnique;
     class SequencePlayback;
 	class LightingEngineApparatus;
-	struct LightSourceOperatorDesc;
-	struct ShadowOperatorDesc;
 }}
 namespace RenderCore { class IThreadContext; class FrameBufferProperties; }
 namespace std { template<typename Type> class future; }
@@ -51,8 +49,6 @@ namespace SceneEngine
 
 	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeLightingTechnique(
 		RenderCore::LightingEngine::LightingEngineApparatus& apparatus,
-		IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowOperators,
 		const RenderCore::LightingEngine::ChainedOperatorDesc* globalOperators,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments);
 }

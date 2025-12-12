@@ -218,7 +218,7 @@ namespace UnitTests
 
 		void BindCfg(SceneEngine::MergedLightingEngineCfg& cfg) override
 		{
-			RenderCore::LightingEngine::LightSourceOperatorDesc lightOp;
+			RenderCore::LightingEngine::PositionalLightOperatorDesc lightOp;
 			lightOp._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
 			_lightOperatorId = cfg.Register(lightOp);
 
@@ -415,8 +415,8 @@ namespace UnitTests
 
 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
 
-		LightingEngine::LightSourceOperatorDesc resolveOperators[] {
-			LightingEngine::LightSourceOperatorDesc{}
+		LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
+			LightingEngine::PositionalLightOperatorDesc{}
 		};
 
 		auto threadContext = Techniques::GetThreadContext();

@@ -142,8 +142,8 @@ namespace UnitTests
 			float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
 			(void)ratio0;
 
-			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
-				LightingEngine::LightSourceOperatorDesc{}
+			LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
+				LightingEngine::PositionalLightOperatorDesc{}
 			};
 			LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
@@ -458,8 +458,8 @@ namespace UnitTests
 			sunSourceFrustumSettings._maxFrustumCount = 5;
 			sunSourceFrustumSettings._frustumSizeFactor = 2.0f;
 
-			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
-				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Directional }
+			LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
+				LightingEngine::PositionalLightOperatorDesc{ LightingEngine::LightSourceShape::Directional }
 			};
 			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
 				CalculateShadowOperatorDesc(sunSourceFrustumSettings)

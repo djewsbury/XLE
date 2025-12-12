@@ -168,8 +168,8 @@ namespace UnitTests
 
 		testHelper->BeginFrameCapture();
 
-		LightingEngine::LightSourceOperatorDesc resolveOperators[] {
-			LightingEngine::LightSourceOperatorDesc{}
+		LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
+			LightingEngine::PositionalLightOperatorDesc{}
 		};
 		LightingEngine::ShadowOperatorDesc shadowOp;
 		shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
@@ -273,8 +273,8 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		{
-			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
-				LightingEngine::LightSourceOperatorDesc {
+			LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
+				LightingEngine::PositionalLightOperatorDesc {
 					LightingEngine::LightSourceShape::Sphere
 				}
 			};

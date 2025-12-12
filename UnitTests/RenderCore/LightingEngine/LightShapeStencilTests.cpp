@@ -119,12 +119,12 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		{
-			LightingEngine::LightSourceOperatorDesc resolveOperators[] {
-				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Sphere },
-				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Tube },
-				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Rectangle },
-				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Disc },
-				LightingEngine::LightSourceOperatorDesc{ LightingEngine::LightSourceShape::Sphere, LightingEngine::DiffuseModel::Disney, LightingEngine::LightSourceOperatorDesc::Flags::NeverStencil },
+			LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
+				LightingEngine::PositionalLightOperatorDesc{ LightingEngine::LightSourceShape::Sphere },
+				LightingEngine::PositionalLightOperatorDesc{ LightingEngine::LightSourceShape::Tube },
+				LightingEngine::PositionalLightOperatorDesc{ LightingEngine::LightSourceShape::Rectangle },
+				LightingEngine::PositionalLightOperatorDesc{ LightingEngine::LightSourceShape::Disc },
+				LightingEngine::PositionalLightOperatorDesc{ LightingEngine::LightSourceShape::Sphere, LightingEngine::DiffuseModel::Disney, LightingEngine::PositionalLightOperatorDesc::Flags::NeverStencil },
 			};
 
 			auto targetDesc = CreateDesc(

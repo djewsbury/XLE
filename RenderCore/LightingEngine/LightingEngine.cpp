@@ -1061,10 +1061,8 @@ namespace RenderCore { namespace LightingEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void CreationUtility::CreateToPromise(
+	void CreationUtility::CreateTechniqueToPromise(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const ChainedOperatorDesc* globalOperators,
 		OutputTarget outputTarget)
 	{
@@ -1094,7 +1092,6 @@ namespace RenderCore { namespace LightingEngine
 			CreateDeferredLightingTechnique(
 				std::move(promise),
 				_pipelineAccelerators, _pipelinePool, _techDelBox,
-				resolveOperators, shadowOperators,
 				globalOperators,
 				outputTarget._preregisteredAttachments);
 		} else if (foundUtility) {
@@ -1107,25 +1104,69 @@ namespace RenderCore { namespace LightingEngine
 			CreateForwardLightingTechnique(
 				std::move(promise),
 				_pipelineAccelerators, _pipelinePool, _techDelBox,
-				resolveOperators, shadowOperators,
 				globalOperators,
 				outputTarget._preregisteredAttachments);
 		}
 	}
 
 	// Simplified construction --
-	std::future<std::shared_ptr<CompiledLightingTechnique>> CreationUtility::CreateToFuture(
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
+	std::future<std::shared_ptr<CompiledLightingTechnique>> CreationUtility::CreateTechniqueToFuture(
 		const ChainedOperatorDesc* globalOperators,
 		OutputTarget outputTarget)
 	{
 		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
 		auto result = promisedTechnique.get_future();
-		CreateToPromise(
-			std::move(promisedTechnique),
-			resolveOperators, shadowGenerators, globalOperators,
-			outputTarget);
+		CreateTechniqueToPromise(std::move(promisedTechnique), globalOperators, outputTarget);
+		return result;
+	}
+
+	void CreationUtility::CreateLightSceneToPromise(
+		std::promise<std::shared_ptr<ILightScene>>&& promise,
+		const ChainedOperatorDesc* globalOperators)
+	{
+		// Convenience function to select from one of the built-in lighting techniques
+		// We'll scan the list of operator descs and decide on a technique type from what we
+		// find there
+		bool foundForwardTechnique = false, foundDeferredTechnique = false, foundUtility = false;
+		auto* op = globalOperators;
+		while (op) {
+			switch (op->_structureType) {
+			case TypeHashCode<ForwardLightingTechniqueDesc>:
+				foundForwardTechnique = true;
+				break;
+			case TypeHashCode<DeferredLightingTechniqueDesc>:
+				foundDeferredTechnique = true;
+				break;
+			case TypeHashCode<UtilityLightingTechniqueDesc>:
+				foundUtility = true;
+				break;
+			}
+			op = op->_next;
+		}
+		if ((unsigned(foundForwardTechnique) + unsigned(foundDeferredTechnique) + unsigned(foundUtility)) > 1)
+			Throw(std::runtime_error("Multiple top level lighting technique types found. There can only be one"));
+
+		if (foundDeferredTechnique) {
+			assert(0);
+		} else if (foundUtility) {
+			CreateForwardPlusLightScene(
+				std::move(promise),
+				_pipelineAccelerators, _pipelinePool, _techDelBox,
+				globalOperators);
+		} else {
+			CreateForwardPlusLightScene(
+				std::move(promise),
+				_pipelineAccelerators, _pipelinePool, _techDelBox,
+				globalOperators);
+		}
+	}
+
+	[[nodiscard]] std::future<std::shared_ptr<ILightScene>> CreationUtility::CreateLightSceneToFuture(
+		const ChainedOperatorDesc* globalOperators)
+	{
+		std::promise<std::shared_ptr<ILightScene>> promisedTechnique;
+		auto result = promisedTechnique.get_future();
+		CreateLightSceneToPromise(std::move(promisedTechnique), globalOperators);
 		return result;
 	}
 

@@ -37,6 +37,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IShaderResourceDelegate> CreateMainSceneResourceDelegate();
 
 		// ILightScene
+		virtual LightSourceId CreateLightSource(LightOperatorId operatorId) override;
 		virtual void DestroyLightSource(LightSourceId sourceId) override;
 		virtual void Clear() override;
 		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override;

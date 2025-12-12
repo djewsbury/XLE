@@ -46,13 +46,13 @@ namespace RenderCore { namespace LightingEngine
 		struct Pipeline
 		{
 			std::shared_ptr<Metal::GraphicsPipeline> _pipeline;
-			LightSourceOperatorDesc::Flags::BitField _flags = 0;
+			PositionalLightOperatorDesc::Flags::BitField _flags = 0;
 			LightSourceShape _stencilingGeoShape = LightSourceShape::Directional;
 		};
 
 		std::vector<Pipeline> _pipelines;
-		std::vector<std::tuple<ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned>> _operatorToPipelineMap;
-		std::vector<LightSourceOperatorDesc> _operatorDescs;
+		std::vector<std::tuple<ILightScene::LightOperatorId, unsigned, unsigned>> _operatorToPipelineMap;
+		std::vector<PositionalLightOperatorDesc> _operatorDescs;
 		std::shared_ptr<RenderCore::ICompiledPipelineLayout> _pipelineLayout;
 		Metal::BoundUniforms _boundUniforms;
 		std::shared_ptr<RenderCore::IDescriptorSet> _fixedDescriptorSet;
@@ -86,7 +86,7 @@ namespace RenderCore { namespace LightingEngine
     std::future<std::shared_ptr<LightResolveOperators>> BuildLightResolveOperators(
 		Techniques::PipelineCollection& pipelineCollection,
 		const std::shared_ptr<ICompiledPipelineLayout>& lightingOperatorLayout,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
+		IteratorRange<const PositionalLightOperatorDesc*> resolveOperators,
 		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const FrameBufferDesc& fbDesc,
 		unsigned subpassIdx,

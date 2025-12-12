@@ -81,12 +81,10 @@ namespace SceneEngine
 
 	std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> CreateAndActualizeLightingTechnique(
 		RenderCore::LightingEngine::LightingEngineApparatus& apparatus,
-		IteratorRange<const RenderCore::LightingEngine::LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const RenderCore::LightingEngine::ShadowOperatorDesc*> shadowOperators,
 		const RenderCore::LightingEngine::ChainedOperatorDesc* globalOperators,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregisteredAttachments)
 	{
 		return RenderCore::LightingEngine::CreationUtility{apparatus}
-			.CreateToFuture(resolveOperators, shadowOperators, globalOperators, {preregisteredAttachments}).get();
+			.CreateTechniqueToFuture(globalOperators, {preregisteredAttachments}).get();
 	}
 }

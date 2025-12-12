@@ -212,16 +212,15 @@ namespace ToolsRig
 			std::shared_ptr<SceneEngine::IScene> _scene;
 			std::shared_ptr<SceneEngine::ILightingStateDelegate> _envSettings;
 			std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _compiledLightingTechnique;
+			std::shared_ptr<RenderCore::LightingEngine::ILightScene> _lightScene;
 			::Assets::DependencyValidation _depVal;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 			~PreparedScene()
 			{
-				if (_envSettings && _compiledLightingTechnique) {
-					auto& lightScene = RenderCore::LightingEngine::GetLightScene(*_compiledLightingTechnique);
-					_envSettings->UnbindScene(lightScene);
-				}
+				if (_envSettings && _lightScene)
+					_envSettings->UnbindScene(*_lightScene);
 			}
 			PreparedScene() = default;
 			PreparedScene(PreparedScene&&) = default;
@@ -285,7 +284,7 @@ namespace ToolsRig
 			auto cam = _camera ? AsCameraDesc(*_camera) : RenderCore::Techniques::CameraDesc{};
 			parserContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(cam, parserContext.GetViewport()._width / float(parserContext.GetViewport()._height));
 
-			auto& lightScene = RenderCore::LightingEngine::GetLightScene(*actualizedScene->_compiledLightingTechnique);
+			auto& lightScene = *actualizedScene->_lightScene;
 			parserContext.GetAttachmentReservation().DefineDoubleBufferAttachments(RenderCore::LightingEngine::GetDoubleBufferAttachments(*actualizedScene->_compiledLightingTechnique));
 			actualizedScene->_envSettings->PreRender(parserContext.GetProjectionDesc(), lightScene);
 
@@ -398,21 +397,24 @@ namespace ToolsRig
 					SceneEngine::MergedLightingEngineCfg lightingEngineCfg;
 					envSettings->BindCfg(lightingEngineCfg);
 					auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreationUtility{*lightingApparatus}
-						.CreateToFuture(lightingEngineCfg.GetLightOperators(), lightingEngineCfg.GetShadowOperators(), lightingEngineCfg.GetChainedGlobalOperators(), {targets});
+						.CreateTechniqueToFuture(lightingEngineCfg.GetChainedGlobalOperators(), {targets});
 
-					::Assets::WhenAll(std::move(compiledLightingTechniqueFuture)).ThenConstructToPromise(
+					auto lightSceneFuture = RenderCore::LightingEngine::CreationUtility{*lightingApparatus}
+						.CreateLightSceneToFuture(lightingEngineCfg.GetChainedGlobalOperators());
+
+					::Assets::WhenAll(std::move(compiledLightingTechniqueFuture), std::move(lightSceneFuture)).ThenConstructToPromise(
 						std::move(promise),
-						[pipelineAccelerators, loadingContext, envSettings, scene=std::move(scene)](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto compiledLightingTechnique) mutable {
+						[pipelineAccelerators, loadingContext, envSettings, scene=std::move(scene)](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto compiledLightingTechnique, auto lightScene) mutable {
 							
 							TRY {
 								auto preparedScene = std::make_shared<PreparedScene>();
 								preparedScene->_envSettings = envSettings;
 								preparedScene->_compiledLightingTechnique = std::move(compiledLightingTechnique);
 								preparedScene->_scene = std::move(scene);
+								preparedScene->_lightScene = std::move(lightScene);
 								preparedScene->_depVal = RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique);
 
-								auto& lightScene = RenderCore::LightingEngine::GetLightScene(*preparedScene->_compiledLightingTechnique);
-								preparedScene->_envSettings->BindScene(lightScene, loadingContext);
+								preparedScene->_envSettings->BindScene(*preparedScene->_lightScene, loadingContext);
 
 								auto threadContext = RenderCore::Techniques::GetThreadContext();
 								std::future<RenderCore::Techniques::PreparedResourcesVisibility> pendingResources;

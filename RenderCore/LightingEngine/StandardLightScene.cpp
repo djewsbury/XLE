@@ -5,7 +5,6 @@
 #include "StandardLightScene.h"
 #include "StandardLightOperators.h"
 #include "ILightScene.h"
-#include "../../Core/Exceptions.h"
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
@@ -229,6 +228,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{}
 	StandardLightScene::~StandardLightScene()
 	{}
+
+	ILightBase::~ILightBase() = default;
+	ILightSceneComponent::~ILightSceneComponent() = default;
+
 }}}
 
 namespace RenderCore { namespace LightingEngine
