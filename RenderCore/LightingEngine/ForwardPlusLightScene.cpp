@@ -65,9 +65,9 @@ namespace RenderCore { namespace LightingEngine
 			RegisterComponent(_dominantLightSet);
 		}
 
-		for (unsigned op=0; op<_lightOperatorInfo.size(); ++op)
-			if (_lightOperatorInfo[op]._standardLightFlags)
-				AssociateFlag(op, _lightOperatorInfo[op]._standardLightFlags);
+		for (unsigned op=0; op<_LightOperatorsMapping._positionalLightOperators.size(); ++op)
+			if (_LightOperatorsMapping._positionalLightOperators[op]._standardLightFlags)
+				AssociateFlag(op, _LightOperatorsMapping._positionalLightOperators[op]._standardLightFlags);
 
 		if (_LightOperatorsMapping._operatorForStaticProbes != ~0u) {
 			_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _LightOperatorsMapping._shadowProbesCfg);
@@ -173,7 +173,7 @@ namespace RenderCore { namespace LightingEngine
 				auto op = _lightSets[setIdx]._operatorId;
 				assert(_lightSets[setIdx]._operatorId != _LightOperatorsMapping._dominantLightOperator);
 				auto& lightDesc = _lightSets[setIdx]._baseData.GetObject(lightIdx);
-				*i = MakeLightUniforms(lightDesc, _lightOperatorInfo[op]._uniformShapeCode);
+				*i = MakeLightUniforms(lightDesc, _LightOperatorsMapping._positionalLightOperators[op]._uniformShapeCode);
 			}
 
 			if (_shadowProbesManager) {
@@ -199,7 +199,7 @@ namespace RenderCore { namespace LightingEngine
 			if (_dominantLightSet && _dominantLightSet->_hasLight) {
 				i->_dominantLight = Internal::MakeLightUniforms(
 					_lightSets[_dominantLightSet->_setIdx]._baseData.GetObject(0),
-					_lightOperatorInfo[_dominantLightSet->_lightOpId]._uniformShapeCode);
+					_LightOperatorsMapping._positionalLightOperators[_dominantLightSet->_lightOpId]._uniformShapeCode);
 			}
 
 			i->_lightCount = tilerOutputs._lightCount;
@@ -316,7 +316,6 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
 		std::shared_ptr<RasterizationLightTileOperator> lightTiler,
 		LightOperatorsMapping&& lightOperatorsMapping,
-		std::vector<LightOperatorInfo>&& lightOperatorInfo,
 		std::shared_ptr<IResourceView> glossLut,
 		BufferUploads::CommandListID glossLutCompletion,
 		::Assets::DependencyValidation depVal)
@@ -326,7 +325,6 @@ namespace RenderCore { namespace LightingEngine
 		lightScene->_LightOperatorsMapping = std::move(lightOperatorsMapping);
 		lightScene->_pipelineAccelerators = constructionServices._pipelineAccelerators;
 		lightScene->_techDelBox = constructionServices._techDelBox;
-		lightScene->_lightOperatorInfo = std::move(lightOperatorInfo);
 		lightScene->_depVal = std::move(depVal);
 
 		lightScene->_lightTiler = lightTiler;
@@ -344,7 +342,6 @@ namespace RenderCore { namespace LightingEngine
 		std::promise<std::shared_ptr<ForwardPlusLightScene>>&& promise,
 		const ConstructionServices& constructionServices,
 		LightOperatorsMapping&& lightOperatorsMapping,
-		std::vector<LightOperatorInfo>&& lightOperatorInfo,
 		const RasterizationLightTileOperatorDesc& tilerCfg,
 		const IntegrationParams& integrationParams)
 	{
@@ -373,7 +370,7 @@ namespace RenderCore { namespace LightingEngine
 				if (helper->_glossLUTFuture.valid() && Internal::MarkerTimesOut(helper->_glossLUTFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
-			[helper, lightOperatorsMapping=std::move(lightOperatorsMapping), lightOperatorInfo=std::move(lightOperatorInfo), constructionServices] () mutable
+			[helper, lightOperatorsMapping=std::move(lightOperatorsMapping), constructionServices] () mutable
 			{
 				std::shared_ptr<IResourceView> glossLut;
 				BufferUploads::CommandListID glossLutCompletion = 0;
@@ -387,7 +384,7 @@ namespace RenderCore { namespace LightingEngine
 				auto lightTiler = helper->_lightTilerFuture.get();
 				depVals[1] = lightTiler->GetDependencyValidation();
 				auto depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
-				return CreateInternal(constructionServices, helper->_shadowPreparationOperatorsFuture.get(), std::move(lightTiler), std::move(lightOperatorsMapping), std::move(lightOperatorInfo), glossLut, glossLutCompletion, std::move(depVal));
+				return CreateInternal(constructionServices, helper->_shadowPreparationOperatorsFuture.get(), std::move(lightTiler), std::move(lightOperatorsMapping), glossLut, glossLutCompletion, std::move(depVal));
 			});
 	}
 

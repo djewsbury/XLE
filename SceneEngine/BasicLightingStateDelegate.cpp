@@ -185,16 +185,12 @@ namespace SceneEngine
                 InitializeLight(lightScene, newLight, light._parameters, Zero<Float3>());
                 lightNameToId.emplace_back(Hash64(light._name), newLight);
 
-                continue;
-            }
+                if (light._operatorHash == _ambientOperator) {
+                    auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(newLight);
+                    if (distanceIBL)
+                        distanceIBL->SetEquirectangularSource(operationContext, light._parameters.GetParameterAsString("EquirectangularSource"_h).value());
+                }
 
-            if (light._operatorHash == _ambientOperator) {
-                auto newLight = lightScene.CreateLightSource(lightOperator->second);
-                _lightSourcesInBoundScene.push_back(newLight);
-
-                auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(newLight);
-                if (distanceIBL)
-                    distanceIBL->SetEquirectangularSource(operationContext, light._parameters.GetParameterAsString("EquirectangularSource"_h).value());
                 continue;
             }
         }
@@ -247,16 +243,21 @@ namespace SceneEngine
 
         _lightOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
         for (const auto& c:_operatorResolveContext._lightSourceOperators._objects) {
-            auto shadow = std::find_if(b2e(_operatorResolveContext._shadowOperators._objects), [n=c.first](const auto& q) { return q.first == n; });
-            if (shadow != _operatorResolveContext._shadowOperators._objects.end()) {
-                _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second, shadow->second));
-                continue;
-            }
 
-            auto shadow2 = std::find_if(b2e(_sunSourceFrustumSettingsInCfgFile._objects), [n=c.first](const auto& q) { return q.first == n; });
-            if (shadow2 != _sunSourceFrustumSettingsInCfgFile._objects.end()) {
-                auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(shadow2->second);
-                continue;
+            auto associatedShadow = std::find_if(b2e(_shadowToAssociatedLight), [n=c.first](const auto& q) { return q.second == n; });
+            if (associatedShadow != _shadowToAssociatedLight.end()) {
+                auto shadow = std::find_if(b2e(_operatorResolveContext._shadowOperators._objects), [n=associatedShadow->first](const auto& q) { return q.first == n; });
+                if (shadow != _operatorResolveContext._shadowOperators._objects.end()) {
+                    _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second, shadow->second));
+                    continue;
+                }
+
+                auto shadow2 = std::find_if(b2e(_sunSourceFrustumSettingsInCfgFile._objects), [n=associatedShadow->first](const auto& q) { return q.first == n; });
+                if (shadow2 != _sunSourceFrustumSettingsInCfgFile._objects.end()) {
+                    auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(shadow2->second);
+                    _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second, shadowOperator));
+                    continue;
+                }
             }
 
             _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second));
@@ -267,6 +268,7 @@ namespace SceneEngine
                 Throw(std::runtime_error("Only one ambient operator allowed in BasicLightingStateDelegate configuration file"));
 
             _ambientOperator = _operatorResolveContext._ambientOperators._objects[0].first;
+            _lightOperatorHashToId.emplace_back(_ambientOperator, cfg.Register(_operatorResolveContext._ambientOperators._objects[0].second));
         }
 
         if (!_operatorResolveContext._toneMapAcesOperators._objects.empty()) {
@@ -595,6 +597,14 @@ namespace SceneEngine
             SetOperator<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::PositionalLightOperatorDesc>>({result, pos});
         }
 
+        return result;
+    }
+
+    auto MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::AmbientLightOperatorDesc& ambient) -> LightOperatorId
+    {
+        auto result = unsigned(_lightOperatorHashes.size());
+        _lightOperatorHashes.push_back(~0ull);
+        SetOperator<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::AmbientLightOperatorDesc>>({result, ambient});
         return result;
     }
 

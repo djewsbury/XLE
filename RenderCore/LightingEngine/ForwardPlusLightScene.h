@@ -84,7 +84,6 @@ namespace RenderCore { namespace LightingEngine
 			std::promise<std::shared_ptr<ForwardPlusLightScene>>&& promise,
 			const ConstructionServices&,
 			LightOperatorsMapping&& shadowPreparerMapping,
-			std::vector<LightOperatorInfo>&& lightOperatorInfo,
 			const RasterizationLightTileOperatorDesc& tilerCfg,
 			const IntegrationParams& integrationParams);
 
@@ -98,7 +97,6 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
 		LightOperatorsMapping _LightOperatorsMapping;
-		std::vector<LightOperatorInfo> _lightOperatorInfo;
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
@@ -133,7 +131,6 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
 			std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
 			ForwardPlusLightScene::LightOperatorsMapping&& shadowPreparerMapping,
-			std::vector<LightOperatorInfo>&& lightOperatorInfo,
 			std::shared_ptr<IResourceView> glossLut,
 			BufferUploads::CommandListID glossLutCompletion,
 			::Assets::DependencyValidation depVal);

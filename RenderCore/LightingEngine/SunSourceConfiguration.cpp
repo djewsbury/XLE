@@ -4,22 +4,15 @@
 
 #include "SunSourceConfiguration.h"
 #include "ShadowPreparer.h"
-#include "ShadowUniforms.h"     // for the attach driver infrastructure
 #include "ShadowProjectionDriver.h"
 #include "../Techniques/TechniqueUtils.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Format.h"
 #include "../StateDesc.h"
-#include "../../ConsoleRig/Console.h"
 #include "../../Math/Vector.h"
 #include "../../Math/Matrix.h"
 #include "../../Math/Transformations.h"
 #include "../../Math/ProjectionMath.h"
-#include "../../Math/MathSerialization.h"
-#include "../../OSServices/Log.h"
-#include "../../Utility/BitUtils.h"
-
-#include <sstream>
 
 namespace RenderCore { namespace LightingEngine
 {

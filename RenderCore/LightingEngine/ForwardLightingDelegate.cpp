@@ -375,7 +375,6 @@ namespace RenderCore { namespace LightingEngine
 		bool _hasPostProcessOperators = false;
 
 		ForwardPlusLightScene::LightOperatorsMapping _lightOperatorsMapping;
-		std::vector<ForwardPlusLightScene::LightOperatorInfo> _lightSceneOperatorInfo;
 		RasterizationLightTileOperatorDesc _tilingConfig;
 
 		OperatorDigest(
@@ -838,7 +837,7 @@ namespace RenderCore { namespace LightingEngine
 		ForwardPlusLightScene::ConstructToPromise(
 			std::move(specializedPromise),
 			ForwardPlusLightScene::ConstructionServices{pipelineAccelerators, pipelinePool, techDelBox},
-			std::move(digest._lightOperatorsMapping), std::move(digest._lightSceneOperatorInfo),
+			std::move(digest._lightOperatorsMapping),
 			digest._tilingConfig, integrationParams);
 
 		// awkwardly convert promise types

@@ -88,6 +88,7 @@ namespace SceneEngine
         using LightOperatorId = unsigned;
         LightOperatorId Register(const RenderCore::LightingEngine::PositionalLightOperatorDesc&, const RenderCore::LightingEngine::ShadowOperatorDesc&);
         LightOperatorId Register(const RenderCore::LightingEngine::PositionalLightOperatorDesc&);
+        LightOperatorId Register(const RenderCore::LightingEngine::AmbientLightOperatorDesc&);
 
         void SetOperator(const RenderCore::LightingEngine::ForwardLightingTechniqueDesc&);
         void SetOperator(const RenderCore::LightingEngine::DeferredLightingTechniqueDesc&);
