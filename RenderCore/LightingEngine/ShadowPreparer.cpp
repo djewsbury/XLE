@@ -588,10 +588,9 @@ namespace RenderCore { namespace LightingEngine
 			| (GetBits<4>(_cullMode)				<< 42ull)
 			| (GetBits<4>(_resolveType)				<< 46ull)
 			| (GetBits<1>(_enableNearCascade)  		<< 50ull)
-			| (GetBits<1>(_dominantLight)  			<< 51ull)
-			| (GetBits<2>(_filterModel)  			<< 52ull)
-			| (GetBits<1>(_enableContactHardening)	<< 54ull)
-			| (GetBits<1>(_multiViewInstancingPath)	<< 55ull)
+			| (GetBits<2>(_filterModel)  			<< 51ull)
+			| (GetBits<1>(_enableContactHardening)	<< 53ull)
+			| (GetBits<1>(_multiViewInstancingPath)	<< 54ull)
 			;
 
 		uint64_t h1 = 

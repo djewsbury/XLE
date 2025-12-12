@@ -33,21 +33,14 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit);
-
-
-
 
 	void CreateForwardPlusLightScene(
 		std::promise<std::shared_ptr<ILightScene>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const ChainedOperatorDesc* globalOperators);
 
 }}

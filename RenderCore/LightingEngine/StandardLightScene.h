@@ -13,23 +13,6 @@ namespace RenderCore { namespace LightingEngine { class ShadowProbes; }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
-	class ILightBase
-	{
-	public:
-		virtual void* QueryInterface(uint64_t interfaceTypeCode) = 0;
-		virtual ~ILightBase();
-	};
-
-	class ILightSceneComponent
-	{
-	public:
-		virtual void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) = 0;
-		virtual void DeregisterLight(unsigned setIdx, unsigned lightIdx) = 0;
-		virtual bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) = 0;
-		virtual void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) = 0;
-		virtual ~ILightSceneComponent();
-	};
-
 	template<typename T>
 		class PageHeap
 	{
@@ -110,7 +93,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		struct LightSet
 		{
 			LightOperatorId _operatorId = ~0u;
-			ShadowOperatorId _shadowOperatorId = ~0u;
 			PageHeap<StandardPositionalLight> _baseData;
 			std::vector<std::shared_ptr<ILightSceneComponent>> _boundComponents;
 			StandardPositionLightFlags::BitField _flags = 0;
@@ -131,10 +113,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		virtual LightSourceId CreateLightSource(LightOperatorId operatorId) override;
 		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
 		virtual void DestroyLightSource(LightSourceId) override;
-		virtual void SetShadowOperator(LightSourceId, ShadowOperatorId) override;
 		virtual void Clear() override;
 		virtual void* QueryInterface(uint64_t) override;
-		virtual LightSourceId CreateAmbientLightSource() override;
 		StandardLightScene();
 		~StandardLightScene();
 
@@ -146,7 +126,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			ShadowOperatorId shadowOperatorId);
 
 		void ReserveLightSourceIds(unsigned idCount); 
-		unsigned GetLightSet(LightOperatorId, ShadowOperatorId);
+		unsigned GetLightSet(LightOperatorId);
 
 		void AddToLookupTable(LightSourceId, LightSetAndIndex);
 		void ChangeLightSet(

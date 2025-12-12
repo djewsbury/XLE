@@ -39,6 +39,12 @@ namespace RenderCore { namespace LightingEngine
 		ChainedOperatorTemplate() : ChainedOperatorDesc(TypeHashCode<Type>) {}
 	};
 
+	template<typename T> struct LightOperatorAssignment
+	{
+		unsigned _lightOperatorId = ~0u;
+		T _desc;
+	};
+
 	struct CreationUtility
 	{
 		struct OutputTarget
@@ -46,16 +52,21 @@ namespace RenderCore { namespace LightingEngine
 			IteratorRange<const Techniques::PreregisteredAttachment*> _preregisteredAttachments;
 		};
 
-		void CreateToPromise(
+		void CreateTechniqueToPromise(
 			std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
-			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-			IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 			const ChainedOperatorDesc* globalOperators,
 			OutputTarget outputTarget);
 
-		[[nodiscard]] std::future<std::shared_ptr<CompiledLightingTechnique>> CreateToFuture(
-			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-			IteratorRange<const ShadowOperatorDesc*> shadowOperators,
+		[[nodiscard]] std::future<std::shared_ptr<CompiledLightingTechnique>> CreateTechniqueToFuture(
+			const ChainedOperatorDesc* globalOperators,
+			OutputTarget outputTarget);
+
+		void CreateLightSceneToPromise(
+			std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
+			const ChainedOperatorDesc* globalOperators,
+			OutputTarget outputTarget);
+
+		[[nodiscard]] std::future<std::shared_ptr<CompiledLightingTechnique>> CreateLightSceneToFuture(
 			const ChainedOperatorDesc* globalOperators,
 			OutputTarget outputTarget);
 
@@ -131,7 +142,7 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 	class ILightScene;
-	ILightScene& GetLightScene(CompiledLightingTechnique&);
+	void SetLightScene(CompiledLightingTechnique&, ILightScene&);
 	ILightScene* TryGetLightScene(CompiledLightingTechnique&);
 	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique&);
 	IteratorRange<const Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments(CompiledLightingTechnique&);

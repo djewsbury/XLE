@@ -59,7 +59,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	auto StandardLightScene::CreateLightSource(LightOperatorId operatorId) -> LightSourceId
 	{
 		auto result = _nextLightSource++;
-		auto lightSetIdx = GetLightSet(operatorId, ~0u);
+		auto lightSetIdx = GetLightSet(operatorId);
 		auto lightSet = &_lightSets[lightSetIdx];
 
 		auto newLight = lightSet->_baseData.Allocate();
@@ -88,11 +88,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		set->_baseData.Deallocate(i->second._lightIndex);
 
 		_lookupTable.erase(i);
-	}
-
-	void StandardLightScene::SetShadowOperator(LightSourceId lightSourceId, ShadowOperatorId shadowOperatorId)
-	{
-		ChangeLightsShadowOperator(MakeIteratorRange(&lightSourceId, &lightSourceId+1), shadowOperatorId);
 	}
 
 	void StandardLightScene::ChangeLightSet(

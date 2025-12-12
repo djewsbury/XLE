@@ -19,13 +19,9 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		using LightSourceId = unsigned;
 		using LightOperatorId = unsigned;
-		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) = 0; 
-		virtual LightSourceId CreateLightSource(LightOperatorId op) = 0;
-		virtual LightSourceId CreateAmbientLightSource() = 0;
+		virtual LightSourceId CreateLightSource(LightOperatorId) = 0;
 		virtual void DestroyLightSource(LightSourceId) = 0;
-
-		using ShadowOperatorId = unsigned;
-		virtual void SetShadowOperator(LightSourceId, ShadowOperatorId) = 0;
+		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) = 0;
 
 		virtual void Clear() = 0;
 
@@ -38,6 +34,24 @@ namespace RenderCore { namespace LightingEngine
 				constexpr auto interfaceCode = TypeHashCode<Type>;
 				return (Type*)TryGetLightSourceInterface(sourceId, interfaceCode);
 			}
+	};
+
+	class ILightBase
+	{
+	public:
+		virtual void* QueryInterface(uint64_t interfaceTypeCode) = 0;
+		virtual ~ILightBase();
+	};
+
+	class ILightSceneComponent
+	{
+	public:
+		using LightSetId = unsigned;
+		virtual void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) = 0;
+		virtual void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) = 0;
+		virtual bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) = 0;
+		virtual void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) = 0;
+		virtual ~ILightSceneComponent();
 	};
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

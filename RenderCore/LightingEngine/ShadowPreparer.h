@@ -61,7 +61,6 @@ namespace RenderCore { namespace LightingEngine
 		bool					_enableContactHardening = false;
 		unsigned				_normalProjCount = 1u;
 		bool					_enableNearCascade = false;
-		bool					_dominantLight = false;
 		bool					_multiViewInstancingPath = true;
 
 		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;

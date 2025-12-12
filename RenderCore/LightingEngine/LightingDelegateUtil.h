@@ -65,7 +65,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		SemiStaticShadowProbeScheduler(
 			std::shared_ptr<ShadowProbes> shadowProbes,
-			ILightScene::ShadowOperatorId operatorId);
+			ILightScene::LightOperatorId operatorId);
 		~SemiStaticShadowProbeScheduler();
 	private:
 		Threading::Mutex _lock;
@@ -88,13 +88,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		struct SceneSet;
 		std::vector<SceneSet> _sceneSets;
-		ILightScene::ShadowOperatorId _operatorId;
+		ILightScene::LightOperatorId _operatorId;
 		float _defaultNearRadius = 1.f;
 
 		// ILightSceneComponent
 		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
 		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
@@ -129,7 +129,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		// ILightSceneComponent
 		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
 		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
 
 		std::shared_ptr<Techniques::IFrameBufferPool> _shadowGenFrameBufferPool;
@@ -146,13 +146,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		ILightScene::LightOperatorId _lightOpId;
 		ILightScene::ShadowOperatorId _shadowOpId;
 
-		DominantLightSet(ILightScene::LightOperatorId lightOpId, ILightScene::ShadowOperatorId shadowOpId);
+		DominantLightSet(ILightScene::LightOperatorId lightOpId);
 		~DominantLightSet();
 	private:
 		// ILightSceneComponent
 		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, ILightScene::ShadowOperatorId, unsigned setIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
 		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
 	};
 

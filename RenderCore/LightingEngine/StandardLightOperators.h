@@ -7,14 +7,13 @@
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringUtils.h"
 #include <optional>
-#include <limits>
 
 namespace RenderCore { namespace LightingEngine
 {
 	enum class LightSourceShape { Directional, Sphere, Tube, Rectangle, Disc };
 	enum class DiffuseModel { Lambert, Disney };
 
-	struct LightSourceOperatorDesc
+	struct PositionalLightOperatorDesc
 	{
 		LightSourceShape _shape = LightSourceShape::Directional;
 		DiffuseModel _diffuseModel = DiffuseModel::Lambert;

@@ -275,7 +275,7 @@ namespace RenderCore { namespace LightingEngine
 		bool hasSSR, bool hasSSAO,
 		bool hasDistantIBL,
 		Techniques::DeferredShaderResource& balanceNoiseTexture,
-		std::optional<LightSourceOperatorDesc> dominantLightOperator,
+		std::optional<ForwardPlusLightScene::LightOperatorInfo> dominantLightOperator,
 		std::optional<ShadowOperatorDesc> dominantShadowOperator)
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
@@ -315,9 +315,9 @@ namespace RenderCore { namespace LightingEngine
 			if (dominantShadowOperator) {
 				// assume the shadow operator that will be associated is index 0
 				Internal::MakeShadowResolveParam(dominantShadowOperator.value()).WriteShaderSelectors(box);
-				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOperator.value()._shape | 0x20u);
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOperator.value()._uniformShapeCode | 0x20u);
 			} else {
-				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOperator.value()._shape);
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOperator.value()._uniformShapeCode);
 			}
 			if (captures->_lightScene->ShadowProbesSupported())
 				box.SetParameter("SHADOW_PROBE", 1);
@@ -352,6 +352,17 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
+	static ForwardPlusLightScene::LightOperatorInfo AsLightOperatorInfo(const PositionalLightOperatorDesc& desc)
+	{
+		unsigned flags = (desc._flags & PositionalLightOperatorDesc::Flags::DominantLight) ? 0 : Internal::StandardPositionLightFlags::SupportFiniteRange|Internal::StandardPositionLightFlags::LightTiler;
+		return {flags, Internal::AsUniformShapeCode(desc._shape)};
+	}
+
+	static bool operator==(const ForwardPlusLightScene::LightOperatorInfo& lhs, const ForwardPlusLightScene::LightOperatorInfo& rhs)
+	{
+		return lhs._standardLightFlags == rhs._standardLightFlags && lhs._uniformShapeCode == rhs._uniformShapeCode;
+	}
+
 	struct OperatorDigest
 	{
 		std::optional<ScreenSpaceReflectionsOperatorDesc> _ssr;
@@ -364,59 +375,15 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<PostProcessOperator::CombinedDesc> _postProcess;
 		bool _hasPostProcessOperators = false;
 
-		ForwardPlusLightScene::ShadowPreparerIdMapping _shadowPrepreparerIdMapping;
+		ForwardPlusLightScene::LightOperatorsMapping _lightOperatorsMapping;
 		std::vector<ForwardPlusLightScene::LightOperatorInfo> _lightSceneOperatorInfo;
 		RasterizationLightTileOperatorDesc _tilingConfig;
 
-		std::optional<LightSourceOperatorDesc> _dominantLightOperator;
-		std::optional<ShadowOperatorDesc> _dominantShadowOperator;
-
 		OperatorDigest(
-			IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-			IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 			const ChainedOperatorDesc* globalOperatorsChain)
 		{
 			// Given a partially opaque set of operators, try to digest and interpret them in order so we know how to create
 			// the light scene, and what operators to create
-
-			// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
-			{
-				_shadowPrepreparerIdMapping._shadowPreparers.reserve(shadowOperators.size());
-				_shadowPrepreparerIdMapping._operatorToShadowPreparerId.resize(shadowOperators.size(), ~0u);
-				for (unsigned c=0; c<shadowOperators.size(); ++c) {
-					if (shadowOperators[c]._resolveType == ShadowResolveType::Probe) {
-						// setup shadow operator for probes
-						if (_shadowPrepreparerIdMapping._operatorForStaticProbes != ~0u)
-							Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
-						_shadowPrepreparerIdMapping._operatorForStaticProbes = c;
-						_shadowPrepreparerIdMapping._shadowProbesCfg = MakeShadowProbeConfiguration(shadowOperators[c]);
-					} else {
-						_shadowPrepreparerIdMapping._operatorToShadowPreparerId[c] = (unsigned)_shadowPrepreparerIdMapping._shadowPreparers.size();
-
-						if (shadowOperators[c]._dominantLight) {
-							if (_shadowPrepreparerIdMapping._dominantShadowOperator != ~0u)
-								Throw(std::runtime_error("Multiple dominant shadow operators detected. This isn't supported -- there must be either 0 or 1"));
-							_shadowPrepreparerIdMapping._dominantShadowOperator = c;
-							_dominantShadowOperator = shadowOperators[c];
-						}
-
-						_shadowPrepreparerIdMapping._shadowPreparers.push_back(shadowOperators[c]);
-					}
-				}
-			}
-
-			_lightSceneOperatorInfo.reserve(resolveOperators.size());
-			for (unsigned c=0; c<resolveOperators.size(); ++c) {
-				unsigned flags = (resolveOperators[c]._flags & LightSourceOperatorDesc::Flags::DominantLight) ? 0 : Internal::StandardPositionLightFlags::SupportFiniteRange|Internal::StandardPositionLightFlags::LightTiler;
-				_lightSceneOperatorInfo.push_back({flags, Internal::AsUniformShapeCode(resolveOperators[c]._shape)});		// LightTiler assigned by the light scene
-
-				if (resolveOperators[c]._flags & LightSourceOperatorDesc::Flags::DominantLight) {
-					if (_shadowPrepreparerIdMapping._dominantLightOperator != ~0u)
-						Throw(std::runtime_error("Multiple dominant light operators detected. This isn't supported -- there must be either 0 or 1"));
-					_shadowPrepreparerIdMapping._dominantLightOperator = c;
-					_dominantLightOperator = resolveOperators[c];
-				}
-			}
 
 			bool gotTiledLightingConfig = false;
 			auto* chain = globalOperatorsChain;
@@ -475,6 +442,67 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			_postProcess = PostProcessOperator::MakeCombinedDesc(globalOperatorsChain);
+
+			// Map the light and shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
+			std::vector<uint64_t> hashedShadowPreparers;
+			chain = globalOperatorsChain;
+			while (chain) {
+				switch(chain->_structureType) {
+				case TypeHashCode<LightOperatorAssignment<PositionalLightOperatorDesc>>:
+					{
+						auto& op = Internal::ChainedOperatorCast<LightOperatorAssignment<PositionalLightOperatorDesc>>(*chain);
+						auto info = AsLightOperatorInfo(op._desc);
+						auto i = std::find_if(b2e(_lightOperatorsMapping._positionalLightOperators), info);
+						if (i == _lightOperatorsMapping._positionalLightOperators.end())
+							i = _lightOperatorsMapping._positionalLightOperators.insert(i, info);
+
+						if (_lightOperatorsMapping._operatorToPositionalLightOperator.size() <= op._lightOperatorId)
+							_lightOperatorsMapping._operatorToPositionalLightOperator.resize(op._lightOperatorId+1, ~0u);
+						_lightOperatorsMapping._operatorToPositionalLightOperator[op._lightOperatorId] = unsigned(i-_lightOperatorsMapping._positionalLightOperators.begin());
+
+						if (op._desc._flags & PositionalLightOperatorDesc::Flags::DominantLight) {
+							if (_lightOperatorsMapping._dominantLightOperator != ~0u)
+								Throw(std::runtime_error("Multiple dominant light operators found, where only one expected"));
+							_lightOperatorsMapping._dominantLightOperator = op._lightOperatorId;
+						}
+					}
+					break;
+
+				case TypeHashCode<LightOperatorAssignment<AmbientLightOperatorDesc>>:
+					{
+						auto& op = Internal::ChainedOperatorCast<LightOperatorAssignment<AmbientLightOperatorDesc>>(*chain);
+						if (_lightOperatorsMapping._ambientLightOperator != ~0u)
+							Throw(std::runtime_error("Multiple ambient light operators found, where only one expected"));
+						_lightOperatorsMapping._ambientLightOperator = op._lightOperatorId;
+					}
+					break;
+
+				case TypeHashCode<LightOperatorAssignment<ShadowOperatorDesc>>:
+					{
+						auto& op = Internal::ChainedOperatorCast<LightOperatorAssignment<ShadowOperatorDesc>>(*chain);
+						if (op._desc._resolveType == ShadowResolveType::Probe) {
+							// setup shadow operator for probes
+							if (_lightOperatorsMapping._operatorForStaticProbes != ~0u)
+								Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
+							_lightOperatorsMapping._operatorForStaticProbes = op._lightOperatorId;
+							_lightOperatorsMapping._shadowProbesCfg = MakeShadowProbeConfiguration(op._desc);
+						} else {
+							auto h = op._desc.GetHash();
+							auto i = std::find_if(b2e(hashedShadowPreparers), h);
+							if (i == hashedShadowPreparers.end()) {
+								i = hashedShadowPreparers.insert(i, h);
+								_lightOperatorsMapping._shadowPreparers.push_back(op._desc);
+							}
+
+							if (_lightOperatorsMapping._operatorToShadowPreparerId.size() <= op._lightOperatorId)
+								_lightOperatorsMapping._operatorToShadowPreparerId.resize(op._lightOperatorId+1, ~0u);
+							_lightOperatorsMapping._operatorToShadowPreparerId[op._lightOperatorId] = unsigned(i-hashedShadowPreparers.begin());
+						}
+					}
+					break;
+				}
+				chain = chain->_next;
+			}
 		}
 	};
 
@@ -553,11 +581,16 @@ namespace RenderCore { namespace LightingEngine
 			});
 
 		// Draw main scene
+		std::optional<ForwardPlusLightScene::LightOperatorInfo> dominantLightOperator; std::optional<ShadowOperatorDesc> dominantShadowOperator;
+		if (digest._lightOperatorsMapping._dominantLightOperator != ~0u) {
+			dominantLightOperator = digest._lightOperatorsMapping._positionalLightOperators[digest._lightOperatorsMapping._operatorToPositionalLightOperator[digest._lightOperatorsMapping._dominantLightOperator]];
+			dominantShadowOperator = digest._lightOperatorsMapping._shadowPreparers[digest._lightOperatorsMapping._operatorToShadowPreparerId[digest._lightOperatorsMapping._dominantLightOperator]];
+		}
 		auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
 			CreateForwardSceneFragment(
 				shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
 				_ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
-				balancedNoiseTexture, digest._dominantLightOperator, digest._dominantShadowOperator));
+				balancedNoiseTexture, dominantLightOperator, dominantShadowOperator));
 
 		// simplify uniforms before going into post processing steps
 		mainSequence.CreateStep_CallFunction(
@@ -610,8 +643,6 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const ChainedOperatorDesc* globalOperators,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit)
 	{
@@ -624,20 +655,13 @@ namespace RenderCore { namespace LightingEngine
 
 			std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _balancedNoiseTexture;
 
-			std::future<std::shared_ptr<ForwardPlusLightScene>> _lightSceneFuture;
+			// std::future<std::shared_ptr<ForwardPlusLightScene>> _lightSceneFuture;
 		};
 		auto helper = std::make_shared<ConstructionHelper>();
 
 		helper->_balancedNoiseTexture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
 
-		OperatorDigest digest { resolveOperators, shadowOperators, globalOperators };
-
-		ForwardPlusLightScene::IntegrationParams lightSceneIntegrationParams;
-		lightSceneIntegrationParams._specularIBLEnabled = digest._skyTextureProcessor.has_value();
-		helper->_lightSceneFuture = ::Assets::ConstructToFuturePtr<ForwardPlusLightScene>(
-			ForwardPlusLightScene::ConstructionServices{pipelineAccelerators, pipelinePool, techDelBox},
-			std::move(digest._shadowPrepreparerIdMapping), std::move(digest._lightSceneOperatorInfo),
-			digest._tilingConfig, lightSceneIntegrationParams);
+		OperatorDigest digest { globalOperators };
 
 		helper->_depthMotionNormalRoughnessDelegate = techDelBox->GetGBufferDelegate(GBufferDelegateType::DepthMotionNormalRoughness);
 		helper->_depthMotionDelegate = techDelBox->GetGBufferDelegate(GBufferDelegateType::DepthMotion);
@@ -651,7 +675,6 @@ namespace RenderCore { namespace LightingEngine
 			std::move(promise),
 			[helper](auto timeout) {
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-				if (Internal::MarkerTimesOut(helper->_lightSceneFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_depthMotionNormalRoughnessDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_depthMotionDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
@@ -663,7 +686,6 @@ namespace RenderCore { namespace LightingEngine
 
 				TRY {
 					auto captures = std::make_shared<ForwardLightingCaptures>();
-					captures->_lightScene = helper->_lightSceneFuture.get();
 
 					captures->_forwardLightingSemiConstant = Techniques::CreateSemiConstantDescriptorSet(
 						*techDelBox->_forwardLightingDescSetTemplate, "ForwardLighting", PipelineType::Graphics, *pipelinePool->GetDevice());
@@ -801,11 +823,9 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const LightSourceOperatorDesc*> resolveOperators,
-		IteratorRange<const ShadowOperatorDesc*> shadowOperators,
 		const ChainedOperatorDesc* globalOperators)
 	{
-		OperatorDigest digest { resolveOperators, shadowOperators, globalOperators };
+		OperatorDigest digest { globalOperators };
 
 		std::promise<std::shared_ptr<ForwardPlusLightScene>> specializedPromise;
 		auto specializedFuture = specializedPromise.get_future();
@@ -814,7 +834,7 @@ namespace RenderCore { namespace LightingEngine
 		ForwardPlusLightScene::ConstructToPromise(
 			std::move(specializedPromise),
 			ForwardPlusLightScene::ConstructionServices{pipelineAccelerators, pipelinePool, techDelBox},
-			std::move(digest._shadowPrepreparerIdMapping), std::move(digest._lightSceneOperatorInfo),
+			std::move(digest._lightOperatorsMapping), std::move(digest._lightSceneOperatorInfo),
 			digest._tilingConfig, integrationParams);
 
 		// awkwardly convert promise types
