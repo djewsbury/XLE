@@ -15,7 +15,7 @@ namespace RenderCore { namespace Techniques { struct PreregisteredAttachment; cl
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 namespace Assets { class IAsyncMarker; class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
-namespace std { template<typename Type> class promise; template<typename Type> class future; }
+namespace std { template<typename Type> class promise; template<typename Type> class future; template<typename Type> class shared_future; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -58,6 +58,17 @@ namespace RenderCore { namespace LightingEngine
 
 		[[nodiscard]] std::future<std::shared_ptr<CompiledLightingTechnique>> CreateTechniqueToFuture(
 			const ChainedOperatorDesc* globalOperators,
+			OutputTarget outputTarget);
+
+		void CreateTechniqueToPromise(
+			std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
+			const ChainedOperatorDesc* globalOperators,
+			std::shared_future<std::shared_ptr<ILightScene>>,
+			OutputTarget outputTarget);
+
+		[[nodiscard]] std::future<std::shared_ptr<CompiledLightingTechnique>> CreateTechniqueToFuture(
+			const ChainedOperatorDesc* globalOperators,
+			std::shared_future<std::shared_ptr<ILightScene>>,
 			OutputTarget outputTarget);
 
 		void CreateLightSceneToPromise(
@@ -139,7 +150,6 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 	class ILightScene;
-	void SetLightScene(CompiledLightingTechnique&, ILightScene&);
 	ILightScene* TryGetLightScene(CompiledLightingTechnique&);
 	const ::Assets::DependencyValidation& GetDependencyValidation(CompiledLightingTechnique&);
 	IteratorRange<const Techniques::DoubleBufferAttachment*> GetDoubleBufferAttachments(CompiledLightingTechnique&);

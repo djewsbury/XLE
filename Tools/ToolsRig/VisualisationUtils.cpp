@@ -399,22 +399,22 @@ namespace ToolsRig
 					auto compiledLightingTechniqueFuture = RenderCore::LightingEngine::CreationUtility{*lightingApparatus}
 						.CreateTechniqueToFuture(lightingEngineCfg.GetChainedGlobalOperators(), {targets});
 
-					auto lightSceneFuture = RenderCore::LightingEngine::CreationUtility{*lightingApparatus}
-						.CreateLightSceneToFuture(lightingEngineCfg.GetChainedGlobalOperators());
-
-					::Assets::WhenAll(std::move(compiledLightingTechniqueFuture), std::move(lightSceneFuture)).ThenConstructToPromise(
+					::Assets::WhenAll(std::move(compiledLightingTechniqueFuture)).ThenConstructToPromise(
 						std::move(promise),
-						[pipelineAccelerators, loadingContext, envSettings, scene=std::move(scene)](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto compiledLightingTechnique, auto lightScene) mutable {
+						[pipelineAccelerators, loadingContext, envSettings, scene=std::move(scene)](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto compiledLightingTechnique) mutable {
 							
 							TRY {
 								auto preparedScene = std::make_shared<PreparedScene>();
 								preparedScene->_envSettings = envSettings;
 								preparedScene->_compiledLightingTechnique = std::move(compiledLightingTechnique);
 								preparedScene->_scene = std::move(scene);
-								preparedScene->_lightScene = std::move(lightScene);
-								preparedScene->_depVal = RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique);
 
-								preparedScene->_envSettings->BindScene(*preparedScene->_lightScene, loadingContext);
+								auto* lightScene = RenderCore::LightingEngine::TryGetLightScene(*preparedScene->_compiledLightingTechnique);
+								assert(lightScene);
+								::Assets::DependencyValidationMarker depVals[] { RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique), lightScene->GetDependencyValidation() };
+								preparedScene->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+
+								preparedScene->_envSettings->BindScene(*lightScene, loadingContext);
 
 								auto threadContext = RenderCore::Techniques::GetThreadContext();
 								std::future<RenderCore::Techniques::PreparedResourcesVisibility> pendingResources;

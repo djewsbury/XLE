@@ -11,7 +11,7 @@
 namespace RenderCore { namespace Techniques { class ParsingContext; struct PreregisteredAttachment; class PipelineCollection; class IPipelineAcceleratorPool; } }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
 namespace RenderCore { class IDevice; class FrameBufferProperties; }
-namespace std { template<typename T> class future; }
+namespace std { template<typename T> class shared_future; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -32,6 +32,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const ChainedOperatorDesc* globalOperators,
+		const std::shared_future<std::shared_ptr<ILightScene>>& future,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit);
 
 	void CreateForwardPlusLightScene(

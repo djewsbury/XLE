@@ -133,6 +133,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		virtual void DestroyLightSource(LightSourceId) override;
 		virtual void Clear() override;
 		virtual void* QueryInterface(uint64_t) override;
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override;
+
 		StandardLightScene();
 		~StandardLightScene();
 

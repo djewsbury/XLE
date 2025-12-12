@@ -5,6 +5,7 @@
 #include "StandardLightScene.h"
 #include "StandardLightOperators.h"
 #include "ILightScene.h"
+#include "../../Assets/DepVal.h"
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
@@ -223,6 +224,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			if (set._operatorId == operatorId)
 				set._flags |= flag;
 	}
+
+	::Assets::DependencyValidation StandardLightScene::GetDependencyValidation() const { return {}; }
 
 	StandardLightScene::StandardLightScene()
 	{}

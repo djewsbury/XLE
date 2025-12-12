@@ -1064,6 +1064,7 @@ namespace RenderCore { namespace LightingEngine
 	void CreationUtility::CreateTechniqueToPromise(
 		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
 		const ChainedOperatorDesc* globalOperators,
+		std::shared_future<std::shared_ptr<ILightScene>> futureLightScene,
 		OutputTarget outputTarget)
 	{
 		// Convenience function to select from one of the built-in lighting techniques
@@ -1104,13 +1105,32 @@ namespace RenderCore { namespace LightingEngine
 			CreateForwardLightingTechnique(
 				std::move(promise),
 				_pipelineAccelerators, _pipelinePool, _techDelBox,
-				globalOperators,
+				globalOperators, std::move(futureLightScene),
 				outputTarget._preregisteredAttachments);
 		}
 	}
 
 	// Simplified construction --
 	std::future<std::shared_ptr<CompiledLightingTechnique>> CreationUtility::CreateTechniqueToFuture(
+		const ChainedOperatorDesc* globalOperators,
+		std::shared_future<std::shared_ptr<ILightScene>> futureLightScene,
+		OutputTarget outputTarget)
+	{
+		std::promise<std::shared_ptr<CompiledLightingTechnique>> promisedTechnique;
+		auto result = promisedTechnique.get_future();
+		CreateTechniqueToPromise(std::move(promisedTechnique), globalOperators, std::move(futureLightScene), outputTarget);
+		return result;
+	}
+
+	void CreationUtility::CreateTechniqueToPromise(
+		std::promise<std::shared_ptr<CompiledLightingTechnique>>&& promise,
+		const ChainedOperatorDesc* globalOperators,
+		OutputTarget outputTarget)
+	{
+		CreateTechniqueToPromise(std::move(promise), globalOperators, CreateLightSceneToFuture(globalOperators), outputTarget);
+	}
+
+	[[nodiscard]] std::future<std::shared_ptr<CompiledLightingTechnique>> CreationUtility::CreateTechniqueToFuture(
 		const ChainedOperatorDesc* globalOperators,
 		OutputTarget outputTarget)
 	{

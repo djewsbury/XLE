@@ -91,7 +91,6 @@ namespace RenderCore { namespace LightingEngine
 			_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
 	}
 
-
 	void ForwardLightingCaptures::SetupCameraJitter(Techniques::ParsingContext& parsingContext, const FrameToFrameProperties& f2fp)
 	{
 		if (_taaOperator)
@@ -584,7 +583,8 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<ForwardPlusLightScene::LightOperatorInfo> dominantLightOperator; std::optional<ShadowOperatorDesc> dominantShadowOperator;
 		if (digest._lightOperatorsMapping._dominantLightOperator != ~0u) {
 			dominantLightOperator = digest._lightOperatorsMapping._positionalLightOperators[digest._lightOperatorsMapping._operatorToPositionalLightOperator[digest._lightOperatorsMapping._dominantLightOperator]];
-			dominantShadowOperator = digest._lightOperatorsMapping._shadowPreparers[digest._lightOperatorsMapping._operatorToShadowPreparerId[digest._lightOperatorsMapping._dominantLightOperator]];
+			if (digest._lightOperatorsMapping._dominantLightOperator < digest._lightOperatorsMapping._operatorToShadowPreparerId.size() && digest._lightOperatorsMapping._operatorToShadowPreparerId[digest._lightOperatorsMapping._dominantLightOperator] != ~0u)
+				dominantShadowOperator = digest._lightOperatorsMapping._shadowPreparers[digest._lightOperatorsMapping._operatorToShadowPreparerId[digest._lightOperatorsMapping._dominantLightOperator]];
 		}
 		auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
 			CreateForwardSceneFragment(
@@ -644,6 +644,7 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::PipelineCollection>& pipelinePool,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const ChainedOperatorDesc* globalOperators,
+		const std::shared_future<std::shared_ptr<ILightScene>>& future,
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachmentsInit)
 	{
 		struct ConstructionHelper
@@ -655,11 +656,12 @@ namespace RenderCore { namespace LightingEngine
 
 			std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _balancedNoiseTexture;
 
-			// std::future<std::shared_ptr<ForwardPlusLightScene>> _lightSceneFuture;
+			std::shared_future<std::shared_ptr<ILightScene>> _lightSceneFuture;
 		};
 		auto helper = std::make_shared<ConstructionHelper>();
 
 		helper->_balancedNoiseTexture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
+		helper->_lightSceneFuture = future;
 
 		OperatorDigest digest { globalOperators };
 
@@ -675,6 +677,7 @@ namespace RenderCore { namespace LightingEngine
 			std::move(promise),
 			[helper](auto timeout) {
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				if (Internal::MarkerTimesOut(helper->_lightSceneFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_depthMotionNormalRoughnessDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_depthMotionDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
@@ -686,6 +689,7 @@ namespace RenderCore { namespace LightingEngine
 
 				TRY {
 					auto captures = std::make_shared<ForwardLightingCaptures>();
+					captures->_lightScene = checked_pointer_cast<ForwardPlusLightScene>(helper->_lightSceneFuture.get());
 
 					captures->_forwardLightingSemiConstant = Techniques::CreateSemiConstantDescriptorSet(
 						*techDelBox->_forwardLightingDescSetTemplate, "ForwardLighting", PipelineType::Graphics, *pipelinePool->GetDevice());
@@ -728,11 +732,11 @@ namespace RenderCore { namespace LightingEngine
 
 					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>();
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
-					lightingTechnique->_depVal.RegisterDependency(captures->_lightScene->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(depthMotionNormalRoughnessDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(depthMotionDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_DisableDepthWrite->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(balancedNoiseTexture->GetDependencyValidation());
+
 					captures->_lightScene->_queryInterfaceHelper = lightingTechnique->_queryInterfaceHelper =
 						[captures=captures.get()](uint64_t typeCode) -> void* {
 							switch (typeCode) {

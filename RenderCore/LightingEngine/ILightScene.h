@@ -10,7 +10,7 @@
 #include "../../Utility/MemoryUtils.h"
 #include <cstdint>
 
-namespace Assets { class OperationContext; }
+namespace Assets { class OperationContext; class DependencyValidation; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -26,6 +26,8 @@ namespace RenderCore { namespace LightingEngine
 		virtual void Clear() = 0;
 
 		virtual void* QueryInterface(uint64_t) = 0;
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
+
 		virtual ~ILightScene();
 
 		template<typename Type>

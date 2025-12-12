@@ -43,7 +43,7 @@ namespace RenderCore { namespace LightingEngine
 		virtual void* TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) override;
 		virtual void* QueryInterface(uint64_t typeCode) override;
 
-		::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
+		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
 		struct LightOperatorInfo
 		{

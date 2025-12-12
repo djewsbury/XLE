@@ -128,6 +128,8 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
+		::Assets::DependencyValidation GetDependencyValidation() const override { return {}; }
+
 		DeferredLightScene()
 		{
 			// We'll maintain the first few ids for system lights (ambient surrounds, etc)
