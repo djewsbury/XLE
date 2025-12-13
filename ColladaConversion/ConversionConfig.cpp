@@ -2,45 +2,35 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#define _SCL_SECURE_NO_WARNINGS
-
 #include "ConversionConfig.h"
 #include "../../Assets/Assets.h"       // (for RegisterFileDependency)
-#include "../../Assets/IFileSystem.h"
 #include "../../OSServices/Log.h"
-#include "../../OSServices/RawFS.h"
-#include "../../Formatters/StreamDOM.h"
 #include "../../Formatters/TextFormatter.h"
-#include "../../Utility/StringFormat.h"
+#include "../../Formatters/FormatterUtils.h"
 
 namespace ColladaConversion
 {
-    ImportConfiguration::ImportConfiguration(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal)
-    : _depVal(depVal)
+    BindingConfig::BindingConfig(Formatters::TextInputFormatter<utf8>& formatter)
     {
-        Formatters::StreamDOM<Formatters::TextInputFormatter<utf8>> doc(formatter);
-
-        _resourceBindings = BindingConfig(doc.RootElement().Element("Resources"));
-        _constantsBindings = BindingConfig(doc.RootElement().Element("Constants"));
-        _vertexSemanticBindings = BindingConfig(doc.RootElement().Element("VertexSemantics"));
-    }
-    ImportConfiguration::ImportConfiguration() {}
-    ImportConfiguration::~ImportConfiguration()
-    {}
-
-    BindingConfig::BindingConfig(const Formatters::StreamDOMElement<Formatters::TextInputFormatter<utf8>>& source)
-    {
-        auto bindingRenames = source.Element("Rename");
-        if (bindingRenames) {
-            for (auto child:bindingRenames.attributes())
-                _exportNameToBinding.push_back(
-                    std::make_pair(child.Name().AsString(), child.Value().AsString()));
-        }
-
-        auto bindingSuppress = source.Element("Suppress");
-        if (bindingSuppress) {
-            for (auto child:bindingSuppress.attributes())
-                _bindingSuppressed.push_back(child.Name().AsString());
+        StringSection<> kn;
+        while (formatter.TryKeyedItem(kn)) {
+            if (XlEqString(kn, "Rename")) {
+                Formatters::RequireBeginElement(formatter);
+                while (formatter.TryKeyedItem(kn))
+                    _exportNameToBinding.push_back(std::make_pair(kn.AsString(), Formatters::RequireStringValue(formatter).AsString()));
+                Formatters::RequireEndElement(formatter);
+            } else if (XlEqString(kn, "Suppress")) {
+                Formatters::RequireBeginElement(formatter);
+                while (formatter.TryStringValue(kn))
+                    _bindingSuppressed.push_back(kn.AsString());
+                Formatters::RequireEndElement(formatter);
+            } else if (XlEqString(kn, "ForceLinear")) {
+                Formatters::RequireBeginElement(formatter);
+                while (formatter.TryStringValue(kn))
+                    _forceLinear.push_back(kn.AsString());
+                Formatters::RequireEndElement(formatter);
+            } else
+                Formatters::SkipValueOrElement(formatter);
         }
     }
 
@@ -71,4 +61,39 @@ namespace ColladaConversion
         return (i != _bindingSuppressed.cend());
     }
 
+    bool BindingConfig::IsForceLinear(StringSection<utf8> input) const
+    {
+        auto i = std::find_if(
+            _forceLinear.cbegin(), _forceLinear.cend(),
+            [=](const String& e) { return XlEqString(input, e); });
+
+        return (i != _forceLinear.cend());
+    }
+
+    ImportConfiguration::ImportConfiguration(Formatters::TextInputFormatter<utf8>& formatter, const ::Assets::DirectorySearchRules&, const ::Assets::DependencyValidation& depVal)
+    : _depVal(depVal)
+    {
+        StringSection<> kn;
+        while (formatter.TryKeyedItem(kn)) {
+            if (XlEqString(kn, "Resources")) {
+                Formatters::RequireBeginElement(formatter);
+                _resourceBindings = BindingConfig(formatter);
+                Formatters::RequireEndElement(formatter);
+            } else if (XlEqString(kn, "Constants")) {
+                Formatters::RequireBeginElement(formatter);
+                _constantsBindings = BindingConfig(formatter);
+                Formatters::RequireEndElement(formatter);
+            } else if (XlEqString(kn, "VertexSemantics")) {
+                Formatters::RequireBeginElement(formatter);
+                _vertexSemanticBindings = BindingConfig(formatter);
+                Formatters::RequireEndElement(formatter);
+            } else
+                Formatters::SkipValueOrElement(formatter);
+        }
+    }
+    ImportConfiguration::ImportConfiguration() {}
+    ImportConfiguration::~ImportConfiguration()
+    {}
+
 }
+

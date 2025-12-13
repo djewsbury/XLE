@@ -38,7 +38,8 @@ namespace ColladaConversion
         RenderCore::Assets::RawMaterial& dest,
         const ParameterSet& paramSet, const utf8 bindingName[], 
         const StringSection<utf8> samplerRef,
-        const URIResolveContext& resolveContext)
+        const URIResolveContext& resolveContext,
+        bool forceLinear)
     {
         auto* samplerParam = FindSamplerParameter(paramSet, samplerRef);
         if (samplerParam) {
@@ -63,6 +64,7 @@ namespace ColladaConversion
                     if (image) {
                         utf8 rebuiltPath[MaxPath];
                         SplitPath<utf8>(image->GetInitFrom()).Simplify().Rebuild(rebuiltPath, dimof(rebuiltPath));
+                        if (forceLinear) XlCatString(rebuiltPath, ":l");
 
                         dest._resources.SetParameter(bindingName, (const char*)rebuiltPath);
                         return;
@@ -95,7 +97,8 @@ namespace ColladaConversion
                         auto binding = cfg.GetResourceBindings().AsNative(n);
                         AddSamplerBinding(
                             matSettings, params, 
-                            binding.c_str(), samplerRef, pubEles);
+                            binding.c_str(), samplerRef, pubEles,
+                            cfg.GetResourceBindings().IsForceLinear(n));
                     }
                 } else if (techValue.Element("color") || techValue.Element("float") || techValue.Element("param")) {
                     Log(Warning) << "Color, float and param type technique values not supported in <extra> part in effect (" << effectName << ")" << std::endl;
@@ -148,7 +151,8 @@ namespace ColladaConversion
 
                     AddSamplerBinding(
                         matSettings, profile->GetParams(), 
-                        binding.c_str(), value._reference, pubEles);
+                        binding.c_str(), value._reference, pubEles,
+                        cfg.GetResourceBindings().IsForceLinear(t.first));
                     break;
                 }
 

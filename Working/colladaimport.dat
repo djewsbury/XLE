@@ -5,25 +5,28 @@ Resources=~
 		specular=SpecularColorTexture
 		diffuse=DiffuseTexture
 	Suppress=~
-		ambient=<:():>
-		emission=<:():>
-		reflective=<:():>
-		shininess=<:():>
-		transparency=<:():>
-		transparent=<:():>
+		ambient
+		emission
+		reflective
+		shininess
+		transparency
+		transparent
+	ForceLinear=~
+		bump
+
 Constants=~
 	Rename=~
 		diffuse=MaterialDiffuse
 		specular=MaterialSpecular
 	Suppress=~
-		ambient=<:():>
-		emission=<:():>
-		reflective=<:():>
-		shininess=<:():>
-		transparency=<:():>
-		transparent=<:():>
+		ambient
+		emission
+		reflective
+		shininess
+		transparency
+		transparent
+
 VertexSemantics=~
 	Rename=~
 		TEXBINORMAL=TEXBITANGENT
 	Suppress=~
-
