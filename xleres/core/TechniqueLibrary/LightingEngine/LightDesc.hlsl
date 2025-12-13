@@ -37,7 +37,8 @@ struct LightDesc
 	float3	Brightness; 	float	SourceRadiusX;
 	float3	OrientationX; 	float	SourceRadiusY;
 	float3	OrientationY; 	uint	Shape;
-	float3	OrientationZ; 	uint	StaticDatabaseLightId;
+	float3	OrientationZ; 	uint 	Dummy;
+	uint StaticDatabaseLightId; uint DynamicCubeDatabaseLightId; uint2 	Dummy2;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

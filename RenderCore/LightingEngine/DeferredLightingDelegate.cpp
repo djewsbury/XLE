@@ -47,7 +47,7 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
-		std::shared_ptr<Internal::DynamicShadowProjectionScheduler> _shadowScheduler;
+		std::shared_ptr<Internal::PriorityShadowProjectionScheduler> _shadowScheduler;
 		bool _ambientLightEnabled = false;
 
 		struct ShadowPreparerIdMapping
@@ -75,7 +75,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 			
 			if (!_shadowOperatorIdMapping._operatorToShadowPreparerId.empty()) {
-				_shadowScheduler = std::make_shared<Internal::DynamicShadowProjectionScheduler>(
+				_shadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(
 					_pipelineAccelerators->GetDevice(), _shadowPreparers,
 					_shadowOperatorIdMapping._operatorToShadowPreparerId);
 				_shadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);

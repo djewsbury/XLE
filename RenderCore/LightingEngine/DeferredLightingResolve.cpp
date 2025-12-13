@@ -419,7 +419,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
-		Internal::DynamicShadowProjectionScheduler* shadowProjectionScheduler,
+		Internal::PriorityShadowProjectionScheduler* shadowProjectionScheduler,
 		ShadowProbes* shadowProbes,
 		Internal::SemiStaticShadowProbeScheduler* shadowProbeScheduler)
 	{

@@ -44,6 +44,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>);
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>, uint64_t outputSemantic);
 
+	// SemiStaticShadowProbeScheduler assumes that there is no animated content in the probes, and lights are not moving
+	// In other words, the probes are only recalculated after eviction
+	// There is a finite number of active probes, and the scheduler will attempt to make active only the most relevant lights
+	// Probes can be updated asynchronously
 	class SemiStaticShadowProbeScheduler : public ISemiStaticShadowProbeScheduler, public ILightSceneComponent
 	{
 	public:
@@ -98,7 +102,28 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
-	class DynamicShadowProjectionScheduler : public IDynamicShadowProjectionScheduler, public ILightSceneComponent
+	// DynamicShadowProbeScheduler is like SemiStaticShadowProbeScheduler, but probes are updated every frame
+	// Probe update is handled synchronously with the main scene render. Lights can be shadowed by both
+	// SemiStaticShadowProbeScheduler and DynamicShadowProbeScheduler, allowing animated and static shadowing
+	// geometry to be handled separately
+	class DynamicShadowProbeScheduler : public ILightSceneComponent
+	{
+	public:
+		struct AllocatedDatabaseEntry
+		{
+			unsigned _databaseIndex = ~0u;
+			int _fading = 0;
+		};
+		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
+
+		DynamicShadowProbeScheduler();
+		~DynamicShadowProbeScheduler();
+	};
+
+	// PriorityShadowProjectionScheduler handles shadow projections that are always active, and are recalculated every frame
+	// It's typically used for the dominant light, player held torches, or other important shadowing sources that should
+	// never go inactive
+	class PriorityShadowProjectionScheduler : public IDynamicShadowProjectionScheduler, public ILightSceneComponent
 	{
 	public:
 		const IPreparedShadowResult* GetPreparedShadow(unsigned setIdx, unsigned lightIdx);
@@ -121,10 +146,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
 		unsigned _totalProjectionCount;
 
-		DynamicShadowProjectionScheduler(
+		PriorityShadowProjectionScheduler(
 			std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers, 
 			IteratorRange<const unsigned*> operatorToPreparerIdMapping);
-		~DynamicShadowProjectionScheduler();
+		~PriorityShadowProjectionScheduler();
 	private:
 		// ILightSceneComponent
 		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
@@ -213,7 +238,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	/////////////////////////////// inlines //////////////////////////////////
 	class SequencerAddendums;
-	struct DynamicShadowProjectionScheduler::SceneSet
+	struct PriorityShadowProjectionScheduler::SceneSet
 	{
 		using ShadowProjectionBasePtr = std::unique_ptr<ILightBase>;
 		std::vector<ShadowProjectionBasePtr> _projections;
@@ -231,7 +256,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		SceneSet& operator=(SceneSet&&);
 	};
 
-	inline auto DynamicShadowProjectionScheduler::GetPreparedShadow(unsigned setIdx, unsigned lightIdx) -> const IPreparedShadowResult*
+	inline auto PriorityShadowProjectionScheduler::GetPreparedShadow(unsigned setIdx, unsigned lightIdx) -> const IPreparedShadowResult*
 	{
 		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
 		assert(_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx));

@@ -75,11 +75,16 @@ namespace RenderCore { namespace LightingEngine
 			RegisterComponent(_shadowProbesManager);
 		}
 
+		if (_LightOperatorsMapping._operatorForDynamicProbes != ~0u) {
+			_dynamicShadowProbesManager = std::make_shared<Internal::DynamicShadowProbeScheduler>(_LightOperatorsMapping._operatorForDynamicProbes);
+			RegisterComponent(_dynamicShadowProbesManager);
+		}
+
 		bool atLeastOneShadowPreparer = false;
 		for (auto i:_LightOperatorsMapping._operatorToShadowPreparerId) atLeastOneShadowPreparer |= i != ~0u;
 
 		if (atLeastOneShadowPreparer) {
-			_shadowScheduler = std::make_shared<Internal::DynamicShadowProjectionScheduler>(
+			_shadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(
 				_pipelineAccelerators->GetDevice(), _shadowPreparers,
 				_LightOperatorsMapping._operatorToShadowPreparerId);
 			_shadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
@@ -183,9 +188,21 @@ namespace RenderCore { namespace LightingEngine
 					assert(_lightSets[setIdx]._operatorId != _LightOperatorsMapping._dominantLightOperator);
 					auto probe = _shadowProbesManager->GetAllocatedDatabaseEntry(setIdx, lightIdx);
 					i->_staticProbeDatabaseEntry = probe._databaseIndex;
-					++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinal
+					++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinel
 				}
 			}
+
+			if (_dynamicShadowProbesManager) {
+				i = (Internal::CB_Light*)map.GetData().begin();
+				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
+					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
+					assert(_lightSets[setIdx]._operatorId != _LightOperatorsMapping._dominantLightOperator);
+					auto probe = _dynamicShadowProbesManager->GetAllocatedDatabaseEntry(setIdx, lightIdx);
+					i->_dynamicCubeDatabaseEntry = probe._databaseIndex;
+					++i->_dynamicCubeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinel
+				}
+			}
+
 			map.FlushCache();
 		}
 
@@ -254,9 +271,22 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 
-			if (bindingFlags & ((1ull<<6ull)|(1ull<<7ull))) {
-				dst[6] = _lightScene->_distantSpecularIBL.get();
-				dst[7] = _lightScene->_glossLut.get();
+			f (bindingFlags & (1ull<<6ull)) {
+				assert(bindingFlags & (1ull<<7ull));
+				if (_lightScene->_dynamicShadowDatabase) {
+					dst[6] = &_lightScene->_dynamicShadowDatabase->GetDynamicCubeProbesTable();
+					dst[7] = &_lightScene->_dynamicShadowDatabase->GetDynamicCubeProbeUniforms();
+				} else {
+					// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
+					assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
+					dst[6] = context.GetTechniqueContext()._commonResources->_whiteCubeArraySRV.get();
+					dst[7] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
+				}
+			}
+
+			if (bindingFlags & ((1ull<<8ull)|(1ull<<9ull))) {
+				dst[8] = _lightScene->_distantSpecularIBL.get();
+				dst[9] = _lightScene->_glossLut.get();
 				context.RequireCommandList(_lightScene->_distantSpecularIBLAndGlossLutCompletion);
 			}
 		}
@@ -270,20 +300,16 @@ namespace RenderCore { namespace LightingEngine
 			BindResourceView(3, "EnvironmentProps"_h);
 			BindResourceView(4, "StaticShadowProbeDatabase"_h);
 			BindResourceView(5, "StaticShadowProbeProperties"_h);
-			BindResourceView(6, "SpecularIBL"_h);
-			BindResourceView(7, "GlossLUT"_h);
+			BindResourceView(6, "DynamicCubeShadowDatabase"_h);
+			BindResourceView(7, "DynamicCubeShadowProperties"_h);
+			BindResourceView(8, "SpecularIBL"_h);
+			BindResourceView(9, "GlossLUT"_h);
 		}
 	};
 
 	std::shared_ptr<Techniques::IShaderResourceDelegate> ForwardPlusLightScene::CreateMainSceneResourceDelegate()
 	{
 		return std::make_shared<ShaderResourceDelegate>(*this);
-	}
-
-	bool ForwardPlusLightScene::ShadowProbesSupported() const
-	{
-		// returns true if we have an operator for shadow probes, even if the shadow probe database hasn't actually been created
-		return _LightOperatorsMapping._operatorForStaticProbes != ~0u;
 	}
 
 	void ForwardPlusLightScene::SetDiffuseSHCoefficients(const SHCoefficients& coeffients)

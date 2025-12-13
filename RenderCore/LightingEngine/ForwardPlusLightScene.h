@@ -17,14 +17,13 @@ namespace RenderCore { namespace LightingEngine
 	class HierarchicalDepthsOperator;
 	class DynamicShadowPreparers;
 	class SHCoefficients;
-	namespace Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProjectionScheduler; class DominantLightSet; }
+	namespace Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProbeScheduler; class PriorityShadowProjectionScheduler; class DominantLightSet; }
 
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
 	public:
 		RasterizationLightTileOperator& GetLightTiler() { return *_lightTiler; }
 		ShadowProbes& GetShadowProbes() { return *_shadowProbes; }
-		bool ShadowProbesSupported() const;
 		const IPreparedShadowResult* GetDominantPreparedShadow();
 
 		void FinalizeConfiguration();
@@ -57,6 +56,7 @@ namespace RenderCore { namespace LightingEngine
 			std::vector<unsigned> _operatorToShadowPreparerId;
 
 			unsigned _operatorForStaticProbes = ~0u;
+			unsigned _operatorForDynamicProbes = ~0u;
 			std::vector<ShadowOperatorDesc> _shadowPreparers;
 			ShadowProbes::Configuration _shadowProbesCfg;
 
@@ -88,7 +88,12 @@ namespace RenderCore { namespace LightingEngine
 			const IntegrationParams& integrationParams);
 
 		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
-		std::shared_ptr<Internal::DynamicShadowProjectionScheduler> _shadowScheduler;
+		std::shared_ptr<ShadowProbes> _shadowProbes;
+		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
+		std::shared_ptr<Internal::DynamicShadowProbeScheduler> _dynamicShadowProbesManager;
+		std::shared_ptr<Internal::PriorityShadowProjectionScheduler> _shadowScheduler;
+		std::shared_ptr<Internal::DominantLightSet> _dominantLightSet;
+
 		std::function<void*(uint64_t)> _queryInterfaceHelper;
 
 	private:
@@ -97,10 +102,6 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
 		LightOperatorsMapping _LightOperatorsMapping;
-
-		std::shared_ptr<ShadowProbes> _shadowProbes;
-		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
-		std::shared_ptr<Internal::DominantLightSet> _dominantLightSet;
 
 		class AmbientLightConfig;
 		std::shared_ptr<AmbientLightConfig> _ambientLight;

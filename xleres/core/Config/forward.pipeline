@@ -9,22 +9,29 @@ DescriptorSet ForwardLighting
 	SampledTexture SSR;									// 4
 	SampledTexture SSRConfidence;						// 5
 	SampledTexture SSAOTexture;							// 6
-	SampledTexture StaticShadowProbeDatabase;			// 7
-	UnorderedAccessBuffer StaticShadowProbeProperties;	// 8
 
-	SampledTexture NoiseTexture;						// 9
+	SampledTexture DynamicShadowDatabase;				// 7
+	UnorderedAccessBuffer DynamicShadowProperties;		// 8
 
-	SampledTexture SpecularIBL;							// 10
-	SampledTexture GlossLUT;							// 11
+	SampledTexture DynamicCubeShadowDatabase;			// 9
+	UnorderedAccessBuffer DynamicCubeShadowProperties;	// 10
 
-	Sampler ShadowSampler								// 12
+	SampledTexture StaticShadowProbeDatabase;			// 11
+	UnorderedAccessBuffer StaticShadowProbeProperties;	// 12
+
+	SampledTexture NoiseTexture;						// 13
+
+	SampledTexture SpecularIBL;							// 14
+	SampledTexture GlossLUT;							// 15
+
+	Sampler ShadowSampler								// 16
 	{
 		Filter = ComparisonBilinear,
 		AddressU = Border,
 		AddressV = Border,
 		Comparison = GreaterEqual
 	};
-	Sampler ShadowDepthSampler							// 13
+	Sampler ShadowDepthSampler							// 17
 	{
 		Filter = Bilinear,
 		AddressU = Border,

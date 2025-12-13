@@ -248,9 +248,15 @@ namespace RenderCore { namespace LightingEngine
 		bool hasSSR, bool hasSSAO,
 		bool hasDistantIBL,
 		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
-		std::optional<ForwardPlusLightScene::LightOperatorInfo> dominantLightOperator,
-		std::optional<ShadowOperatorDesc> dominantShadowOperator)
+		const ForwardPlusLightScene::LightOperatorsMapping& lightOperatorMapping)
 	{
+		std::optional<ForwardPlusLightScene::LightOperatorInfo> dominantLightOperator; std::optional<ShadowOperatorDesc> dominantShadowOperator;
+		if (lightOperatorMapping._dominantLightOperator != ~0u) {
+			dominantLightOperator = lightOperatorMapping._positionalLightOperators[lightOperatorMapping._operatorToPositionalLightOperator[lightOperatorMapping._dominantLightOperator]];
+			if (lightOperatorMapping._dominantLightOperator < lightOperatorMapping._operatorToShadowPreparerId.size() && lightOperatorMapping._operatorToShadowPreparerId[lightOperatorMapping._dominantLightOperator] != ~0u)
+				dominantShadowOperator = lightOperatorMapping._shadowPreparers[lightOperatorMapping._operatorToShadowPreparerId[lightOperatorMapping._dominantLightOperator]];
+		}
+
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).NoInitialState();
 		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(BindFlag::ShaderResource).FinalState(BindFlag::DepthStencil);
@@ -292,8 +298,8 @@ namespace RenderCore { namespace LightingEngine
 			} else {
 				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOperator.value()._uniformShapeCode);
 			}
-			if (captures->_lightScene->ShadowProbesSupported())
-				box.SetParameter("SHADOW_PROBE", 1);
+			if (lightOperatorMapping._operatorForStaticProbes != ~0u) box.SetParameter("SHADOW_PROBE", 1);
+			if (lightOperatorMapping._operatorForDynamicProbes != ~0u) box.SetParameter("DYNAMIC_SHADOW_PROBE", 1);
 		}
 
 		if (hasDistantIBL)
@@ -453,11 +459,17 @@ namespace RenderCore { namespace LightingEngine
 				case TypeHashCode<LightOperatorAssignment<ShadowOperatorDesc>>:
 					{
 						auto& op = Internal::ChainedOperatorCast<LightOperatorAssignment<ShadowOperatorDesc>>(*chain);
-						if (op._desc._resolveType == ShadowResolveType::Probe) {
+						if (op._desc._resolveType == ShadowResolveType::SemiStaticProbe) {
 							// setup shadow operator for probes
 							if (_lightOperatorsMapping._operatorForStaticProbes != ~0u)
 								Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
 							_lightOperatorsMapping._operatorForStaticProbes = op._lightOperatorId;
+							_lightOperatorsMapping._shadowProbesCfg = MakeShadowProbeConfiguration(op._desc);
+						} else if (op._desc._resolveType == ShadowResolveType::DynamicProbe) {
+							// setup shadow operator for probes
+							if (_lightOperatorsMapping._operatorForDynamicProbes != ~0u)
+								Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
+							_lightOperatorsMapping._operatorForDynamicProbes = op._lightOperatorId;
 							_lightOperatorsMapping._shadowProbesCfg = MakeShadowProbeConfiguration(op._desc);
 						} else {
 							auto h = op._desc.GetHash();
@@ -554,17 +566,11 @@ namespace RenderCore { namespace LightingEngine
 			});
 
 		// Draw main scene
-		std::optional<ForwardPlusLightScene::LightOperatorInfo> dominantLightOperator; std::optional<ShadowOperatorDesc> dominantShadowOperator;
-		if (digest._lightOperatorsMapping._dominantLightOperator != ~0u) {
-			dominantLightOperator = digest._lightOperatorsMapping._positionalLightOperators[digest._lightOperatorsMapping._operatorToPositionalLightOperator[digest._lightOperatorsMapping._dominantLightOperator]];
-			if (digest._lightOperatorsMapping._dominantLightOperator < digest._lightOperatorsMapping._operatorToShadowPreparerId.size() && digest._lightOperatorsMapping._operatorToShadowPreparerId[digest._lightOperatorsMapping._dominantLightOperator] != ~0u)
-				dominantShadowOperator = digest._lightOperatorsMapping._shadowPreparers[digest._lightOperatorsMapping._operatorToShadowPreparerId[digest._lightOperatorsMapping._dominantLightOperator]];
-		}
 		auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
 			CreateForwardSceneFragment(
 				shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
 				_ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
-				sequencerResources, dominantLightOperator, dominantShadowOperator));
+				sequencerResources, digest._lightOperatorsMapping));
 
 		// simplify uniforms before going into post processing steps
 		mainSequence.CreateStep_CallFunction(

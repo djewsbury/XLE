@@ -16,16 +16,16 @@
 #endif
 
 #include "ShadowSampleFiltering.hlsl"
-#include "RTShadows.hlsl"
 #include "../Math/MathConstants.hlsl"
 #include "../Math/PoissonDisc.hlsl"
-#include "../Framework/Binding.hlsl"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
     //   I N P U T S
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-Texture2DArray<float> 	ShadowTextures BIND_SHADOW_T3;
-TextureCube<float> 	    ShadowCube BIND_SHADOW_T3;
+struct ShadowResolveContext
+{
+    Texture2DArray<float> ShadowTextures;
+};
 
 Texture2D<float> GetNoiseTexture();
 
@@ -145,6 +145,7 @@ float GetNoisyValue(int2 randomizerValue, uint idx)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 float CalculateShadowCasterDistance(
+    ShadowResolveContext context,
     float2 texCoords, float comparisonDistance,
     uint arrayIndex, float searchSize, float2 filterPlane, uint msaaSampleIndex, float noisyValue)
 {
@@ -201,10 +202,10 @@ float CalculateShadowCasterDistance(
         float2 rotatedFilter3 = float2(dot(filterRotation, filter3), dot(float2(filterRotation.y, -filterRotation.x), filter3));
 
         float4 sampleDepth;
-        sampleDepth.x = ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter0, float(arrayIndex)), 0).r;
-        sampleDepth.y = ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter1, float(arrayIndex)), 0).r;
-        sampleDepth.z = ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter2, float(arrayIndex)), 0).r;
-        sampleDepth.w = ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter3, float(arrayIndex)), 0).r;
+        sampleDepth.x = context.ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter0, float(arrayIndex)), 0).r;
+        sampleDepth.y = context.ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter1, float(arrayIndex)), 0).r;
+        sampleDepth.z = context.ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter2, float(arrayIndex)), 0).r;
+        sampleDepth.w = context.ShadowTextures.SampleLevel(GetShadowDepthSampler(), float3(texCoords + rotatedFilter3, float(arrayIndex)), 0).r;
 
         // Note that we have to flip this comparison for the ReverseZ projection modes, since
         // larger values mean closer to the light in ReverseZ, while smaller numbers mean closer to the
@@ -263,25 +264,20 @@ float CalculateShadowCasterDistance(
     //   P E R C E N T A G E   C L O S E R
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-float TestShadow(float2 texCoord, uint arrayIndex, float comparisonDistance)
+float TestShadow(ShadowResolveContext context, float2 texCoord, uint arrayIndex, float comparisonDistance)
 {
-    // these two methods should return the same result (and probably have similiar performance...)
+    // these two methods should return the same result (and probably have similar performance...)
     const bool useGatherCmpRed = false;
     if (!useGatherCmpRed) {
-        // SampleCmpLevelZero cannot be used when cross compiling via glsl, because there is no textureLod() override
-        // for a a sampler2DArrayShadow 
-        #if !defined(HLSLCC)
-            return ShadowTextures.SampleCmpLevelZero(GetShadowSampler(), float3(texCoord, float(arrayIndex)), comparisonDistance);
-        #else
-            return ShadowTextures.SampleCmp(GetShadowSampler(), float3(texCoord, float(arrayIndex)), comparisonDistance);
-        #endif
+        return context.ShadowTextures.SampleCmpLevelZero(GetShadowSampler(), float3(texCoord, float(arrayIndex)), comparisonDistance);
     } else {
-        float4 t = ShadowTextures.GatherCmpRed(GetShadowSampler(), float3(texCoord, float(arrayIndex)), comparisonDistance);
+        float4 t = context.ShadowTextures.GatherCmpRed(GetShadowSampler(), float3(texCoord, float(arrayIndex)), comparisonDistance);
         return dot(t, 1.0.xxxx) * 0.25f;
     }
 }
 
 float CalculateFilteredShadows_PoissonDisc(
+    ShadowResolveContext context,
     float2 texCoords, float comparisonDistance, uint arrayIndex,
     float filterSizeNorm, float2 filterPlane,
     int2 randomizerValue, uint msaaSampleIndex)
@@ -339,10 +335,10 @@ float CalculateFilteredShadows_PoissonDisc(
         float cDist3 = comparisonDistance + dot(rotatedFilter3, filterPlane);
 
         float4 sampleDepth;
-        sampleDepth.x = TestShadow(texCoords + rotatedFilter0, arrayIndex, cDist0);
-        sampleDepth.y = TestShadow(texCoords + rotatedFilter1, arrayIndex, cDist1);
-        sampleDepth.z = TestShadow(texCoords + rotatedFilter2, arrayIndex, cDist2);
-        sampleDepth.w = TestShadow(texCoords + rotatedFilter3, arrayIndex, cDist3);
+        sampleDepth.x = TestShadow(context, texCoords + rotatedFilter0, arrayIndex, cDist0);
+        sampleDepth.y = TestShadow(context, texCoords + rotatedFilter1, arrayIndex, cDist1);
+        sampleDepth.z = TestShadow(context, texCoords + rotatedFilter2, arrayIndex, cDist2);
+        sampleDepth.w = TestShadow(context, texCoords + rotatedFilter3, arrayIndex, cDist3);
 
         shadowingTotal += dot(sampleDepth, 1.0.xxxx);
     }
@@ -351,6 +347,7 @@ float CalculateFilteredShadows_PoissonDisc(
 }
 
 float CalculateFilteredShadows(
+    ShadowResolveContext context,
     float2 texCoords, float comparisonDistance, uint arrayIndex,
     float filterSizeNorm, float2 filterPlane,
     int2 randomizerValue, uint msaaSampleIndex, 
@@ -359,6 +356,7 @@ float CalculateFilteredShadows(
     if (config._filteringMode == SHADOW_FILTER_MODEL_POISSONDISC) {
 
         return CalculateFilteredShadows_PoissonDisc(
+            context,
             texCoords, comparisonDistance, arrayIndex, 
             filterSizeNorm, filterPlane,
             randomizerValue, msaaSampleIndex);
@@ -367,22 +365,24 @@ float CalculateFilteredShadows(
 
         float fRatio = saturate(filterSizeNorm * ShadowTextureSize / float(AMD_FILTER_SIZE));
         return FixedSizeShadowFilter(
-            ShadowTextures,
+            context. ShadowTextures,
             float3(texCoords, float(arrayIndex)), comparisonDistance, fRatio, filterPlane);
 
     } else {
 
-        return TestShadow(texCoords, arrayIndex, comparisonDistance);
+        return TestShadow(context, texCoords, arrayIndex, comparisonDistance);
 
     }
 }
 
 float CalculateFilterSize(
+    ShadowResolveContext context,
     uint cascadeIndex, float2 shadowTexCoord,
     float4 miniProjection, float comparisonDistance, float searchSize, float2 filterPlane,
     int2 randomizerValue, uint msaaSampleIndex)
 {
     float casterDistance = CalculateShadowCasterDistance(
+        context,
         shadowTexCoord, comparisonDistance, cascadeIndex, searchSize, filterPlane,
         msaaSampleIndex, GetNoisyValue(randomizerValue, 1));
 
@@ -414,7 +414,8 @@ float CalculateFilterSize(
     return filterSizeNorm;
 }
 
-float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeSpaceNormal,
+float SampleDMShadows(	ShadowResolveContext context,
+                        uint cascadeIndex, float2 shadowTexCoord, float3 cascadeSpaceNormal,
                         float4 miniProjection, float maxBlurNorm,
                         float comparisonDistance,
                         int2 randomizerValue, uint msaaSampleIndex,
@@ -460,6 +461,7 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
             float searchSize = blockerFilterToMainFilterRatio * MaxBlurRadiusNorm;
         #endif
         filterSize = CalculateFilterSize(
+            context,
             cascadeIndex, shadowTexCoord, miniProjection, biasedDepth, 
             searchSize, filterPlane, randomizerValue, msaaSampleIndex);
 
@@ -467,7 +469,7 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
 
         // If the filter size is very small, let's do a cheaper single tap test (offten a pretty fair amount of samples end up here)
         [branch] if (filterSize <= 1/ShadowTextureSize)
-            return TestShadow(shadowTexCoord, cascadeIndex, biasedDepth);
+            return TestShadow(context, shadowTexCoord, cascadeIndex, biasedDepth);
 
         filterSize = min(max(filterSize, MinBlurRadiusNorm), maxBlurNorm);
     } else {
@@ -475,6 +477,7 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
     }
 
     return CalculateFilteredShadows(
+        context,
         shadowTexCoord, biasedDepth, cascadeIndex, filterSize, filterPlane, randomizerValue,
         msaaSampleIndex, config);
 }
@@ -484,6 +487,7 @@ float SampleDMShadows(	uint cascadeIndex, float2 shadowTexCoord, float3 cascadeS
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 float ResolveShadows_Cascade(
+    ShadowResolveContext context,
     CascadeAddress cascade,
     int2 randomizerValue, uint msaaSampleIndex,
     ShadowResolveConfig config)
@@ -507,11 +511,12 @@ float ResolveShadows_Cascade(
             //	of the depth map shadows...
             //	We could alternatively have a completely independent cascade; but
             //	that would make doing the hybrid blend more difficult
-    if (config._hasHybridRT && cascade.cascadeIndex==0) {
+    /*if (config._hasHybridRT && cascade.cascadeIndex==0) {
         return SampleRTShadows(cascade.frustumCoordinates.xyz/cascade.frustumCoordinates.w, randomizerValue);
-    }
+    }*/
 
     return SampleDMShadows(
+        context,
         cascade.cascadeIndex, texCoords, cascade.frustumSpaceNormal, cascade.miniProjection, cascade.maxBlurNorm, 
         comparisonDistance, randomizerValue, msaaSampleIndex, config);
 }
@@ -535,12 +540,156 @@ float CubeMapComparisonDistance(float3 cubeMapSampleCoord, float4 miniProjection
 }
 
 float ResolveShadows_CubeMap(
+    TextureCube<float> shadowCube,
     float3 cubeMapNormCoords, float4 miniProjection,
     int2 randomizerValue, uint msaaSampleIndex,
     ShadowResolveConfig config)
 {
     float comparisonDistance = CubeMapComparisonDistance(cubeMapNormCoords, miniProjection);
-    return ShadowCube.SampleCmpLevelZero(GetShadowSampler(), cubeMapNormCoords, comparisonDistance);
+    return shadowCube.SampleCmpLevelZero(GetShadowSampler(), cubeMapNormCoords, comparisonDistance);
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+    //   R E S O L V E - - - P R O B E   D A T A B A S E S
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if !defined(CUBE_SHADOW_BIQUADRATIC)
+    #define CUBE_SHADOW_BIQUADRATIC 1
+#endif
+
+#if CUBE_SHADOW_BIQUADRATIC
+
+    uint MajorAxisIndex(float3 input)
+	{
+		if (abs(input.x) > abs(input.y) && abs(input.x) > abs(input.z)) return 0;
+		else if (abs(input.y) > abs(input.z)) return 1;
+		return 2;
+	}
+
+	uint MajorAxisDistance(float3 input)
+	{
+		if (abs(input.x) > abs(input.y) && abs(input.x) > abs(input.z)) return abs(input.x);
+		else if (abs(input.y) > abs(input.z)) return abs(input.y);
+		return abs(input.z);
+	}
+
+    float ResolveShadows_CubeMapArray(TextureCubeArray<float> database, uint databaseEntry, MiniProjZW miniProjZW, float3 offset)
+    {
+        float distance;
+        float2 texCoord;
+        uint faceIdx = 0;
+        uint majorAxisIndex = MajorAxisIndex(offset);
+
+        if (majorAxisIndex == 0) {
+            distance = (offset.x < 0) ? -offset.x : offset.x;
+            texCoord.x = (offset.x < 0) ? offset.z : -offset.z;
+            texCoord.y = -offset.y;
+            faceIdx = (offset.x < 0) ? 1 : 0;
+        } else if (majorAxisIndex == 1) {
+            distance = (offset.y < 0) ? -offset.y : offset.y;
+            texCoord.x = offset.x;
+            texCoord.y = (offset.y < 0) ? -offset.z : offset.z;
+            faceIdx = (offset.y < 0) ? 3 : 2;
+        } else {
+            distance = (offset.z < 0) ? -offset.z : offset.z;
+            texCoord.x = (offset.z < 0) ? -offset.x : offset.x;
+            texCoord.y = -offset.y;
+            faceIdx = (offset.z < 0) ? 5 : 4;
+        }
+
+        // See https://www.shadertoy.com/view/wtXXDl for "biquadratic" texture sampling hack
+        // It's not quiet perfect, but does help reduce the impact of tell-tale bilinear problems,
+        // and is sort of neat mathematically.
+        //
+        // This method tries to estimate cubic interpolation by placing extra bilinear samples
+        // in such a way that the combination of them is a quadratic.
+        // 
+        // It's simple for flat textures, but we have a few different ways to extend this to
+        // cubemaps. Even bilinear cubemap interpolation is done in a non-angular way, so we'll
+        // do the same here (unless we we where using equiangular cubemaps, this would be a hassle)
+        // anyway. So following the existing spirit of approximations, we'll just shift the sampling
+        // vector such that we get the same results in the middle of cubemap faces, and hope that it
+        // looks fine for the cubemaps edges.
+        //
+        // We can actually pretty easily figure out when all of our samples are going to be on the same
+        // face -- and in theory, if we had a customized cubemap sample method, we could use this 
+        // to optimize the lookup. But that would require writing the full bilinear cubemap sample including
+        // all of the edge logic... So instead let's just do it the simple way...
+
+        #if 1
+
+            float twiceDistance = 2.0 * distance;
+            texCoord = texCoord / twiceDistance;		// (simplified)
+            float3 probeDatabaseDims;
+            database.GetDimensions(probeDatabaseDims.x, probeDatabaseDims.y, probeDatabaseDims.z);
+            float2 q = frac(texCoord * probeDatabaseDims.xy);
+            float2 c = (q*(q - 1.0) + 0.5);		// biquadratic trick
+            float extraBias = (abs(c.x)+abs(c.y)) * 32 / 65535.f;		// since we're expanding the sampling area, we will need some extra bias
+            c /= probeDatabaseDims.xy;
+
+            float3 A, B, C, D;
+            if (majorAxisIndex == 0) {
+                A = float3(offset.x, offset.y-c.y*twiceDistance, offset.z-c.x*twiceDistance);
+                B = float3(offset.x, offset.y+c.y*twiceDistance, offset.z-c.x*twiceDistance);
+                C = float3(offset.x, offset.y+c.y*twiceDistance, offset.z+c.x*twiceDistance);
+                D = float3(offset.x, offset.y-c.y*twiceDistance, offset.z+c.x*twiceDistance);
+            } else if (majorAxisIndex == 1) {
+                A = float3(offset.x-c.x*twiceDistance, offset.y, offset.z-c.y*twiceDistance);
+                B = float3(offset.x+c.x*twiceDistance, offset.y, offset.z-c.y*twiceDistance);
+                C = float3(offset.x+c.x*twiceDistance, offset.y, offset.z+c.y*twiceDistance);
+                D = float3(offset.x-c.x*twiceDistance, offset.y, offset.z+c.y*twiceDistance);
+            } else {
+                A = float3(offset.x-c.x*twiceDistance, offset.y-c.y*twiceDistance, offset.z);
+                B = float3(offset.x+c.x*twiceDistance, offset.y-c.y*twiceDistance, offset.z);
+                C = float3(offset.x+c.x*twiceDistance, offset.y+c.y*twiceDistance, offset.z);
+                D = float3(offset.x-c.x*twiceDistance, offset.y+c.y*twiceDistance, offset.z);
+            }
+
+            distance = extraBias + WorldSpaceDepthToNDC_Perspective(distance, miniProjZW);
+            float result 
+                = database.SampleCmpLevelZero(GetShadowSampler(), float4(A, float(databaseEntry)), distance)
+                + database.SampleCmpLevelZero(GetShadowSampler(), float4(B, float(databaseEntry)), distance)
+                + database.SampleCmpLevelZero(GetShadowSampler(), float4(C, float(databaseEntry)), distance)
+                + database.SampleCmpLevelZero(GetShadowSampler(), float4(D, float(databaseEntry)), distance);
+            return result * 0.25;
+
+        #else
+
+            // This has an more optimized path when all of the clustered sample points are on the same face
+            // -- but it requires a full cubemap bilinear sample to work
+            texCoord = 0.5 + 0.5f * texCoord / distance;
+            float3 probeDatabaseDims;
+            database.GetDimensions(probeDatabaseDims.x, probeDatabaseDims.y, probeDatabaseDims.z);
+            float2 q = frac(texCoord * probeDatabaseDims.xy);
+            float2 c = (q*(q - 1.0) + 0.5) / probeDatabaseDims.xy;		// biquadratic trick
+            float2 w0 = texCoord - c;
+            float2 w1 = texCoord + c;
+            distance = WorldSpaceDepthToNDC_Perspective(distance, miniProjZW);
+            [branch] if (all(w0 == saturate(w0) && w1 == saturate(w1))) {
+                // cheap -- all samples in the one face
+                float result 
+                    = database.SampleCmpLevelZero(GetShadowSampler(), float3(w0.x, w0.y, float(databaseEntry*6+faceIdx)), distance)
+                    + database.SampleCmpLevelZero(GetShadowSampler(), float3(w0.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
+                    + database.SampleCmpLevelZero(GetShadowSampler(), float3(w1.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
+                    + database.SampleCmpLevelZero(GetShadowSampler(), float3(w1.x, w0.y, float(databaseEntry*6+faceIdx)), distance);
+                return result * 0.25;
+            } else {
+                // expensive -- samples cross face boundaries
+                return 1;
+            }
+        #endif
+
+    }
+
+#else
+
+    float SampleCubeShadowDatabase(TextureCubeArray<float> database, uint databaseEntry, float3 offset)
+    {
+        float distance = WorldSpaceDepthToNDC_Perspective(MajorAxisDistance(offset), StaticShadowProbeProperties[databaseEntry]._miniProjZW);
+        // distance += 0.5f / 65535.f;     // bias half precision
+        return database.SampleCmpLevelZero(GetShadowSampler(), float4(offset, float(databaseEntry)), distance);
+    }
+    #endif
+
 
 #endif

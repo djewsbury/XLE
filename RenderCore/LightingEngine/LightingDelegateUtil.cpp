@@ -45,7 +45,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Techniques::IAttachmentPool& shadowGenAttachmentPool,
 		ViewPool& shadowGenViewPool);
 
-	void DynamicShadowProjectionScheduler::SceneSet::RegisterLight(unsigned index, ILightBase& light)
+	void PriorityShadowProjectionScheduler::SceneSet::RegisterLight(unsigned index, ILightBase& light)
 	{
 		if (_projections.size() <= index) {
 			_projections.resize(index+1);
@@ -58,18 +58,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_addendums[index]._srcLight = &light;
 		_activeProjections.Allocate(index);
 	}
-	void DynamicShadowProjectionScheduler::SceneSet::DeregisterLight(unsigned index)
+	void PriorityShadowProjectionScheduler::SceneSet::DeregisterLight(unsigned index)
 	{
 		_activeProjections.Deallocate(index);
 		_projections[index] = {};
 		_addendums[index] = {};
 	}
 
-	DynamicShadowProjectionScheduler::SceneSet::SceneSet() = default;
-	DynamicShadowProjectionScheduler::SceneSet::SceneSet(SceneSet&&) = default;
-	auto DynamicShadowProjectionScheduler::SceneSet::operator=(SceneSet&&) -> SceneSet& = default;
+	PriorityShadowProjectionScheduler::SceneSet::SceneSet() = default;
+	PriorityShadowProjectionScheduler::SceneSet::SceneSet(SceneSet&&) = default;
+	auto PriorityShadowProjectionScheduler::SceneSet::operator=(SceneSet&&) -> SceneSet& = default;
 
-	void DynamicShadowProjectionScheduler::DoShadowPrepare(
+	void PriorityShadowProjectionScheduler::DoShadowPrepare(
 		SequenceIterator& iterator,
 		Sequence& sequence)
 	{
@@ -96,7 +96,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 	}
 
-	void DynamicShadowProjectionScheduler::ClearPreparedShadows()
+	void PriorityShadowProjectionScheduler::ClearPreparedShadows()
 	{
 		for (auto& comp:_sceneSets) {
 			if (!comp._activeSet) continue;
@@ -105,14 +105,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 	}
 
-	void DynamicShadowProjectionScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light)
+	void PriorityShadowProjectionScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light)
 	{
 		assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
 		_sceneSets[setIdx].RegisterLight(lightIdx, light);
 		++_totalProjectionCount;
 	}
 
-	void DynamicShadowProjectionScheduler::DeregisterLight(unsigned setIdx, unsigned lightIdx)
+	void PriorityShadowProjectionScheduler::DeregisterLight(unsigned setIdx, unsigned lightIdx)
 	{
 		assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
 		_sceneSets[setIdx].DeregisterLight(lightIdx);
@@ -120,7 +120,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		--_totalProjectionCount;
 	}
 
-	bool DynamicShadowProjectionScheduler::BindToSet(ILightScene::LightOperatorId opId, unsigned setIdx)
+	bool PriorityShadowProjectionScheduler::BindToSet(ILightScene::LightOperatorId opId, unsigned setIdx)
 	{
 		if (opId >= _operatorToPreparerIdMapping.size() || _operatorToPreparerIdMapping[opId] == ~0u) return false;
 		if (_sceneSets.size() <= setIdx)
@@ -131,7 +131,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return true;
 	}
 
-	void* DynamicShadowProjectionScheduler::QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode)
+	void* PriorityShadowProjectionScheduler::QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode)
 	{
 		if (setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet)
 			if (_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx)) {
@@ -148,7 +148,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return nullptr;
 	}
 
-	auto DynamicShadowProjectionScheduler::GetAllPreparedShadows() -> std::vector<PreparedShadow>
+	auto PriorityShadowProjectionScheduler::GetAllPreparedShadows() -> std::vector<PreparedShadow>
 	{
 		std::vector<PreparedShadow> result;
 		result.reserve(_totalProjectionCount);
@@ -161,7 +161,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return result;
 	}
 
-	void DynamicShadowProjectionScheduler::SetDescriptorSetLayout(
+	void PriorityShadowProjectionScheduler::SetDescriptorSetLayout(
 		const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
 		PipelineType pipelineType)
 	{
@@ -169,7 +169,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			preparer._preparer->SetDescriptorSetLayout(descSetLayout, pipelineType);
 	}
 
-	DynamicShadowProjectionScheduler::DynamicShadowProjectionScheduler(
+	PriorityShadowProjectionScheduler::PriorityShadowProjectionScheduler(
 		std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
 		IteratorRange<const unsigned*> operatorToPreparerIdMapping)
 	: _shadowPreparers(std::move(shadowPreparers)), _totalProjectionCount(0)
@@ -180,7 +180,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		assert(!operatorToPreparerIdMapping.empty());
 		_operatorToPreparerIdMapping.insert(_operatorToPreparerIdMapping.end(), operatorToPreparerIdMapping.begin(), operatorToPreparerIdMapping.end());
 	}
-	DynamicShadowProjectionScheduler::~DynamicShadowProjectionScheduler() {}
+	PriorityShadowProjectionScheduler::~PriorityShadowProjectionScheduler() {}
 
 	constexpr auto s_positionalLightSourceInterface = TypeHashCode<IPositionalLightSource>;
 	constexpr auto s_orthoShadowProjectionsInterface = TypeHashCode<IOrthoShadowProjections>;

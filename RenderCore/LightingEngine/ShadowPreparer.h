@@ -28,7 +28,7 @@ namespace std { template<typename T> class future; }
 namespace RenderCore { namespace LightingEngine
 {
 	enum class ShadowProjectionMode { Arbitrary, Ortho, ArbitraryCubeMap };
-	enum class ShadowResolveType { DepthTexture, RayTraced, Probe };
+	enum class ShadowResolveType { DepthTexture, RayTraced, SemiStaticProbe, DynamicProbe };
 	enum class ShadowFilterModel { None, PoissonDisc, Smooth };
 
 	struct ShadowOperatorDesc

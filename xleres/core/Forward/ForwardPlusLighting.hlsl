@@ -41,9 +41,10 @@ Texture2D<float> SSRConfidence : register(t5, space2);
 #endif
 Texture2D<float2> GlossLUT : register(t11, space2);			// this is the look up table used in the split-sum IBL glossy reflections
 
-Texture2D<float>			NoiseTexture 			: register(t9, space2);
-SamplerComparisonState		ShadowSampler           : register(s12, space2);
-SamplerState				ShadowDepthSampler      : register(s13, space2);
+Texture2D<float>			NoiseTexture 			: register(t13, space2);
+SamplerComparisonState		ShadowSampler           : register(s14, space2);
+SamplerState				ShadowDepthSampler      : register(s15, space2);
+Texture2DArray<float> 		PriorityLightShadowTextures BIND_SHADOW_T3;
 
 static const uint TiledLights_DepthGradiations = 1024;
 static const uint TiledLights_GridDims = 16;
@@ -112,11 +113,13 @@ float3 CalculateIllumination(
 		#if defined(DOMINANT_LIGHT_SHAPE)
 			{
 				float shadowing = 1.f;
+				ShadowResolveContext shadowResolveContext;
+				shadowResolveContext.ShadowTextures = PriorityLightShadowTextures;
 
 				#if (DOMINANT_LIGHT_SHAPE & 0x20) == 0x20
 					CascadeAddress cascade = ResolveCascade_FromWorldPosition(worldPosition, worldGeometryNormal);
 					if (cascade.cascadeIndex >= 0)
-						shadowing = ResolveShadows_Cascade(cascade, screenDest.pixelCoords, screenDest.sampleIndex, ShadowResolveConfig_Default());
+						shadowing = ResolveShadows_Cascade(shadowResolveContext, cascade, screenDest.pixelCoords, screenDest.sampleIndex, ShadowResolveConfig_Default());
 				#endif
 
 				#if (DOMINANT_LIGHT_SHAPE & 0x7) == 0
@@ -156,7 +159,12 @@ float3 CalculateIllumination(
 						float shadowing = 1.0f;
 						#if SHADOW_PROBE
 							if (l.StaticDatabaseLightId != 0)
-								shadowing = SampleStaticDatabase(l.StaticDatabaseLightId-1, worldPosition-l.Position, screenDest);
+								shadowing = SampleStaticShadowDatabase(l.StaticDatabaseLightId-1, worldPosition-l.Position, screenDest);
+						#endif
+
+						#if DYNAMIC_SHADOW_PROBE
+							if (l.DynamicCubeDatabaseLightId != 0)
+								shadowing *= SampleDynamicCubeShadowDatabase(l.DynamicCubeDatabaseLightId-1, worldPosition-l.Position, screenDest);
 						#endif
 
 						if (l.Shape == 0) {

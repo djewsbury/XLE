@@ -244,14 +244,14 @@ namespace SceneEngine
         _lightOperatorHashToId.reserve(_operatorResolveContext._lightSourceOperators._objects.size());
         for (const auto& c:_operatorResolveContext._lightSourceOperators._objects) {
 
+            auto shadow = std::find_if(b2e(_operatorResolveContext._shadowOperators._objects), [n=c.first](const auto& q) { return q.first == n; });
+            if (shadow != _operatorResolveContext._shadowOperators._objects.end()) {
+                _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second, shadow->second));
+                continue;
+            }
+
             auto associatedShadow = std::find_if(b2e(_shadowToAssociatedLight), [n=c.first](const auto& q) { return q.second == n; });
             if (associatedShadow != _shadowToAssociatedLight.end()) {
-                auto shadow = std::find_if(b2e(_operatorResolveContext._shadowOperators._objects), [n=associatedShadow->first](const auto& q) { return q.first == n; });
-                if (shadow != _operatorResolveContext._shadowOperators._objects.end()) {
-                    _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second, shadow->second));
-                    continue;
-                }
-
                 auto shadow2 = std::find_if(b2e(_sunSourceFrustumSettingsInCfgFile._objects), [n=associatedShadow->first](const auto& q) { return q.first == n; });
                 if (shadow2 != _sunSourceFrustumSettingsInCfgFile._objects.end()) {
                     auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(shadow2->second);

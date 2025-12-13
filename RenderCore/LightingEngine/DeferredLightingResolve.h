@@ -71,7 +71,7 @@ namespace RenderCore { namespace LightingEngine
 	struct ShadowOperatorDesc;
 	namespace Internal { class StandardLightScene; }
 	class ShadowProbes;
-	namespace Internal { class DynamicShadowProjectionScheduler; class SemiStaticShadowProbeScheduler; }
+	namespace Internal { class PriorityShadowProjectionScheduler; class SemiStaticShadowProbeScheduler; }
 
     void ResolveLights(
 		IThreadContext& threadContext,
@@ -79,7 +79,7 @@ namespace RenderCore { namespace LightingEngine
         Techniques::RenderPassInstance& rpi,
 		const LightResolveOperators& lightResolveOperators,
 		Internal::StandardLightScene& lightScene,
-		Internal::DynamicShadowProjectionScheduler* shadowProjectionScheduler,
+		Internal::PriorityShadowProjectionScheduler* shadowProjectionScheduler,
 		ShadowProbes* shadowProbes,
 		Internal::SemiStaticShadowProbeScheduler* shadowProbeScheduler);
 
