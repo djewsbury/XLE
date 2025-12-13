@@ -8,6 +8,7 @@
 #define SPECULAR_METHODS_H
 
 #include "LightingAlgorithm.hlsl"
+#include "optimized-ggx.hlsl"
 
 #if !defined(SPECULAR_METHOD)
     #define SPECULAR_METHOD 1
@@ -265,19 +266,23 @@ float3 CalculateSpecular_GGX(
     float3 halfVector,
     float roughness, float3 F0, bool mirrorSurface)
 {
-    return ReferenceSpecularGGX(
-        normal, directionToEye, negativeLightDirection, halfVector,
-        roughness, F0, mirrorSurface);
-
     #if 0
+
+        return ReferenceSpecularGGX(
+            normal, directionToEye, negativeLightDirection, halfVector,
+            roughness, F0, mirrorSurface);
+
+    #else
+
         float aveF0 = 0.3333f * (F0.r + F0.g + F0.b);
-        return LightingFuncGGX_REF(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
+        // return LightingFuncGGX_REF(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
 
         if (!mirrorSurface) {
             return LightingFuncGGX_OPT5(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
         } else {
             return LightingFuncGGX_OPT5_Mirror(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
         }
+
     #endif
 }
 

@@ -27,7 +27,7 @@ DescriptorSet Sequencer
 	SampledTexture DepthPrev;					// 6
 	SampledTexture GBufferNormalPrev;			// 7
 	SampledTexture tex2;						// 8
-	SampledTexture tex3;						// 9
+	SampledTexture GGXTable;					// 9
 	SampledTexture NormalsFittingTexture;		// 10
 
 	Sampler DefaultSampler						// 11

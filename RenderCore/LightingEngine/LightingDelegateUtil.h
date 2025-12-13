@@ -9,6 +9,7 @@
 #include "ShadowProbes.h"
 #include "ShadowPreparer.h"
 #include "Sequence.h"
+#include "../Techniques/DrawableDelegates.h"
 #include "../Types.h"
 #include "../ResourceUtils.h"		// for ViewPool
 #include "../Techniques/PipelineCollection.h"		// for FrameBufferTarget
@@ -39,7 +40,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	class ILightBase;
 
-	::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate();
+	std::future<std::shared_ptr<Techniques::IShaderResourceDelegate>> CreateDefaultSequencerResourceDelegate();
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>);
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>, uint64_t outputSemantic);
 
@@ -152,6 +153,23 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
 		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
 		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
+	};
+
+	class ShaderResourceSplitter : public RenderCore::Techniques::IShaderResourceDelegate
+	{
+	public:
+		void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override;
+		void WriteSamplers(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<ISampler**> dst) override;
+		void WriteImmediateData(Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override;
+		size_t GetImmediateDataSize(Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override;
+
+		ShaderResourceSplitter(std::shared_ptr<Techniques::IShaderResourceDelegate> zero, std::shared_ptr<Techniques::IShaderResourceDelegate> one);
+		ShaderResourceSplitter(std::shared_ptr<Techniques::IShaderResourceDelegate> zero, std::shared_ptr<Techniques::IShaderResourceDelegate> one, std::shared_ptr<Techniques::IShaderResourceDelegate> two);
+		ShaderResourceSplitter(std::shared_ptr<Techniques::IShaderResourceDelegate> zero, std::shared_ptr<Techniques::IShaderResourceDelegate> one, std::shared_ptr<Techniques::IShaderResourceDelegate> two, std::shared_ptr<Techniques::IShaderResourceDelegate> three);
+	protected:
+		std::shared_ptr<Techniques::IShaderResourceDelegate> _subDelegates[4];
+		unsigned _srvOffsets[5], _samplerOffsets[5], _immDataOffsets[5];
+		void Configure();
 	};
 
 	/////////////////////////// utility functions ////////////////////////

@@ -36,6 +36,7 @@ For more information, please refer to <http://unlicense.org/>
 #define OPTIMIZED_GGX_H
 
 #include "../Framework/CommonResources.hlsl"
+#include "../Framework/Binding.hlsl"
 
 float G1V(float dotNV, float k)
 {
@@ -189,7 +190,7 @@ float Pow4(float x)
 	return x*x*x*x;
 }
 
-Texture2D<float4> GGXTable : register(t3, space2);
+Texture2D<float4> GGXTable BIND_SEQ_T9;
 
 float LightingFuncGGX_OPT4(float3 N, float3 V, float3 L, float roughness, float F0)
 {

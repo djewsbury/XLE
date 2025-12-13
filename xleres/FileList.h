@@ -58,6 +58,7 @@ using namespace Assets::Literals;
 #define MESH_MARKER_TECH "xleres/Config/Legacy/MeshMarker.tech"_initializer
 
 #define NORMALS_FITTING_TEXTURE "xleres/DefaultResources/normalsfitting.dds:LT"_initializer
+#define GGX_TABLE_TEXTURE "xleres/DefaultResources/GGXTable.dds:LT"_initializer
 #define DISTINCT_COLORS_TEXTURE "xleres/DefaultResources/distinctcolors.dds:T"_initializer
 #define BALANCED_NOISE_TEXTURE "xleres/DefaultResources/balanced_noise.dds:LT"_initializer
 

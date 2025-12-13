@@ -79,7 +79,7 @@ namespace RenderCore { namespace LightingEngine
 			IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 			const FrameBufferProperties& fbProps,
 			const OperatorDigest& digest,
-			Techniques::DeferredShaderResource& balancedNoiseTexture,
+			const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
 			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalRoughnessDelegate,
 			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
 			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_DisableDepthWrite) -> std::shared_ptr<SecondStageConstructionOperators>;
@@ -211,60 +211,34 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
 		{
-			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart))) {
-				assert(bindingFlags & (1ull<<uint64_t(_resourceViewsStart+1)));
+			if (bindingFlags & (1ull<<uint64_t(0))) {
+				assert(bindingFlags & (1ull<<uint64_t(1)));
 				assert(context._rpi);
 				if (_hasSSR) {
-					dst[_resourceViewsStart] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
-					dst[_resourceViewsStart+1] = context._rpi->GetNonFrameBufferAttachmentView(1).get();
+					dst[0] = context._rpi->GetNonFrameBufferAttachmentView(0).get();
+					dst[1] = context._rpi->GetNonFrameBufferAttachmentView(1).get();
 				} else {
-					dst[_resourceViewsStart] = Techniques::Services::GetCommonResources()->_black2DSRV.get();
-					dst[_resourceViewsStart+1] = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+					dst[0] = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+					dst[1] = Techniques::Services::GetCommonResources()->_black2DSRV.get();
 				}
 			}
-			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart+2))) {
+			if (bindingFlags & (1ull<<uint64_t(2))) {
 				if (_hasSSAO) {
-					dst[_resourceViewsStart+2] = context._rpi->GetNonFrameBufferAttachmentView(2).get();
+					dst[2] = context._rpi->GetNonFrameBufferAttachmentView(2).get();
 				} else {
-					dst[_resourceViewsStart+2] = Techniques::Services::GetCommonResources()->_black2DSRV.get();
+					dst[2] = Techniques::Services::GetCommonResources()->_black2DSRV.get();
 				}
 			}
-			if (bindingFlags & (1ull<<uint64_t(_resourceViewsStart+3)))
-				dst[_resourceViewsStart+3] = _noise.get();
-			_lightSceneDelegate->WriteResourceViews(context, objectContext, bindingFlags, dst);
 		}
 
-		void WriteSamplers(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<ISampler**> dst) override
+		MainSceneResourceDelegate(bool hasSSR, bool hasSSAO)
+		: _hasSSR(hasSSR), _hasSSAO(hasSSAO)
 		{
-			_lightSceneDelegate->WriteSamplers(context, objectContext, bindingFlags, dst);
-		}
-		void WriteImmediateData(Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override
-		{
-			_lightSceneDelegate->WriteImmediateData(context, objectContext, idx, dst);
-		}
-		size_t GetImmediateDataSize(Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
-		{
-			return _lightSceneDelegate->GetImmediateDataSize(context, objectContext, idx);
+			_interface.BindResourceView(0, "SSR"_h);
+			_interface.BindResourceView(1, "SSRConfidence"_h);
+			_interface.BindResourceView(2, "SSAOTexture"_h);
 		}
 
-		MainSceneResourceDelegate(std::shared_ptr<Techniques::IShaderResourceDelegate> lightSceneDelegate, bool hasSSR, bool hasSSAO, Techniques::DeferredShaderResource& balanceNoiseTexture)
-		: _lightSceneDelegate(std::move(lightSceneDelegate)), _hasSSR(hasSSR), _hasSSAO(hasSSAO)
-		{
-			_interface = _lightSceneDelegate->_interface;
-			_resourceViewsStart = (unsigned)_interface.GetResourceViewBindings().size();
-
-			_interface.BindResourceView(_resourceViewsStart+0, "SSR"_h);
-			_interface.BindResourceView(_resourceViewsStart+1, "SSRConfidence"_h);
-			_interface.BindResourceView(_resourceViewsStart+2, "SSAOTexture"_h);
-
-			_noise = balanceNoiseTexture.GetShaderResource();
-			_completionCmdList = balanceNoiseTexture.GetCompletionCommandList();
-			_interface.BindResourceView(_resourceViewsStart+3, "NoiseTexture"_h);
-		}
-
-		std::shared_ptr<Techniques::IShaderResourceDelegate> _lightSceneDelegate;
-		unsigned _resourceViewsStart = 0;
-		std::shared_ptr<IResourceView> _noise;
 		bool _hasSSR = false, _hasSSAO = false;
 	};
 
@@ -273,7 +247,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
 		bool hasSSR, bool hasSSAO,
 		bool hasDistantIBL,
-		Techniques::DeferredShaderResource& balanceNoiseTexture,
+		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
 		std::optional<ForwardPlusLightScene::LightOperatorInfo> dominantLightOperator,
 		std::optional<ShadowOperatorDesc> dominantShadowOperator)
 	{
@@ -328,9 +302,10 @@ namespace RenderCore { namespace LightingEngine
 		if (hasSSR) box.SetParameter("SSR", 1);
 		if (hasSSAO) box.SetParameter("SSAO", 1);
 
-		auto resourceDelegate = std::make_shared<MainSceneResourceDelegate>(
+		auto resourceDelegate = std::make_shared<Internal::ShaderResourceSplitter>(
 			captures->_lightScene->CreateMainSceneResourceDelegate(),
-			hasSSR, hasSSAO, balanceNoiseTexture);
+			std::make_shared<MainSceneResourceDelegate>(hasSSR, hasSSAO),
+			sequencerResources);
 
 		auto batches = Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending;
 		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
@@ -524,7 +499,7 @@ namespace RenderCore { namespace LightingEngine
 		IteratorRange<const Techniques::PreregisteredAttachment*> preregisteredAttachments,
 		const FrameBufferProperties& fbProps,
 		const OperatorDigest& digest,
-		Techniques::DeferredShaderResource& balancedNoiseTexture,
+		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
 		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalRoughnessDelegate,
 		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_DisableDepthWrite)
@@ -589,7 +564,7 @@ namespace RenderCore { namespace LightingEngine
 			CreateForwardSceneFragment(
 				shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
 				_ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
-				balancedNoiseTexture, dominantLightOperator, dominantShadowOperator));
+				sequencerResources, dominantLightOperator, dominantShadowOperator));
 
 		// simplify uniforms before going into post processing steps
 		mainSequence.CreateStep_CallFunction(
@@ -653,14 +628,13 @@ namespace RenderCore { namespace LightingEngine
 			SharedTechniqueDelegateBox::TechniqueDelegateFuture _depthMotionDelegate;
 			SharedTechniqueDelegateBox::TechniqueDelegateFuture _forwardIllumDelegate;
 
-			std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _balancedNoiseTexture;
-
 			std::shared_future<std::shared_ptr<ILightScene>> _lightSceneFuture;
+			std::future<std::shared_ptr<Techniques::IShaderResourceDelegate>> _sequencerResources;
 		};
 		auto helper = std::make_shared<ConstructionHelper>();
 
-		helper->_balancedNoiseTexture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
 		helper->_lightSceneFuture = future;
+		helper->_sequencerResources = Internal::CreateDefaultSequencerResourceDelegate();
 
 		OperatorDigest digest { globalOperators };
 
@@ -680,7 +654,7 @@ namespace RenderCore { namespace LightingEngine
 				if (Internal::MarkerTimesOut(helper->_depthMotionNormalRoughnessDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_depthMotionDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (Internal::MarkerTimesOut(helper->_balancedNoiseTexture, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (Internal::MarkerTimesOut(helper->_sequencerResources, timeoutTime)) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
 			[helper, techDelBox, pipelineAccelerators, pipelinePool, preregisteredAttachments=std::move(preregisteredAttachments), resolution, digest=std::move(digest)]
@@ -727,14 +701,13 @@ namespace RenderCore { namespace LightingEngine
 					auto depthMotionNormalRoughnessDelegate = helper->_depthMotionNormalRoughnessDelegate.get();
 					auto depthMotionDelegate = helper->_depthMotionDelegate.get();
 					auto forwardIllumDelegate_DisableDepthWrite = helper->_forwardIllumDelegate.get();
-					auto balancedNoiseTexture = helper->_balancedNoiseTexture.get();
+					auto sequencerResources = helper->_sequencerResources.get();
 
 					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>();
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
 					lightingTechnique->_depVal.RegisterDependency(depthMotionNormalRoughnessDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(depthMotionDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_DisableDepthWrite->GetDependencyValidation());
-					lightingTechnique->_depVal.RegisterDependency(balancedNoiseTexture->GetDependencyValidation());
 
 					captures->_lightScene->_queryInterfaceHelper = lightingTechnique->_queryInterfaceHelper =
 						[captures=captures.get()](uint64_t typeCode) -> void* {
@@ -767,7 +740,7 @@ namespace RenderCore { namespace LightingEngine
 					auto secondStageHelper = captures->ConstructMainSequence(
 						*lightingTechnique,
 						pipelineAccelerators,
-						preregisteredAttachments, fbProps, digest, *balancedNoiseTexture,
+						preregisteredAttachments, fbProps, digest, sequencerResources,
 						depthMotionNormalRoughnessDelegate, depthMotionDelegate, forwardIllumDelegate_DisableDepthWrite);
 
 					::Assets::PollToPromise(

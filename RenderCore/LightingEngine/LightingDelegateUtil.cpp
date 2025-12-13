@@ -239,33 +239,47 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return res;
 	}
 
-	class BuildGBufferResourceDelegate : public Techniques::IShaderResourceDelegate
+	class DefaultSequencerResourcesDelegate : public Techniques::IShaderResourceDelegate
 	{
 	public:
         virtual void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst)
 		{
-			assert(bindingFlags == 1<<0);
 			dst[0] = _normalsFitting.get();
+			dst[1] = _ggxTable.get();
+			dst[2] = _balancedNoise.get();
 			context.RequireCommandList(_completionCmdList);
 		}
 
-		BuildGBufferResourceDelegate(Techniques::DeferredShaderResource& normalsFittingResource)
+		DefaultSequencerResourcesDelegate(
+			const std::shared_ptr<Techniques::DeferredShaderResource>& normalsFittingResource,
+			const std::shared_ptr<Techniques::DeferredShaderResource>& ggxTableResource,
+			const std::shared_ptr<Techniques::DeferredShaderResource>& balancedNoise)
 		{
 			BindResourceView(0, "NormalsFittingTexture"_h);
-			_normalsFitting = normalsFittingResource.GetShaderResource();
-			_completionCmdList = normalsFittingResource.GetCompletionCommandList();
+			BindResourceView(1, "GGXTable"_h);
+			BindResourceView(2, "NoiseTexture"_h);
+			_normalsFitting = normalsFittingResource->GetShaderResource();
+			_ggxTable = ggxTableResource->GetShaderResource();
+			_balancedNoise = balancedNoise->GetShaderResource();
+			_completionCmdList = std::max(normalsFittingResource->GetCompletionCommandList(), ggxTableResource->GetCompletionCommandList());
+			_completionCmdList = std::max(_completionCmdList, balancedNoise->GetCompletionCommandList());
 		}
-		std::shared_ptr<IResourceView> _normalsFitting;
+		std::shared_ptr<IResourceView> _normalsFitting, _ggxTable, _balancedNoise;
 		BufferUploads::CommandListID _completionCmdList;
 	};
 
-	::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> CreateBuildGBufferResourceDelegate()
+	std::future<std::shared_ptr<Techniques::IShaderResourceDelegate>> CreateDefaultSequencerResourceDelegate()
 	{
 		auto normalsFittingTexture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
-		::Assets::MarkerPtr<Techniques::IShaderResourceDelegate> result("gbuffer-srdelegate");
-		::Assets::WhenAll(normalsFittingTexture).ThenConstructToPromise(
-			result.AdoptPromise(),
-			[](auto nft) { return std::make_shared<BuildGBufferResourceDelegate>(*nft); });
+		auto ggxTableTexture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(GGX_TABLE_TEXTURE);
+		auto balancedNoise = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
+		std::promise<std::shared_ptr<Techniques::IShaderResourceDelegate>> promise;
+		auto result = promise.get_future();
+		::Assets::WhenAll(std::move(normalsFittingTexture), std::move(ggxTableTexture), std::move(balancedNoise)).ThenConstructToPromise(
+			std::move(promise),
+			[](const auto& zero, const auto& one, const auto& two) {
+				return std::make_shared<DefaultSequencerResourcesDelegate>(zero, one, two);
+			});
 		return result;
 	}
 
@@ -667,6 +681,92 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (i == preregs.end())
 			Throw(std::runtime_error("Missing output attachment in input interface"));
 		return { i->_desc._textureDesc._width, i->_desc._textureDesc._height };
+	}
+
+	void ShaderResourceSplitter::WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst)
+	{
+		for (unsigned c=0; c<dimof(_subDelegates); ++c) {
+			if (!_subDelegates[c]) break;
+			_subDelegates[c]->WriteResourceViews(context, objectContext, bindingFlags, {dst.first+_srvOffsets[c], dst.second});
+		}
+	}
+
+	void ShaderResourceSplitter::WriteSamplers(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<ISampler**> dst)
+	{
+		for (unsigned c=0; c<dimof(_subDelegates); ++c) {
+			if (!_subDelegates[c]) break;
+			_subDelegates[c]->WriteSamplers(context, objectContext, bindingFlags, {dst.first+_samplerOffsets[c], dst.second});
+		}
+	}
+
+	void ShaderResourceSplitter::WriteImmediateData(Techniques::ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst)
+	{
+		for (unsigned c=0; c<dimof(_subDelegates); ++c) {
+			if (!_subDelegates[c]) break;
+			if (idx >= _immDataOffsets[c] && idx < _immDataOffsets[c+1]) {
+				_subDelegates[c]->WriteImmediateData(context, objectContext, idx-_immDataOffsets[c], dst);
+				break;
+			}
+		}
+	}
+
+	size_t ShaderResourceSplitter::GetImmediateDataSize(Techniques::ParsingContext& context, const void* objectContext, unsigned idx)
+	{
+		for (unsigned c=0; c<dimof(_subDelegates); ++c) {
+			if (!_subDelegates[c]) break;
+			if (idx >= _immDataOffsets[c] && idx < _immDataOffsets[c+1])
+				return _subDelegates[c]->GetImmediateDataSize(context, objectContext, idx-_immDataOffsets[c]);
+		}
+		return 0;
+	}
+
+	void ShaderResourceSplitter::Configure()
+	{
+		for (auto& o:_srvOffsets) o = 0;
+		for (auto& o:_samplerOffsets) o = 0;
+		for (auto& o:_immDataOffsets) o = 0;
+		_completionCmdList = 0;
+
+		unsigned nextSrvOffset = 0, nextSamplerOffset = 0, nextImmDataOffset = 0;
+		unsigned c=0;
+		for (auto& d:_subDelegates) {
+			if (!d) break;
+			_srvOffsets[c] = nextSrvOffset;
+			_samplerOffsets[c] = nextSamplerOffset;
+			_immDataOffsets[c] = nextImmDataOffset;
+			for (auto& srv:d->_interface.GetResourceViewBindings()) _interface.BindResourceView(nextSrvOffset++, srv);
+			for (auto& sampler:d->_interface.GetSamplerBindings()) _interface.BindSampler(nextSamplerOffset++, sampler);
+			for (auto& imm:d->_interface.GetImmediateDataBindings()) _interface.BindImmediateData(nextImmDataOffset++, imm);
+			_completionCmdList = std::max(_completionCmdList, d->_completionCmdList);
+			++c;
+		}
+		_srvOffsets[c] = nextSrvOffset;
+		_samplerOffsets[c] = nextSamplerOffset;
+		_immDataOffsets[c] = nextImmDataOffset;
+	}
+
+	ShaderResourceSplitter::ShaderResourceSplitter(std::shared_ptr<Techniques::IShaderResourceDelegate> zero, std::shared_ptr<Techniques::IShaderResourceDelegate> one)
+	{
+		_subDelegates[0] = std::move(zero);
+		_subDelegates[1] = std::move(one);
+		Configure();
+	}
+
+	ShaderResourceSplitter::ShaderResourceSplitter(std::shared_ptr<Techniques::IShaderResourceDelegate> zero, std::shared_ptr<Techniques::IShaderResourceDelegate> one, std::shared_ptr<Techniques::IShaderResourceDelegate> two)
+	{
+		_subDelegates[0] = std::move(zero);
+		_subDelegates[1] = std::move(one);
+		_subDelegates[2] = std::move(two);
+		Configure();
+	}
+
+	ShaderResourceSplitter::ShaderResourceSplitter(std::shared_ptr<Techniques::IShaderResourceDelegate> zero, std::shared_ptr<Techniques::IShaderResourceDelegate> one, std::shared_ptr<Techniques::IShaderResourceDelegate> two, std::shared_ptr<Techniques::IShaderResourceDelegate> three)
+	{
+		_subDelegates[0] = std::move(zero);
+		_subDelegates[1] = std::move(one);
+		_subDelegates[2] = std::move(two);
+		_subDelegates[3] = std::move(three);
+		Configure();
 	}
 
 }}}
