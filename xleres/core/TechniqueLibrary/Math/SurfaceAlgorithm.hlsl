@@ -65,33 +65,39 @@ float3 TangentFromNormalBitangent(float3 normal, float3 bitangent, float handine
 	return cross(normal, bitangent) * handiness;
 }
 
-float3 SampleNormalMap(Texture2D normalMap, SamplerState samplerObject, bool dxtFormatNormalMap, float2 texCoord)
+#define NORMAL_MAP_FORMAT_UVW 			0		// 3 component normal map
+#define NORMAL_MAP_FORMAT_UV 			1		// 2 component normal map (ie, tangent & bitangent factors, normal is implied)
+#define NORMAL_MAP_FORMAT_UV_FLIPPED 	2		// 2 component normal map, but V factor is flipped (as is common in some Unreal focused assets)
+
+float3 SampleNormalMap(Texture2D normalMap, SamplerState samplerObject, uint normalMapFormat, float2 texCoord)
 {
-	if (dxtFormatNormalMap) {
+	if (normalMapFormat == NORMAL_MAP_FORMAT_UVW) {
+
 		float3 rawNormal = normalMap.Sample(samplerObject, texCoord).xyz * 2.f - 1.0.xxx;
             // note... we may have to do a normalize here; because the normal can
             // become significantly denormalized after filtering.
         rawNormal = normalize(rawNormal);
         return rawNormal;
+
     } else {
+
 		float2 result = normalMap.Sample(samplerObject, texCoord).xy * 2.f - 1.0.xx;
 
-            // The following seems to give the best results on the "nyra" model currently...
-            // It seems that maybe that model is using a wierd coordinate scheme in the normal map?
         float2 coordTwiddle = float2(result.x, result.y);
-        #if (MAT_HACK_TWIDDLE_NORMAL_MAP==1)
+        if (normalMapFormat == NORMAL_MAP_FORMAT_UV_FLIPPED)
             coordTwiddle = float2(result.x, -result.y);
-        #endif
+
 		return float3(coordTwiddle, sqrt(saturate(1.f + dot(result.xy, -result.xy))));
         // return normalize(float3(coordTwiddle, 1.f - saturate(dot(result.xy, result.xy))));
-    }
+    
+	}
 }
 
-float3 NormalMapAlgorithm(  Texture2D normalMap, SamplerState samplerObject, bool dxtFormatNormalMap,
+float3 NormalMapAlgorithm(  Texture2D normalMap, SamplerState samplerObject, uint normalMapFormat,
                             float2 texCoord, TangentFrame tangentFrame)
 {
     row_major float3x3 normalsTextureToWorld = float3x3(tangentFrame.tangent.xyz, tangentFrame.bitangent, tangentFrame.normal);
-    float3 normalTextureSample = SampleNormalMap(normalMap, samplerObject, dxtFormatNormalMap, texCoord);
+    float3 normalTextureSample = SampleNormalMap(normalMap, samplerObject, NORMAL_MAP_FORMAT_UV, texCoord);
 		// Note -- matrix multiply opposite from typical
         //          (so we can initialise normalsTextureToWorld easily)
 	return mul(normalTextureSample, normalsTextureToWorld);

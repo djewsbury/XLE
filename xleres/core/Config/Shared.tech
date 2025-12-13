@@ -9,11 +9,9 @@ LegacyCommonMaterial=~
 		RES_HAS_ParametersTexture
 		RES_HAS_SpecularColorTexture
 		RES_HAS_Occlusion
-		RES_HAS_NormalsTexture_DXT
 		MAT_VCOLOR_IS_ANIM_PARAM
 		MAT_DOUBLE_SIDED_LIGHTING
 		MAT_AO_IN_NORMAL_BLUE
-		MAT_HACK_TWIDDLE_NORMAL_MAP
 		VIS_ANIM_PARAM=~; relevance=<:(value!=0):>
 
 Skinnable=~

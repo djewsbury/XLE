@@ -13,15 +13,13 @@ Texture2D			DiffuseTexture          BIND_MAT_T1;
 Texture2D			NormalsTexture          BIND_MAT_T2;
 Texture2D<float>	OpacityTexture          BIND_MAT_T5;
 
+#if !defined(MAT_NORMAL_MAP_FORMAT)
+	#define MAT_NORMAL_MAP_FORMAT NORMAL_MAP_FORMAT_UV
+#endif
+
 float3 SampleDefaultNormalMap(VSOUT geo)
 {
-	#if defined(RES_HAS_NormalsTexture_DXT)
-		bool dxtNormalMap = RES_HAS_NormalsTexture_DXT;
-	#else
-		bool dxtNormalMap = false;
-	#endif
-
-	return SampleNormalMap(NormalsTexture, DefaultSampler, dxtNormalMap, VSOUT_GetTexCoord0(geo));
+	return SampleNormalMap(NormalsTexture, DefaultSampler, MAT_NORMAL_MAP_FORMAT, VSOUT_GetTexCoord0(geo));
 }
 
 void DoAlphaTest(VSOUT geo, float alphaThreshold)

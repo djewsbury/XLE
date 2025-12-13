@@ -72,7 +72,6 @@ VSShadowProbe_DeformVertex=~
 IllumShared=~
 	Inherit=~; Shared.tech:LegacyCommonMaterial; Shared.tech:System
 	Selectors=~
-		CLASSIFY_NORMAL_MAP
 		SKIP_MATERIAL_DIFFUSE=~; relevance=<:(value!=0):>
 
 Forward=~
