@@ -83,14 +83,6 @@ namespace RenderCore { namespace Techniques
             if (c == 's' || c == 'S') { _colSpaceRequestString = SourceColorSpace::SRGB; }
             if (c == 't' || c == 'T') { _generateMipmaps = false; }
         }
-
-        if (_colSpaceRequestString == SourceColorSpace::Unspecified) {
-            if (XlFindStringI(initializer.File(), "_ddn")) {
-                _colSpaceDefault = SourceColorSpace::Linear;
-            } else {
-                _colSpaceDefault = SourceColorSpace::SRGB;
-            }
-        }
     }
 
     static TextureViewDesc MakeTextureViewDesc(const TextureDesc& tDesc, const DecodedInitializer& init, const TextureMetaData* actualizedMetaData = nullptr)
@@ -102,7 +94,11 @@ namespace RenderCore { namespace Techniques
             colSpace = SourceColorSpace::SRGB;
         } else if (fmtComponentType != FormatComponentType::Typeless) {
             colSpace = SourceColorSpace::Linear;
-        } else if (init._colSpaceRequestString != SourceColorSpace::Unspecified) {
+        }
+
+        // Note that we must allow the _colSpaceRequestString to override tDesc format, because DXT1 (etc) textures loaded from
+        // DDS are sometimes marked as SRGB when they would otherwise be ambiguous (ie, see TextureLoaders.cpp)
+        if (init._colSpaceRequestString != SourceColorSpace::Unspecified) {
             colSpace = init._colSpaceRequestString;
         } else if (actualizedMetaData) {
             if (actualizedMetaData->_colorSpace != SourceColorSpace::Unspecified)
