@@ -123,10 +123,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		struct AllocatedDatabaseEntry
 		{
-			unsigned _clusterIndex = ~0u;
 			unsigned _databaseIndex = ~0u;
 			int _fading = 0;
-			bool _active = true;
 		};
 		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
@@ -136,10 +134,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		~DynamicShadowProbeScheduler();
 	private:
 		using LightIndex = uint64_t;		// encoded set index and light index within that set
+		struct ActiveLight
+		{
+			unsigned _clusterIndex = ~0u;
+			int _fading = 0;
+			bool _active = true;
+		};
 
 		std::vector<SharedProbeSceneSet> _sceneSets;
 		std::shared_ptr<DynamicShadowProbes> _shadowProbes;
-		std::vector<std::pair<LightIndex, AllocatedDatabaseEntry>> _activeLights[2];
+		std::vector<std::pair<LightIndex, ActiveLight>> _activeLights[2];
 		float _defaultNearRadius = 1.f;
 		unsigned _fadeTransitionInFrames = 16;
 		unsigned _probeSlotsCount = 0;

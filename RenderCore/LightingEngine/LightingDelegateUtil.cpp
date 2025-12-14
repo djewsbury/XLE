@@ -24,6 +24,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../xleres/FileList.h"
+#include <limits>
 #include <numeric>
 #include <utility>
 
@@ -785,8 +786,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					currentStateIterator->second._active = frustumTester.TestSphere(ExtractTranslation(inComponent._probeDesc._objectToWorld), inComponent._probeDesc._farRadius) != CullTestResult::Culled;
 					if (!currentStateIterator->second._fading) {
 						inComponent._attachedDatabaseIndex = ~0u;
-					} else
+					} else {
+						if (!currentStateIterator->second._active) inComponent._attachedDatabaseIndex = ~0u;
 						updatedState.emplace_back(*currentStateIterator);
+					}
 					++currentStateIterator;
 
 				} else if (currentStateIterator != _activeLights[0].end() && currentStateIterator->first == newDistancesIterator->first) {
@@ -802,7 +805,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				} else {
 
 					// This light is new to the close lights list
-					updatedState.emplace_back(newDistancesIterator->first, AllocatedDatabaseEntry{ ~0u, ~0u, 1, true });
+					updatedState.emplace_back(newDistancesIterator->first, ActiveLight{ ~0u, ~0u, 1, true });
 					++newDistancesIterator;
 
 				}
@@ -812,10 +815,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			while (currentStateIterator!=_activeLights[0].end()) {
 				auto& inComponent = LookupProbeEntry(currentStateIterator->first);
 				inComponent._fading = currentStateIterator->second._fading = std::max(currentStateIterator->second._fading-1, 0);
+				currentStateIterator->second._active = frustumTester.TestSphere(ExtractTranslation(inComponent._probeDesc._objectToWorld), inComponent._probeDesc._farRadius) != CullTestResult::Culled;
 				if (!currentStateIterator->second._fading) {
 					inComponent._attachedDatabaseIndex = ~0u;
-				} else
+				} else {
+					if (!currentStateIterator->second._active) inComponent._attachedDatabaseIndex = ~0u;
 					updatedState.emplace_back(*currentStateIterator);
+				}
 				++currentStateIterator;
 			}
 		}
@@ -839,8 +845,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			auto countToRemove = updatedState.size() - _probeSlotsCount;
 			std::nth_element(scores, scores+countToRemove, scores+updatedState.size(), CompareSecond2{});		// smallest scores to the front
 			std::sort(scores, scores+countToRemove, CompareFirst2{});
-			for (unsigned c=0; c<countToRemove; ++c)
-				updatedState.erase(updatedState.begin()+scores[countToRemove-c-1].first);
+			for (unsigned c=0; c<countToRemove; ++c) {
+				auto toRemove = updatedState.begin()+scores[countToRemove-c-1].first;
+				LookupProbeEntry(toRemove->first)._attachedDatabaseIndex = ~0u;		// ensure this is cleared out
+				updatedState.erase(toRemove);
+			}
 			assert(updatedState.size() == _probeSlotsCount);
 		}
 
@@ -852,6 +861,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 
 	static float Sq(float x) { return x*x; }
+
+	static constexpr unsigned s_maxProbesPerCluster = 5;				// 5 * 6 = 30, just under the limit of 32 projections
+	static constexpr float s_maxSeparationWithinCluster = 10.f;		// lights with 10m or more between them will never trigger a cluster
 
 	void DynamicShadowProbeScheduler::UpdateClustering()
 	{
@@ -874,9 +886,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		// maximize the effectiveness of the ArbitraryConvexVolumeTester in the parse step.
 		//
 
-		constexpr unsigned s_maxProbesPerCluster = 5;				// 5 * 6 = 30, just under the limit of 32 projections
-		constexpr float s_maxSeparationWithinCluster = 10.f;		// lights with 10m or more between them will never trigger a cluster
-
 		auto& activeLights = _activeLights[1];
 
 		const auto baseClusterCount = (_probeSlotsCount + s_maxProbesPerCluster - 1) / s_maxProbesPerCluster;
@@ -886,7 +895,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		using ClusterIndex = unsigned;
 		std::vector<ClusterIndex> clusterAssignments;
 		{
-			
 			auto LookupProbeEntry = [this](LightIndex lightIndex) -> SharedProbeSceneSet::ProbeEntry& { return this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
 
 			struct ClusterHelper
@@ -939,20 +947,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 			// remap cluster indices to ensure they are dense
 			// also assign database indices at this stage (these must be in cluster order)
-			for (auto& a:activeLights) { a.second._clusterIndex = ~0u; a.second._databaseIndex = ~0u; }
+			for (auto& a:activeLights) { a.second._clusterIndex = ~0u; }
 			unsigned denseClusterIdx = 0;
-			unsigned nextDatabaseIdx = 0;
 			for (unsigned c=0; c<clusterHelperCount; ++c) {
 				if (!clusterCounts[c]) continue;
 
-				for (auto h=starts[c]; h!=~0u; h=nexts[h]) {
-					activeLights[clusterHelpers[h]._activeLightIndex].second._databaseIndex = nextDatabaseIdx++;
+				for (auto h=starts[c]; h!=~0u; h=nexts[h])
 					activeLights[clusterHelpers[h]._activeLightIndex].second._clusterIndex = denseClusterIdx;
-				}
 				++denseClusterIdx;
 			}
 			_clusterCount = denseClusterIdx;
-			assert(nextDatabaseIdx <= _probeSlotsCount);
 		}
 	}
 
@@ -965,38 +969,86 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto viewPosition = ExtractTranslation(iterator._parsingContext->GetProjectionDesc()._cameraToWorld);
 		auto farClip = iterator._parsingContext->GetProjectionDesc()._farClip;
 		UpdateActiveLights(viewPosition, farClip, iterator._parsingContext->GetProjectionDesc()._worldToProjection);
+		if (!_clusterCount) return;
 
-		std::vector<Techniques::ProjectionDesc> projDescs;
-		projDescs.resize(standardProj._projections.Count());
-		CalculateProjections(MakeIteratorRange(projDescs), standardProj._projections);
-		return sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::move(projDescs), std::move(volumeTester));
+		struct WorkingCluster
+		{
+			SequenceParseId _parseId;
+		};
+		std::vector<WorkingCluster> clusters;		// subframe allocator candidate
+		clusters.reserve(_clusterCount);
 
-		for (auto& light:_activeLights[0]) {
-			auto& set = _sceneSets[GetSetIndex(light.first)];
-			SequencerAddendums addenums;
-			addenums._preparer = _shadowPreparers->_preparers[set._preparerIndex]._preparer;
-			auto proj = CreateStandardShadowProjectionInterface(_shadowPreparers->_preparers[set._preparerIndex]._desc);
-			auto parseId = SetupShadowParse(iterator, sequence, *proj, addenums);
+		// generate scene parse operations & prepare steps
+		{
+			auto LookupProbeEntry = [this](LightIndex lightIndex) -> SharedProbeSceneSet::ProbeEntry& { return this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
 
-			// add a step for preparing this shadow
-			auto& preparer = *addenums._preparer;
-			sequence.CreateStep_CallFunction(
-				[&preparer, proj, this, parseId](SequenceIterator& iterator) {
+			std::vector<Techniques::ProjectionDesc> projDescs;
+			projDescs.reserve(_probeSlotsCount*6);
+			unsigned nextDatabaseIdx = 0;
 
-					// todo -- bind / unbind multiview shader resource delegate here
+			for (unsigned c=0; c<_clusterCount; ++c) {
 
-					auto rpi = preparer.Begin(
-						*iterator._threadContext,
-						*iterator._parsingContext,
-						*proj,
-						*this->_shadowGenFrameBufferPool,
-						nullptr,
-						this->_shadowGenViewPool);
-					iterator.ExecuteDrawables(parseId, *preparer.GetSequencerConfig().first, preparer.GetSequencerConfig().second);
-					rpi.End();
-					preparer.End(*iterator._threadContext, *iterator._parsingContext, rpi, descSetPipelineType, *res);
+				// scene parse
+				WorkingCluster workingCluster;
+				{
+					Float3 clusterMins { std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max() };
+					Float3 clusterMaxs { std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
 
-				});
+					unsigned firstFaceIndex = nextDatabaseIdx;
+					for (auto& a:_activeLights[0])
+						if (a.second._clusterIndex == c) {
+							auto& probe = LookupProbeEntry(a.first)._probeDesc;
+							LookupProbeEntry(a.first)._attachedDatabaseIndex = unsigned(projDescs.size()); nextDatabaseIdx += 6;
+							WriteProjectionDescs(projDescs, {&probe, &probe+1});
+
+							// sphere rules
+							auto p = ExtractTranslation(probe._objectToWorld);
+							clusterMins[0] = std::min(clusterMins[0], p[0] - probe._farRadius);
+							clusterMins[1] = std::min(clusterMins[1], p[1] - probe._farRadius);
+							clusterMins[2] = std::min(clusterMins[2], p[2] - probe._farRadius);
+							clusterMaxs[0] = std::max(clusterMaxs[0], p[0] + probe._farRadius);
+							clusterMaxs[1] = std::max(clusterMaxs[1], p[1] + probe._farRadius);
+							clusterMaxs[2] = std::max(clusterMaxs[2], p[2] + probe._farRadius);
+						}
+
+					auto volumeTester = std::make_shared<ArbitraryConvexVolumeTester>(ArbitraryConvexVolumeTesterFromAABB(clusterMins, clusterMaxs));
+					workingCluster._parseId = sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::move(projDescs), std::move(volumeTester));
+				}
+
+				// preparation step
+				{
+					auto& set = _sceneSets[GetSetIndex(light.first)];
+					SequencerAddendums addenums;
+					addenums._preparer = _shadowPreparers->_preparers[set._preparerIndex]._preparer;
+					auto proj = CreateStandardShadowProjectionInterface(_shadowPreparers->_preparers[set._preparerIndex]._desc);
+					auto parseId = SetupShadowParse(iterator, sequence, *proj, addenums);
+
+					// add a step for preparing this shadow
+					auto& preparer = *addenums._preparer;
+					sequence.CreateStep_CallFunction(
+						[&preparer, proj, this, parseId](SequenceIterator& iterator) {
+
+							// todo -- bind / unbind multiview shader resource delegate here
+
+							auto rpi = preparer.Begin(
+								*iterator._threadContext,
+								*iterator._parsingContext,
+								*proj,
+								*this->_shadowGenFrameBufferPool,
+								nullptr,
+								this->_shadowGenViewPool);
+							iterator.ExecuteDrawables(parseId, *preparer.GetSequencerConfig().first, preparer.GetSequencerConfig().second);
+							rpi.End();
+							preparer.End(*iterator._threadContext, *iterator._parsingContext, rpi, descSetPipelineType, *res);
+
+						});
+				}
+
+				clusters.emplace_back(std::move(workingCluster));
+
+			}
+
+			assert(nextDatabaseIdx <= _probeSlotsCount*6);
 		}
 	}
 
@@ -1014,12 +1066,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_sceneSets[setIdx].DeregisterLight(lightIdx);
 
 		// remove it from our allocated list, if it's there
+		auto id = (uint64_t(setIdx) << 32ull) | lightIdx;
 		for (auto i=_activeLights[0].begin(); i!=_activeLights[0].end(); ++i)
-			if (GetSetIndex(i->first) == setIdx && GetLightIndex(i->first) == lightIdx) {
-				_unassociatedProbeSlots |= 1ull << uint64_t(i->second._databaseIndex);
-				_activeLights[0].erase(i);
-				break;
-			}
+			if (i->first == id) { _activeLights[0].erase(i); break; }
 	}
 
 	bool DynamicShadowProbeScheduler::BindToSet(ILightScene::LightOperatorId op, unsigned setIdx)

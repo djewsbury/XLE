@@ -125,5 +125,9 @@ namespace RenderCore { namespace LightingEngine
 		std::unique_ptr<Pimpl> _pimpl;
 	};
 
+	void WriteProjectionDescs(
+		std::vector<Techniques::ProjectionDesc>& dst,
+		IteratorRange<const ShadowProbes::Probe*> probes);
+
 }}
 

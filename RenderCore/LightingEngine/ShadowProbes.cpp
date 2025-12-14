@@ -134,7 +134,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 	};
 
-	static void WriteProjectionDescs(
+	void WriteProjectionDescs(
 		std::vector<Techniques::ProjectionDesc>& dst,
 		IteratorRange<const ShadowProbes::Probe*> probes)
 	{
