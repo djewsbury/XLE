@@ -3,7 +3,10 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "ShadowProbes.h"
+#include "Core/Prefix.h"
 #include "LightingEngineApparatus.h"
+#include "Math/XLEMath.h"
+#include "RenderCore/ResourceDesc.h"
 #include "SequenceIterator.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/ParsingContext.h"
@@ -18,6 +21,7 @@
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Metal/DeviceContext.h"
 #include "../IDevice.h"
+#include "../../Math/Transformations.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
@@ -28,10 +32,12 @@ namespace RenderCore { namespace Techniques { class IDeformAcceleratorPool; }}
 
 namespace RenderCore { namespace LightingEngine
 {
-	struct CB_StaticShadowProbeDesc
+	struct CB_ShadowProbeDesc
 	{
 		float _miniProjZ, _miniProjW;
 	};
+
+	static constexpr auto s_semanticProbePrepare = "probe-prepare"_h;
 
 	constexpr size_t s_maxProbesPerBatch = 5;		// ie, 30 slices of the array texture per batch
 
@@ -95,7 +101,6 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::TechniqueContext _techContext;
 			std::unique_ptr<Techniques::ParsingContext> _parsingContext;
 			
-			static const auto semanticProbePrepare = "probe-prepare"_h;
 			StaticProbePrepareHelper(IThreadContext& threadContext, ShadowProbes::Pimpl& pimpl)
 			: _pimpl(&pimpl)
 			{
@@ -110,7 +115,7 @@ namespace RenderCore { namespace LightingEngine
 				_parsingContext = std::make_unique<Techniques::ParsingContext>(_techContext, threadContext);
 				_parsingContext->SetPipelineAcceleratorsVisibility(_techContext._pipelineAccelerators->VisibilityBarrier());
 				_parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
-				_parsingContext->BindAttachment(semanticProbePrepare, _pimpl->_staticTable, false, ~0u);
+				_parsingContext->BindAttachment(s_semanticProbePrepare, _pimpl->_staticTable, false, ~0u);
 			}
 
 			Techniques::RenderPassInstance BeginRPI(unsigned firstSlice, unsigned sliceCount)
@@ -119,7 +124,7 @@ namespace RenderCore { namespace LightingEngine
 				SubpassDesc sp;
 				TextureViewDesc viewDesc;
 				viewDesc._arrayLayerRange = {firstSlice, sliceCount};
-				sp.SetDepthStencil(fragment.DefineAttachment(semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
+				sp.SetDepthStencil(fragment.DefineAttachment(s_semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
 				sp.SetName("static-shadow-prepare");
 				fragment.AddSubpass(std::move(sp));
 
@@ -130,28 +135,41 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 	static void WriteProjectionDescs(
-		Techniques::ProjectionDesc* dst,
+		std::vector<Techniques::ProjectionDesc>& dst,
 		IteratorRange<const ShadowProbes::Probe*> probes)
 	{
 		// Should we consider fewer rendering directions for some probes? 
-		auto count = probes.size()*6;
-		for (unsigned c=0; c<count; ++c) {
-			const auto& p = probes[c/6];
-			float near_ = p._nearRadius;
-			float far_ = p._farRadius;
-			assert(near_ > 0 && far_ > 0);
-			dst[c] = Techniques::BuildCubemapProjectionDesc(c%6, p._position, near_, far_);
+		for (auto& p:probes) {
+			assert(p._nearRadius > 0 && p._farRadius > 0);
+			if (p._dimensionality == TextureDesc::Dimensionality::CubeMap) {
+				for (unsigned c=0; c<6; ++c)
+					dst.emplace_back(Techniques::BuildCubemapProjectionDesc(c, ExtractTranslation(p._objectToWorld), p._nearRadius, p._farRadius));
+			} else if (p._dimensionality == TextureDesc::Dimensionality::T2D) {
+				assert(p._fov > 0);
+				// note that we have to shift the matrix around to convert from object-to-world into camera-to-world style
+				Techniques::CameraDesc cameraDesc;
+				cameraDesc._cameraToWorld = Float3x4 {
+					p._objectToWorld(0, 0), p._objectToWorld(0, 2), -p._objectToWorld(0, 1), p._objectToWorld(0, 3),
+					p._objectToWorld(1, 0), p._objectToWorld(1, 2), -p._objectToWorld(1, 1), p._objectToWorld(1, 3),
+					p._objectToWorld(2, 0), p._objectToWorld(2, 2), -p._objectToWorld(2, 1), p._objectToWorld(2, 3) };
+				cameraDesc._nearClip = p._nearRadius; cameraDesc._farClip = p._farRadius;
+				cameraDesc._projection = Techniques::CameraDesc::Projection::Perspective;
+				cameraDesc._verticalFieldOfView = p._fov;
+				dst.emplace_back(Techniques::BuildProjectionDesc(cameraDesc, 1.f));
+			} else {
+				assert(0);		// invalid dimensionality specified
+			}	
 		}
 	}
 
 	static void WriteStaticShadowProbeTable(IThreadContext& threadContext, IResource& dst, IteratorRange<const ShadowProbes::Probe*> probes)
 	{
-		VLA(CB_StaticShadowProbeDesc, probeUniforms, probes.size()*6);
-		VLA_UNSAFE_FORCE(Techniques::ProjectionDesc, projDescs, probes.size()*6);
+		VLA(CB_ShadowProbeDesc, probeUniforms, probes.size()*6);
+		std::vector<Techniques::ProjectionDesc> projDescs; projDescs.reserve(probes.size()*6);		// subframe allocation candidate
 		WriteProjectionDescs(projDescs, probes);
 		for (unsigned c=0; c<probes.size()*6; ++c) {
 			auto miniProj = ExtractMinimalProjection(projDescs[c]._cameraToProjection);
-			probeUniforms[c] = CB_StaticShadowProbeDesc{miniProj[2], miniProj[3]};
+			probeUniforms[c] = CB_ShadowProbeDesc{miniProj[2], miniProj[3]};
 		}
 		Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(dst, MakeIteratorRange(probeUniforms, probeUniforms+(probes.size()*6)));
 	}
@@ -207,8 +225,8 @@ namespace RenderCore { namespace LightingEngine
 				result._type = LightingEngine::StepType::MultiViewParseScene;
 				VLA_UNSAFE_FORCE(Probe, probesThisStep, nextBatchCount);
 				for (unsigned p=0; p<nextBatchCount; ++p) probesThisStep[p] = _probesToRender[_probeIterator+p].second;
-				result._multiViewDesc.resize(nextBatchCount*6);
-				WriteProjectionDescs(result._multiViewDesc.data(), MakeIteratorRange(probesThisStep, probesThisStep+nextBatchCount));
+				WriteProjectionDescs(result._multiViewDesc, MakeIteratorRange(probesThisStep, probesThisStep+nextBatchCount));
+				assert(result._multiViewDesc.size() == nextBatchCount*6);		// expecting everything to be cubemaps
 				result._pkts.resize(Techniques::Services::GetInstance().BatchCodeCount());
 				result._pkts[(unsigned)Techniques::Batch::Opaque] = &_drawablePkt;
 				_pendingViews.reserve(result._multiViewDesc.size());
@@ -309,7 +327,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		if (_pimpl->_pendingClearOfProbeUniforms) {
-			auto probeUniformsSize = sizeof(CB_StaticShadowProbeDesc)*6*_pimpl->_config._maxProbes;
+			auto probeUniformsSize = sizeof(CB_ShadowProbeDesc)*6*_pimpl->_config._maxProbes;
 			VLA(uint8_t, blank, probeUniformsSize);
 			std::memset(blank, 0, probeUniformsSize);
 			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*_pimpl->_probeUniforms, MakeIteratorRange(blank, blank+probeUniformsSize));
@@ -365,7 +383,7 @@ namespace RenderCore { namespace LightingEngine
 					});
 		}
 
-		_pimpl->_probes.resize(config._maxProbes, Probe{Zero<Float3>(), 1.f, 1024.f});
+		_pimpl->_probes.resize(config._maxProbes, Probe{Identity<Float4x4>(), 1.f, 1024.f, 0.5f*gPI, TextureDesc::Dimensionality::Undefined});
 
 		auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._faceDims, _pimpl->_config._faceDims, _pimpl->_config._format);
 		staticDatabaseDesc._arrayCount = 6*_pimpl->_config._maxProbes;
@@ -375,7 +393,7 @@ namespace RenderCore { namespace LightingEngine
 		_pimpl->_pendingStaticTableInit = true;
 
 		_pimpl->_probeUniforms = device->CreateResource(
-			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*staticDatabaseDesc._arrayCount, sizeof(CB_StaticShadowProbeDesc))), "shadow-probe-list");
+			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_ShadowProbeDesc)*staticDatabaseDesc._arrayCount, sizeof(CB_ShadowProbeDesc))), "shadow-probe-list");
 		_pimpl->_probeUniformsUAV = _pimpl->_probeUniforms->CreateBufferView(BindFlag::UnorderedAccess);
 	}
 
@@ -403,19 +421,26 @@ namespace RenderCore { namespace LightingEngine
 
 	Techniques::RenderPassInstance DynamicShadowProbes::Begin(
 		Techniques::ParsingContext& parsingContext,
-		const ShadowProbes::Probe& probe,
-		unsigned probeIndex)
+		IteratorRange<const ShadowProbes::Probe*> probes,
+		unsigned firstFaceIndex)
 	{
-		_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(_pendingViews));
-		parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
+		std::vector<Techniques::ProjectionDesc> multiViewDesc;
+		multiViewDesc.reserve(probes.size()*6);
+		WriteProjectionDescs(multiViewDesc, probes);
+		assert(!multiViewDesc.empty());
+
+		VLA_UNSAFE_FORCE(Float4x4, worldToProjections, multiViewDesc.size());
+		for (unsigned c=0; c<multiViewDesc.size(); ++c) worldToProjections[c] = multiViewDesc[c]._worldToProjection;
+
+		_pimpl->_multiViewUniformsDelegate->SetWorldToProjections({worldToProjections, worldToProjections+multiViewDesc.size()});
+		parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);		// todo -- this needs to be unbound after we've finished
 		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
-		auto firstSlice = _probesToRender[probeIndex].first*6, sliceCount = (unsigned)_pendingViews.size();
 
 		Techniques::FrameBufferDescFragment fragment;
 		SubpassDesc sp;
 		TextureViewDesc viewDesc;
-		viewDesc._arrayLayerRange = {firstSlice, sliceCount};
-		sp.SetDepthStencil(fragment.DefineAttachment(semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
+		viewDesc._arrayLayerRange = {firstFaceIndex, (unsigned)multiViewDesc.size()};
+		sp.SetDepthStencil(fragment.DefineAttachment(s_semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
 		sp.SetName("static-shadow-prepare");
 		fragment.AddSubpass(std::move(sp));
 
@@ -423,9 +448,22 @@ namespace RenderCore { namespace LightingEngine
 		return Techniques::RenderPassInstance{parsingContext, fragment, beginInfo};
 	}
 
-	IResourceView& GetStaticProbesTable() const;
-	IResourceView& GetShadowProbeUniforms() const;
-	unsigned GetReservedProbeCount();
+	IResourceView& DynamicShadowProbes::GetDynamicProbesTable() const
+	{
+		assert(_pimpl->_staticTableSRV);
+		return *_pimpl->_staticTableSRV;
+	}
+
+	IResourceView& DynamicShadowProbes::GetDynamicProbeUniforms() const
+	{
+		assert(_pimpl->_probeUniformsUAV);
+		return *_pimpl->_probeUniformsUAV;
+	}
+
+	unsigned DynamicShadowProbes::GetFaceCount()
+	{
+		return (unsigned)_pimpl->_config._maxProbes*6;
+	}
 
 	void DynamicShadowProbes::CompleteInitialization(IThreadContext& threadContext)
 	{
@@ -437,7 +475,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		if (_pimpl->_pendingClearOfProbeUniforms) {
-			auto probeUniformsSize = sizeof(CB_StaticShadowProbeDesc)*6*_pimpl->_config._maxProbes;
+			auto probeUniformsSize = sizeof(CB_ShadowProbeDesc)*6*_pimpl->_config._maxProbes;
 			VLA(uint8_t, blank, probeUniformsSize);
 			std::memset(blank, 0, probeUniformsSize);
 			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*_pimpl->_probeUniforms, MakeIteratorRange(blank, blank+probeUniformsSize));
@@ -494,7 +532,7 @@ namespace RenderCore { namespace LightingEngine
 		_pimpl->_pendingStaticTableInit = true;
 
 		_pimpl->_probeUniforms = device->CreateResource(
-			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*staticDatabaseDesc._arrayCount, sizeof(CB_StaticShadowProbeDesc))), "dynamic-shadow-probe-list");
+			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_ShadowProbeDesc)*staticDatabaseDesc._arrayCount, sizeof(CB_ShadowProbeDesc))), "dynamic-shadow-probe-list");
 		_pimpl->_probeUniformsUAV = _pimpl->_probeUniforms->CreateBufferView(BindFlag::UnorderedAccess);
 	}
 

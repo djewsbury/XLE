@@ -50,8 +50,10 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		struct Probe
 		{
-			Float3 _position;
+			Float3x4 _objectToWorld;			// for cubemap probes, only the translation is used
 			float _nearRadius, _farRadius;
+			float _fov;							// only when writing single projection probes (eg, cone lights)		
+			TextureDesc::Dimensionality _dimensionality;		// should be cube or 2d
 		};
 
 		struct Configuration
@@ -100,12 +102,12 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		Techniques::RenderPassInstance Begin(
 			Techniques::ParsingContext& parsingContext,
-			const ShadowProbes::Probe& probe,
-			unsigned probeIndex);		// probeIndex is the index into our table where we're going to write to
+			IteratorRange<const ShadowProbes::Probe*> probes,
+			unsigned firstFaceIndex);		// firstFaceIndex is the index into our table where we're going to write to
 
 		IResourceView& GetDynamicProbesTable() const;
 		IResourceView& GetDynamicProbeUniforms() const;
-		unsigned GetReservedProbeCount();
+		unsigned GetFaceCount();
 
 		void CompleteInitialization(IThreadContext& threadContext);
 

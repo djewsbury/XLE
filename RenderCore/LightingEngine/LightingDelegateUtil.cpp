@@ -3,6 +3,10 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightingDelegateUtil.h"
+#include "Math/ProjectionMath.h"
+#include "Math/Transformations.h"
+#include "Math/XLEMath.h"
+#include "RenderCore/Techniques/TechniqueUtils.h"
 #include "Sequence.h"
 #include "SequenceIterator.h"
 #include "ShadowPreparer.h"
@@ -18,6 +22,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../xleres/FileList.h"
+#include <numeric>
 #include <utility>
 
 using namespace Utility::Literals;
@@ -56,7 +61,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Sequence& sequence,
 		ILightBase& proj,
 		const SequencerAddendums& addenums,
-		PipelineType descSetPipelineType,
 		Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::IAttachmentPool& shadowGenAttachmentPool,
 		ViewPool& shadowGenViewPool);
@@ -104,7 +108,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 					comp._preparedResult[idx] = SetupShadowPrepare(
 						iterator, sequence, *comp._projections[idx], comp._addendums[idx],
-						PipelineType::Graphics,
 						*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool, _shadowGenViewPool);
 				}
 				offset += 64;
@@ -226,12 +229,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return CreateShadowParseInSequence(iterator, sequence, proj, std::move(volumeTester));
 	}
 
-	std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
+	static std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		SequenceIterator& iterator,
 		Sequence& sequence,
 		ILightBase& proj,
 		const SequencerAddendums& addenums,
-		PipelineType descSetPipelineType,
 		Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::IAttachmentPool& shadowGenAttachmentPool,
 		ViewPool& shadowGenViewPool)
@@ -241,9 +243,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto& preparer = *addenums._preparer;
 		auto res = preparer.CreatePreparedShadowResult();
 		sequence.CreateStep_CallFunction(
-			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, &shadowGenViewPool, parseId, res, descSetPipelineType](SequenceIterator& iterator) {
+			[&preparer, &proj, &shadowGenFrameBufferPool, &shadowGenAttachmentPool, &shadowGenViewPool, parseId, res](SequenceIterator& iterator) {
 				auto rpi = preparer.Begin(
-					*iterator._threadContext,
 					*iterator._parsingContext,
 					proj,
 					shadowGenFrameBufferPool,
@@ -251,7 +252,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					shadowGenViewPool);
 				iterator.ExecuteDrawables(parseId, *preparer.GetSequencerConfig().first, preparer.GetSequencerConfig().second);
 				rpi.End();
-				preparer.End(*iterator._threadContext, *iterator._parsingContext, rpi, descSetPipelineType, *res);
+				preparer.End(*iterator._parsingContext, rpi, *res);
 			});
 		return res;
 	}
@@ -369,13 +370,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	static ShadowProbes::Probe GetProbeDesc(ILightBase& light)
 	{
 		ShadowProbes::Probe probe;
-		probe._position = Zero<Float3>();
+		probe._objectToWorld = Identity<Float4x4>();
 		probe._nearRadius = 1.f;
 		probe._farRadius = 1024.f;
+		probe._dimensionality = TextureDesc::Dimensionality::CubeMap;
 		auto* positional = (IPositionalLightSource*)light.QueryInterface(s_positionalLightSourceInterface);
 		assert(positional);
 		if (positional) {
-			probe._position = ExtractTranslation(positional->GetLocalToWorld());
+			probe._objectToWorld = positional->GetLocalToWorld();
 			probe._nearRadius = ExtractUniformScaleFast(AsFloat3x4(positional->GetLocalToWorld()));
 		}
 		auto* finite = (IFiniteLightSource*)light.QueryInterface(s_finiteLightSourceInterface);
@@ -562,7 +564,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					q ^= 1ull << uint64_t(idx);
 					idx += offset;
 					auto& probe = comp._probes[idx]._probeDesc;
-					lightsAndDistance.emplace_back((uint64_t(compIdx) << 32ull) | idx, Magnitude(probe._position-newViewPosition) - probe._farRadius);
+					lightsAndDistance.emplace_back((uint64_t(compIdx) << 32ull) | idx, Magnitude(ExtractTranslation(probe._objectToWorld)-newViewPosition) - probe._farRadius);
 				}
 				offset += 64;
 			}
@@ -718,8 +720,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	float DynamicShadowProbeScheduler::GetNearRadius(float) { return _defaultNearRadius; }
 	void DynamicShadowProbeScheduler::SetFadeTransition(unsigned newValue) { _fadeTransitionInFrames = newValue; }
 
-	void DynamicShadowProbeScheduler::UpdateActiveLights(const Float3& newViewPosition, float drawDistance)
+	void DynamicShadowProbeScheduler::UpdateActiveLights(const Float3& newViewPosition, float drawDistance, const Float4x4& worldToClipSpace)
 	{
+		AccurateFrustumTester frustumTester { worldToClipSpace, Techniques::GetDefaultClipSpaceType() };
+
 		// Given the current set of lights, calculate the optimal use of a finite number of shadow probe database entries
 		// The easiest way to do this is to just the sort the list of lights we have by distance
 		// but ideally this should really be tied into some visibility solution -- and perhaps avoid updating every frame
@@ -736,9 +740,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					q ^= 1ull << uint64_t(idx);
 					idx += offset;
 					auto& probe = comp._probes[idx]._probeDesc;
-					float dist = Magnitude(probe._position-newViewPosition) - probe._farRadius;
-					if (dist < drawDistance)
-						lightsAndDistance.emplace_back((uint64_t(compIdx) << 32ull) | idx, dist);
+					auto probePosition = ExtractTranslation(probe._objectToWorld);
+					float dist = Magnitude(probePosition-newViewPosition) - probe._farRadius;
+					if (dist < drawDistance) {
+						if (frustumTester.TestSphere(probePosition, probe._farRadius) != CullTestResult::Culled)
+							lightsAndDistance.emplace_back((uint64_t(compIdx) << 32ull) | idx, dist);
+					}
 				}
 				offset += 64;
 			}
@@ -773,6 +780,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					// This light fell out of the close lights list
 					auto& inComponent = LookupProbeEntry(currentStateIterator->first);
 					inComponent._fading = currentStateIterator->second._fading = std::max(currentStateIterator->second._fading-1, 0);
+					currentStateIterator->second._active = frustumTester.TestSphere(ExtractTranslation(inComponent._probeDesc._objectToWorld), inComponent._probeDesc._farRadius) != CullTestResult::Culled;
 					if (!currentStateIterator->second._fading) {
 						_unassociatedProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
 						inComponent._attachedDatabaseIndex = ~0u;
@@ -784,6 +792,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 					// no change
 					currentStateIterator->second._fading = std::min(currentStateIterator->second._fading+1, int(_fadeTransitionInFrames));
+					currentStateIterator->second._active = true;
 					auto& inComponent = LookupProbeEntry(currentStateIterator->first);
 					inComponent._fading = currentStateIterator->second._fading;
 					updatedState.emplace_back(*currentStateIterator++);
@@ -792,7 +801,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				} else {
 
 					// This light is new to the close lights list
-					updatedState.emplace_back(newDistancesIterator->first, AllocatedDatabaseEntry{ ~0u, 1 });
+					updatedState.emplace_back(newDistancesIterator->first, AllocatedDatabaseEntry{ ~0u, 1, true });
 					++newDistancesIterator;
 
 				}
@@ -818,11 +827,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			VLA_UNSAFE_FORCE(SlotAndScore, scores, updatedState.size());
 			auto* s = scores;
 			for (auto& u:updatedState) {
-				float x = u.second._fading / float(_fadeTransitionInFrames);
+				float fadeFactor = u.second._fading / float(_fadeTransitionInFrames);
 				auto& inComponent = LookupProbeEntry(u.first);
-				float dist = Magnitude(inComponent._probeDesc._position-newViewPosition) - inComponent._probeDesc._farRadius;
-				if (u.second._databaseIndex == ~0u) x = 0.33f;		// this is new, so let's bias the "fading" factor up a bit -- otherwise it would be very low
-				float score = x*x * (drawDistance-dist) * (drawDistance-dist);
+				auto probePosition = ExtractTranslation(inComponent._probeDesc._objectToWorld);
+				float dist = Magnitude(probePosition-newViewPosition) - inComponent._probeDesc._farRadius;
+				if (u.second._databaseIndex == ~0u) fadeFactor = 0.33f;		// this is new, so let's bias the "fading" factor up a bit -- otherwise it would be very low
+				float offScreenFactor = u.second._active ? 1.f : 0.25f;
+				float score = fadeFactor*fadeFactor * (drawDistance-dist)*(drawDistance-dist) * offScreenFactor * offScreenFactor;
 				*s++ = {unsigned(&u-updatedState.data()), score};
 			}
 			auto countToRemove = updatedState.size() - _probeSlotsCount;
@@ -855,11 +866,53 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Sequence& sequence)
 	{
 		sequence.Reset();
-		if (_shadowPreparers->_preparers.empty()) return;
 
 		auto viewPosition = ExtractTranslation(iterator._parsingContext->GetProjectionDesc()._cameraToWorld);
 		auto farClip = iterator._parsingContext->GetProjectionDesc()._farClip;
-		UpdateActiveLights(viewPosition, farClip);
+		UpdateActiveLights(viewPosition, farClip, iterator._parsingContext->GetProjectionDesc()._worldToProjection);
+
+		//
+		// We can cluster the rendering two combine two separate things:
+		//	1) merging scene parse steps
+		//	2) merging draw calls with multi-view instancing
+		//
+		// In theory, we may be able to call the results of multiple scene parse steps during a single preparer
+		// execute. That would allow us to disconnect the granularity of these two things to some extent.
+		// However, this may not work perfectly, because we may be recording the active views on a per object level
+		// during the parse step.
+		// (see, eg, PlacementsRenderer::Pimpl::BuildDrawablesViewMasks)
+		//
+		// Meaning there's an expectation of a one-to-one mapping between the views on the parse step and the views
+		// that the shader sees when finally rendering.
+		//
+		// At the shader level, there's a limit on the number of views that can be active. If we go the simple route
+		// of one scene parse per render step, can use this to constrain our clustering. Ideally we want to cluster to
+		// maximize the effectiveness of the ArbitraryConvexVolumeTester in the parse step.
+		//  
+
+		constexpr unsigned s_maxProbesPerCluster = 5;		// 5 * 6 = 30, just under the limit of 32 projections
+		const auto baseClusterCount = (_probeSlotsCount + s_maxProbesPerCluster - 1) / s_maxProbesPerCluster;
+		auto activeProbeCount = std::accumulate(b2e(_activeLights[0]), 0u, [](const auto& q) { return (unsigned)q.second._active; });
+		// unsigned clusterCount = std::min(activeProbeCount, baseClusterCount);
+
+		using ClusterIndex = unsigned;
+		std::vector<ClusterIndex> clusterAssignments;
+		{
+			auto LookupProbeEntry = [this](LightIndex lightIndex) -> SharedProbeSceneSet::ProbeEntry& { return this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
+
+			VLA_UNSAFE_FORCE(Float3, positions, _activeLights[0].size());
+			VLA_UNSAFE_FORCE(Float3, radii, _activeLights[0].size());
+			for (unsigned c=0; c<_activeLights[0].size(); ++c) {
+				const auto& desc = LookupProbeEntry(_activeLights[0][c].first)._probeDesc;
+				positions[c] = ExtractTranslation(desc._objectToWorld);
+				radii[c] = desc._farRadius;
+			}
+		}
+
+		std::vector<Techniques::ProjectionDesc> projDescs;
+		projDescs.resize(standardProj._projections.Count());
+		CalculateProjections(MakeIteratorRange(projDescs), standardProj._projections);
+		return sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::move(projDescs), std::move(volumeTester));
 
 		for (auto& light:_activeLights[0]) {
 			auto& set = _sceneSets[GetSetIndex(light.first)];
@@ -872,6 +925,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			auto& preparer = *addenums._preparer;
 			sequence.CreateStep_CallFunction(
 				[&preparer, proj, this, parseId](SequenceIterator& iterator) {
+
+					// todo -- bind / unbind multiview shader resource delegate here
 
 					auto rpi = preparer.Begin(
 						*iterator._threadContext,

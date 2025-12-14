@@ -125,6 +125,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		{
 			unsigned _databaseIndex = ~0u;
 			int _fading = 0;
+			bool _active = true;
 		};
 		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
@@ -133,7 +134,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers);
 		~DynamicShadowProbeScheduler();
 	private:
-
 		using LightIndex = uint64_t;		// encoded set index and light index within that set
 
 		std::vector<SharedProbeSceneSet> _sceneSets;
@@ -144,12 +144,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		unsigned _probeSlotsCount = 0;
 		uint64_t _unassociatedProbeSlots = 0ull;
 
-		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
-		std::shared_ptr<Techniques::IFrameBufferPool> _shadowGenFrameBufferPool;
-		ViewPool _shadowGenViewPool;
-		std::vector<unsigned> _operatorToPreparerIdMapping;
-
-		void UpdateActiveLights(const Float3& newViewPosition, float drawDistance);
+		void UpdateActiveLights(const Float3& newViewPosition, float drawDistance, const Float4x4& worldToClipSpace);
 
 		// ILightSceneComponent
 		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) override;
