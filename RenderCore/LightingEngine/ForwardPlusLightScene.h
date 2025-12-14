@@ -15,7 +15,7 @@ namespace RenderCore { namespace LightingEngine
 {
 	class ScreenSpaceReflectionsOperator;
 	class HierarchicalDepthsOperator;
-	class DynamicShadowPreparers;
+	class PriorityShadowSchedulerUtil;
 	class SHCoefficients;
 	namespace Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProbeScheduler; class PriorityShadowProjectionScheduler; class DominantLightSet; }
 
@@ -53,14 +53,14 @@ namespace RenderCore { namespace LightingEngine
 		struct LightOperatorsMapping
 		{
 			std::vector<unsigned> _operatorToPositionalLightOperator;
+			std::vector<LightOperatorInfo> _positionalLightOperators;
+
 			std::vector<unsigned> _operatorToShadowPreparerId;
+			std::vector<ShadowOperatorDesc> _shadowPreparers;
 
 			unsigned _operatorForStaticProbes = ~0u;
 			unsigned _operatorForDynamicProbes = ~0u;
-			std::vector<ShadowOperatorDesc> _shadowPreparers;
 			ShadowProbes::Configuration _shadowProbesCfg;
-
-			std::vector<LightOperatorInfo> _positionalLightOperators;
 
 			unsigned _dominantLightOperator = ~0u;
 			unsigned _ambientLightOperator = ~0u;
@@ -87,7 +87,7 @@ namespace RenderCore { namespace LightingEngine
 			const RasterizationLightTileOperatorDesc& tilerCfg,
 			const IntegrationParams& integrationParams);
 
-		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
+		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
 		std::shared_ptr<Internal::DynamicShadowProbeScheduler> _dynamicShadowProbesManager;
@@ -129,7 +129,7 @@ namespace RenderCore { namespace LightingEngine
 
 		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
 			const ConstructionServices&,
-			std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
+			std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers,
 			std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
 			ForwardPlusLightScene::LightOperatorsMapping&& shadowPreparerMapping,
 			std::shared_ptr<IResourceView> glossLut,

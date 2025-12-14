@@ -339,7 +339,7 @@ namespace RenderCore { namespace LightingEngine
 
 	std::shared_ptr<ForwardPlusLightScene> ForwardPlusLightScene::CreateInternal(
 		const ConstructionServices& constructionServices,
-		std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
+		std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers,
 		std::shared_ptr<RasterizationLightTileOperator> lightTiler,
 		LightOperatorsMapping&& lightOperatorsMapping,
 		std::shared_ptr<IResourceView> glossLut,
@@ -373,13 +373,13 @@ namespace RenderCore { namespace LightingEngine
 	{
 		struct Helper
 		{
-			std::future<std::shared_ptr<DynamicShadowPreparers>> _shadowPreparationOperatorsFuture;
+			std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> _shadowPreparationOperatorsFuture;
 			std::future<std::shared_ptr<RasterizationLightTileOperator>> _lightTilerFuture;
 			std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _glossLUTFuture;
 		};
 		auto helper = std::make_shared<Helper>();
 
-		helper->_shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
+		helper->_shadowPreparationOperatorsFuture = CreatePriorityShadowSchedulerUtil(
 			lightOperatorsMapping._shadowPreparers,
 			constructionServices._pipelineAccelerators, constructionServices._techDelBox);
 

@@ -36,6 +36,7 @@ namespace RenderCore { namespace LightingEngine
 
 		virtual void SetNearRadius(float) = 0;
 		virtual float GetNearRadius(float) = 0;
+		virtual void SetFadeTransition(unsigned) = 0;		// count of frames to transition between active and inactive
 
 		virtual ~ISemiStaticShadowProbeScheduler();
 	};
@@ -93,6 +94,12 @@ namespace RenderCore { namespace LightingEngine
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;
 		class ProbeRenderingInstance;
+	};
+
+	class DynamicShadowProbes
+	{
+	public:
+	private:
 	};
 
 }}

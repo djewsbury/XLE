@@ -15,6 +15,7 @@
 #include "../Techniques/CommonBindings.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/ContinuationUtil.h"
 #include "../../xleres/FileList.h"
 #include <utility>
 
@@ -170,7 +171,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 
 	PriorityShadowProjectionScheduler::PriorityShadowProjectionScheduler(
-		std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers,
+		std::shared_ptr<IDevice> device, std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers,
 		IteratorRange<const unsigned*> operatorToPreparerIdMapping)
 	: _shadowPreparers(std::move(shadowPreparers)), _totalProjectionCount(0)
 	{
@@ -303,7 +304,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return probe;
 	}
 
-	struct SemiStaticShadowProbeScheduler::SceneSet
+	struct SharedProbeSceneSet
 	{
 		// we just maintain a parallel list of the light probes we're interested in
 		struct ProbeEntry
@@ -329,9 +330,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			_probes[index] = {};
 		}
 
-		SceneSet() = default;
-		SceneSet(SceneSet&&) = default;
-		SceneSet& operator=(SceneSet&&) = default;
+		SharedProbeSceneSet() = default;
+		SharedProbeSceneSet(SharedProbeSceneSet&&) = default;
+		SharedProbeSceneSet& operator=(SharedProbeSceneSet&&) = default;
 	};
 
 	static uint32_t GetSetIndex(uint64_t lightIndex) { return lightIndex >> 32; }
@@ -427,12 +428,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void SemiStaticShadowProbeScheduler::SetNearRadius(float nearRadius) { _defaultNearRadius = nearRadius; }
 	float SemiStaticShadowProbeScheduler::GetNearRadius(float) { return _defaultNearRadius; }
+	void SemiStaticShadowProbeScheduler::SetFadeTransition(unsigned newValue) { _fadeTransitionInFrames = newValue; }
 
 	auto SemiStaticShadowProbeScheduler::OnFrameBarrier(const Float3& newViewPosition, float drawDistance) -> OnFrameBarrierResult
 	{
 		ScopedLock(_lock);
-
-		const int fadeTransitionInFrames = 16;
 
 		if (_probeSlotsReservedInBackground) {
 
@@ -458,7 +458,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			} else {
 				// just have to advance fading state
 				for (auto& l:_allocatedDatabaseEntries) {
-					l.second._fading = std::min(l.second._fading+1, fadeTransitionInFrames);
+					l.second._fading = std::min(l.second._fading+1, int(_fadeTransitionInFrames));
 					_sceneSets[GetSetIndex(l.first)]._probes[GetLightIndex(l.first)]._fading = l.second._fading;
 				}
 				return OnFrameBarrierResult::BackgroundOperationOngoing;
@@ -524,7 +524,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 
 			if (currentStateIterator != _allocatedDatabaseEntries.end() && newStateIterator != lightsAndDistance.end() && currentStateIterator->first == newStateIterator->first) {
-				currentStateIterator->second._fading = std::min(currentStateIterator->second._fading+1, fadeTransitionInFrames);
+				currentStateIterator->second._fading = std::min(currentStateIterator->second._fading+1, int(_fadeTransitionInFrames));
 				auto& inComponent = _sceneSets[GetSetIndex(currentStateIterator->first)]._probes[GetLightIndex(currentStateIterator->first)];
 				inComponent._fading = currentStateIterator->second._fading;
 				assert(inComponent._attachedDatabaseIndex == currentStateIterator->second._databaseIndex);
@@ -631,6 +631,206 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	SemiStaticShadowProbeScheduler::~SemiStaticShadowProbeScheduler() {}
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	void DynamicShadowProbeScheduler::SetNearRadius(float nearRadius) { _defaultNearRadius = nearRadius; }
+	float DynamicShadowProbeScheduler::GetNearRadius(float) { return _defaultNearRadius; }
+	void DynamicShadowProbeScheduler::SetFadeTransition(unsigned newValue) { _fadeTransitionInFrames = newValue; }
+
+	void DynamicShadowProbeScheduler::UpdateActiveLights(const Float3& newViewPosition, float drawDistance)
+	{
+		// Given the current set of lights, calculate the optimal use of a finite number of shadow probe database entries
+		// The easiest way to do this is to just the sort the list of lights we have by distance
+		// but ideally this should really be tied into some visibility solution -- and perhaps avoid updating every frame
+		std::vector<std::pair<LightIndex, float>> lightsAndDistance;
+		lightsAndDistance.reserve(256);
+		for (unsigned compIdx=0; compIdx<_sceneSets.size(); ++compIdx) {
+			auto& comp = _sceneSets[compIdx];
+			if (!comp._activeSet) continue;
+			unsigned offset = 0;
+			for (auto q:comp._activeProbes.InternalArray()) {
+				q = ~q;		// bit heap inverts allocations
+				while (q) {
+					auto idx = xl_ctz8(q);
+					q ^= 1ull << uint64_t(idx);
+					idx += offset;
+					auto& probe = comp._probes[idx]._probeDesc;
+					float dist = Magnitude(probe._position-newViewPosition) - probe._farRadius;
+					if (dist < drawDistance)
+						lightsAndDistance.emplace_back((uint64_t(compIdx) << 32ull) | idx, dist);
+				}
+				offset += 64;
+			}
+		}
+
+		if (lightsAndDistance.size() > _probeSlotsCount) {
+			// find the smallest N items and then restore sort order
+			std::nth_element(lightsAndDistance.begin(), lightsAndDistance.begin()+_probeSlotsCount, lightsAndDistance.end(), CompareSecond2{});
+			lightsAndDistance.erase(lightsAndDistance.begin()+_probeSlotsCount, lightsAndDistance.end());
+			std::sort(lightsAndDistance.begin(), lightsAndDistance.end(), CompareFirst2{});
+		}
+		
+		// compare to the list lights currently in the database and figure out
+		// evictions and new renderings
+		using LightIndexAndDistance = std::pair<LightIndex, float>;
+		VLA_UNSAFE_FORCE(LightIndexAndDistance, potentialNewRenders, lightsAndDistance.size());
+		unsigned potentialRenderCount = 0;
+
+		auto currentStateIterator = _activeLights[0].begin();
+		auto& updatedState = _activeLights[1];
+		updatedState.clear();
+
+		auto LookupProbeEntry = [this](LightIndex lightIndex) -> SharedProbeSceneSet::ProbeEntry& { return this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
+
+		{
+			auto newDistancesIterator = lightsAndDistance.begin();
+			assert(_probeSlotsCount <= 64u);	// has to be small, because we're going to use a bitfield in a uint64_t
+			while (newDistancesIterator != lightsAndDistance.end()) {
+
+				if (currentStateIterator != _activeLights[0].end() && currentStateIterator->first < newDistancesIterator->first) {
+
+					// This light fell out of the close lights list
+					auto& inComponent = LookupProbeEntry(currentStateIterator->first);
+					inComponent._fading = currentStateIterator->second._fading = std::max(currentStateIterator->second._fading-1, 0);
+					if (!currentStateIterator->second._fading) {
+						_unassociatedProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
+						inComponent._attachedDatabaseIndex = ~0u;
+					} else
+						updatedState.emplace_back(*currentStateIterator);
+					++currentStateIterator;
+
+				} else if (currentStateIterator != _activeLights[0].end() && currentStateIterator->first == newDistancesIterator->first) {
+
+					// no change
+					currentStateIterator->second._fading = std::min(currentStateIterator->second._fading+1, int(_fadeTransitionInFrames));
+					auto& inComponent = LookupProbeEntry(currentStateIterator->first);
+					inComponent._fading = currentStateIterator->second._fading;
+					updatedState.emplace_back(*currentStateIterator++);
+					++newDistancesIterator;
+
+				} else {
+
+					// This light is new to the close lights list
+					updatedState.emplace_back(newDistancesIterator->first, AllocatedDatabaseEntry{ ~0u, 1 });
+					++newDistancesIterator;
+
+				}
+			}
+
+			// all remaining lights fell off the close lights list
+			while (currentStateIterator!=_activeLights[0].end()) {
+				auto& inComponent = LookupProbeEntry(currentStateIterator->first);
+				inComponent._fading = currentStateIterator->second._fading = std::max(currentStateIterator->second._fading-1, 0);
+				if (!currentStateIterator->second._fading) {
+					_unassociatedProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
+					inComponent._attachedDatabaseIndex = ~0u;
+				} else
+					updatedState.emplace_back(*currentStateIterator);
+				++currentStateIterator;
+			}
+		}
+
+		// we can have too many due to the fading process slowing down evictions. In this case we must prioritize removals based some heuristic
+		// that considers distance, fading and new light vs old light
+		if (updatedState.size() > _probeSlotsCount) {
+			using SlotAndScore = std::pair<unsigned, float>;
+			VLA_UNSAFE_FORCE(SlotAndScore, scores, updatedState.size());
+			auto* s = scores;
+			for (auto& u:updatedState) {
+				float x = u.second._fading / float(_fadeTransitionInFrames);
+				auto& inComponent = LookupProbeEntry(u.first);
+				float dist = Magnitude(inComponent._probeDesc._position-newViewPosition) - inComponent._probeDesc._farRadius;
+				if (u.second._databaseIndex == ~0u) x = 0.33f;		// this is new, so let's bias the "fading" factor up a bit -- otherwise it would be very low
+				float score = x*x * (drawDistance-dist) * (drawDistance-dist);
+				*s++ = {unsigned(&u-updatedState.data()), score};
+			}
+			auto countToRemove = updatedState.size() - _probeSlotsCount;
+			std::nth_element(scores, scores+countToRemove, scores+updatedState.size(), CompareSecond2{});		// smallest scores to the front
+			std::sort(scores, scores+countToRemove, CompareFirst2{});
+			for (unsigned c=0; c<countToRemove; ++c)
+				updatedState.erase(updatedState.begin()+scores[countToRemove-c-1].first);
+			assert(updatedState.size() == _probeSlotsCount);
+		}
+
+		// assign probe slots to the newly added lights
+		for (auto& u:updatedState) {
+			if (u.second._databaseIndex == ~0u) {
+				assert(_unassociatedProbeSlots);		// if you get this is means we're not tracking evictions correctly -- a light was freed but it wasn't recorded in this value
+				auto probeSlot = xl_ctz8(_unassociatedProbeSlots);
+				_unassociatedProbeSlots ^= 1ull<<uint64_t(probeSlot);
+
+				auto& inComponent = LookupProbeEntry(u.first);
+				inComponent._attachedDatabaseIndex = probeSlot;
+				inComponent._fading = u.second._fading;
+			}
+		}
+
+		// swap in the new state
+		std::swap(_activeLights[0], _activeLights[1]);
+	}
+
+	void DynamicShadowProbeScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light)
+	{
+		_sceneSets[setIdx].RegisterLight(lightIdx, light);
+	}
+
+	void DynamicShadowProbeScheduler::DeregisterLight(unsigned setIdx, unsigned lightIdx)
+	{
+		_sceneSets[setIdx].DeregisterLight(lightIdx);
+
+		// remove it from our allocated list, if it's there
+		for (auto i=_activeLights[0].begin(); i!=_activeLights[0].end(); ++i)
+			if (GetSetIndex(i->first) == setIdx && GetLightIndex(i->first) == lightIdx) {
+				_unassociatedProbeSlots |= 1ull << uint64_t(i->second._databaseIndex);
+				_activeLights[0].erase(i);
+				break;
+			}
+	}
+
+	bool DynamicShadowProbeScheduler::BindToSet(ILightScene::LightOperatorId op, unsigned setIdx)
+	{
+		if (std::find(b2e(_operatorIds), op) == _operatorIds.end()) return false;
+		if (_sceneSets.size() <= setIdx)
+			_sceneSets.resize(setIdx+1);
+		_sceneSets[setIdx]._activeSet = true;
+		return true;
+	}
+
+	void* DynamicShadowProbeScheduler::QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode)
+	{
+		switch(interfaceTypeCode) {
+		case TypeHashCode<ISemiStaticShadowProbeScheduler>:
+			if (_sceneSets[setIdx]._activeSet)
+				return (ISemiStaticShadowProbeScheduler*)this;
+			return nullptr;
+		default:
+			return nullptr;
+		}
+	}
+
+	auto DynamicShadowProbeScheduler::GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx) -> AllocatedDatabaseEntry
+	{
+		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
+		assert(_sceneSets[setIdx]._activeProbes.IsAllocated(lightIdx));
+		auto& p = _sceneSets[setIdx]._probes[lightIdx];
+		return { p._attachedDatabaseIndex, p._fading };
+	}
+
+	DynamicShadowProbeScheduler::DynamicShadowProbeScheduler(
+		std::shared_ptr<DynamicShadowProbes> shadowProbes,
+		IteratorRange<const ILightScene::LightOperatorId*> ops)
+	: _shadowProbes(std::move(shadowProbes)), _operatorIds(ops.begin(), ops.end())
+	{
+		_probeSlotsCount = _shadowProbes->GetReservedProbeCount();
+		assert(_probeSlotsCount <= 64);
+		_unassociatedProbeSlots = (_probeSlotsCount == 64u) ? ~0ull : ((1ull << uint64_t(_probeSlotsCount)) - 1ull);
+		_activeLights[0].reserve(_probeSlotsCount*2);
+		_activeLights[1].reserve(_probeSlotsCount*2);		// allow some overfill during UpdateActiveLights
+	}
+
+	DynamicShadowProbeScheduler::~DynamicShadowProbeScheduler() {}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	DominantLightSet::DominantLightSet(ILightScene::LightOperatorId lightOpId)
 	: _lightOpId(lightOpId)

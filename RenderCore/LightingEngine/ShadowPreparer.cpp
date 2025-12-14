@@ -480,7 +480,7 @@ namespace RenderCore { namespace LightingEngine
 
 	DMShadowPreparer::~DMShadowPreparer() {}
 
-	std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> DynamicShadowPreparers::CreateShadowProjection(unsigned operatorIdx)
+	std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> PriorityShadowSchedulerUtil::CreateShadowProjection(unsigned operatorIdx)
 	{
 		assert(operatorIdx <= _preparers.size());
 		auto result = std::make_unique<Internal::StandardShadowProjection>();
@@ -511,15 +511,15 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	std::future<std::shared_ptr<DynamicShadowPreparers>> CreateDynamicShadowPreparers(
+	std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> CreatePriorityShadowSchedulerUtil(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
 	{
-		std::promise<std::shared_ptr<DynamicShadowPreparers>> promise;
+		std::promise<std::shared_ptr<PriorityShadowSchedulerUtil>> promise;
 		auto result = promise.get_future();
 		if (shadowGenerators.empty()) {
-			promise.set_value(std::make_shared<DynamicShadowPreparers>());
+			promise.set_value(std::make_shared<PriorityShadowSchedulerUtil>());
 			return result;
 		}
 
@@ -532,7 +532,7 @@ namespace RenderCore { namespace LightingEngine
 		auto helper = std::make_shared<Helper>();
 		helper->_futures.reserve(shadowGenerators.size());
 		for (unsigned operatorIdx=0; operatorIdx<shadowGenerators.size(); ++operatorIdx) {
-			assert(shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::Probe);
+			assert(shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::SemiStaticProbe && shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::DynamicProbe && shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::SemiStaticAndDynamicProbe);
 			auto preparer = CreateCompiledShadowPreparer(shadowGenerators[operatorIdx], pipelineAccelerators, delegatesBox);
 			helper->_futures.push_back(std::move(preparer));
 		}
@@ -555,12 +555,12 @@ namespace RenderCore { namespace LightingEngine
 				for (auto& p:helper->_futures)
 					*a++ = p.get();
 
-				auto finalResult = std::make_shared<DynamicShadowPreparers>();
+				auto finalResult = std::make_shared<PriorityShadowSchedulerUtil>();
 				finalResult->_preparers.reserve(actualized.size());
 				assert(actualized.size() == shadowGeneratorCopy.size());
 				auto i = shadowGeneratorCopy.begin();
 				for (auto&a:actualized)
-					finalResult->_preparers.push_back(DynamicShadowPreparers::Preparer{std::move(a), *i++});
+					finalResult->_preparers.push_back(PriorityShadowSchedulerUtil::Preparer{std::move(a), *i++});
 
 				return finalResult;
 			});

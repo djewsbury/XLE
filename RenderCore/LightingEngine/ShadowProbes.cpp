@@ -99,7 +99,7 @@ namespace RenderCore { namespace LightingEngine
 			StaticProbePrepareHelper(IThreadContext& threadContext, ShadowProbes::Pimpl& pimpl)
 			: _pimpl(&pimpl)
 			{
-				_techContext._attachmentPool = Techniques::CreateAttachmentPool(threadContext.GetDevice());
+				// _techContext._attachmentPool = Techniques::CreateAttachmentPool(threadContext.GetDevice());		(can we get away without this?)
 				_techContext._frameBufferPool = Techniques::CreateFrameBufferPool();
 				_techContext._systemUniformsDelegate = std::make_shared<Techniques::SystemUniformsDelegate>(*threadContext.GetDevice());
 				_techContext._graphicsSequencerDS = Techniques::CreateSemiConstantDescriptorSet(*_pimpl->_sequencerDescSetLayout, _pimpl->_sequencerDescSetLayoutName, PipelineType::Graphics, *threadContext.GetDevice());

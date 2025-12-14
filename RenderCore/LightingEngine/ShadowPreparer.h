@@ -28,7 +28,7 @@ namespace std { template<typename T> class future; }
 namespace RenderCore { namespace LightingEngine
 {
 	enum class ShadowProjectionMode { Arbitrary, Ortho, ArbitraryCubeMap };
-	enum class ShadowResolveType { DepthTexture, RayTraced, SemiStaticProbe, DynamicProbe };
+	enum class ShadowResolveType { DepthTexture, RayTraced, SemiStaticProbe, DynamicProbe, SemiStaticAndDynamicProbe };
 	enum class ShadowFilterModel { None, PoissonDisc, Smooth };
 
 	struct ShadowOperatorDesc
@@ -109,7 +109,9 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
 
-	class DynamicShadowPreparers
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class PriorityShadowSchedulerUtil
 	{
 	public:
 		struct Preparer
@@ -121,7 +123,7 @@ namespace RenderCore { namespace LightingEngine
 
 		std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> CreateShadowProjection(unsigned operatorIdx);
 	};
-	std::future<std::shared_ptr<DynamicShadowPreparers>> CreateDynamicShadowPreparers(
+	std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> CreatePriorityShadowSchedulerUtil(
 		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);

@@ -46,7 +46,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
-		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
+		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
 		std::shared_ptr<Internal::PriorityShadowProjectionScheduler> _shadowScheduler;
 		bool _ambientLightEnabled = false;
 
@@ -367,7 +367,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		DeferredLightScene::ShadowPreparerIdMapping shadowOperatorMapping;
 		shadowOperatorMapping._operatorToShadowPreparerId.resize(shadowGenerators.size(), ~0u);
-		std::future<std::shared_ptr<DynamicShadowPreparers>> shadowPreparationOperatorsFuture;
+		std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> shadowPreparationOperatorsFuture;
 
 		// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
 		{
@@ -386,7 +386,7 @@ namespace RenderCore { namespace LightingEngine
 					++dynShadowCount;
 				}
 			}
-			shadowPreparationOperatorsFuture = CreateDynamicShadowPreparers(
+			shadowPreparationOperatorsFuture = CreatePriorityShadowSchedulerUtil(
 				MakeIteratorRange(dynShadowGens, &dynShadowGens[dynShadowCount]),
 				pipelineAccelerators, techDelBox);
 		}

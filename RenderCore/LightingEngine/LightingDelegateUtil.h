@@ -31,7 +31,7 @@ namespace RenderCore { namespace LightingEngine
 	class SequenceIterator;
 	class Sequence;
 	class IProbeRenderingInstance;
-	class DynamicShadowPreparers;
+	class PriorityShadowSchedulerUtil;
 }}
 namespace RenderCore { class IThreadContext; class IDevice; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
@@ -44,6 +44,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>);
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>, uint64_t outputSemantic);
 
+	struct SharedProbeSceneSet;
+
 	// SemiStaticShadowProbeScheduler assumes that there is no animated content in the probes, and lights are not moving
 	// In other words, the probes are only recalculated after eviction
 	// There is a finite number of active probes, and the scheduler will attempt to make active only the most relevant lights
@@ -54,6 +56,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		OnFrameBarrierResult OnFrameBarrier(const Float3& newViewPosition, float drawDistance) override;
 		void SetNearRadius(float nearRadius) override;
 		float GetNearRadius(float) override;
+		void SetFadeTransition(unsigned) override;		// frame count
 
 		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext, unsigned maxProbeCount) override;
 		void EndPrepare(IThreadContext& threadContext) override;
@@ -90,10 +93,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 
-		struct SceneSet;
-		std::vector<SceneSet> _sceneSets;
+		std::vector<SharedProbeSceneSet> _sceneSets;
 		ILightScene::LightOperatorId _operatorId;
 		float _defaultNearRadius = 1.f;
+		unsigned _fadeTransitionInFrames = 16;
 
 		// ILightSceneComponent
 		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) override;
@@ -109,6 +112,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class DynamicShadowProbeScheduler : public ILightSceneComponent
 	{
 	public:
+		void SetNearRadius(float nearRadius);
+		float GetNearRadius(float);
+		void SetFadeTransition(unsigned newValue);
+
 		struct AllocatedDatabaseEntry
 		{
 			unsigned _databaseIndex = ~0u;
@@ -116,8 +123,30 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		};
 		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
-		DynamicShadowProbeScheduler();
+		DynamicShadowProbeScheduler(
+			std::shared_ptr<DynamicShadowProbes> shadowProbes,
+			IteratorRange<const ILightScene::LightOperatorId*>);
 		~DynamicShadowProbeScheduler();
+	private:
+
+		using LightIndex = uint64_t;		// encoded set index and light index within that set
+
+		std::vector<SharedProbeSceneSet> _sceneSets;
+		std::shared_ptr<DynamicShadowProbes> _shadowProbes;
+		std::vector<std::pair<LightIndex, AllocatedDatabaseEntry>> _activeLights[2];
+		std::vector<ILightScene::LightOperatorId> _operatorIds;
+		float _defaultNearRadius = 1.f;
+		unsigned _fadeTransitionInFrames = 16;
+		unsigned _probeSlotsCount = 0;
+		uint64_t _unassociatedProbeSlots = 0ull;
+
+		void UpdateActiveLights(const Float3& newViewPosition, float drawDistance);
+
+		// ILightSceneComponent
+		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) override;
+		void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
+		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
 	// PriorityShadowProjectionScheduler handles shadow projections that are always active, and are recalculated every frame
@@ -143,11 +172,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		struct SceneSet;
 		std::vector<SceneSet> _sceneSets;
 
-		std::shared_ptr<DynamicShadowPreparers> _shadowPreparers;
+		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
 		unsigned _totalProjectionCount;
 
 		PriorityShadowProjectionScheduler(
-			std::shared_ptr<IDevice> device, std::shared_ptr<DynamicShadowPreparers> shadowPreparers, 
+			std::shared_ptr<IDevice> device, std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers, 
 			IteratorRange<const unsigned*> operatorToPreparerIdMapping);
 		~PriorityShadowProjectionScheduler();
 	private:
@@ -246,7 +275,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<SequencerAddendums> _addendums;
 		BitHeap _activeProjections;
 		bool _activeSet = false;
-		std::shared_ptr<DynamicShadowPreparers> _preparers;
+		std::shared_ptr<PriorityShadowSchedulerUtil> _preparers;
 		unsigned _preparerId = ~0u;
 
 		void RegisterLight(unsigned index, ILightBase& light);
