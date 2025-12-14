@@ -6,6 +6,7 @@
 
 #include "LightingEngine.h"
 #include "../Techniques/TechniqueUtils.h"
+#include "../Techniques/RenderPass.h"
 #include "../Format.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/IteratorUtils.h"
@@ -55,11 +56,9 @@ namespace RenderCore { namespace LightingEngine
 
 		struct Configuration
 		{
-			unsigned _staticFaceDims = 256;
-			unsigned _dynamicFaceDims = 128;
-			unsigned _maxStaticProbes = 32;
-			unsigned _maxDynamicProbes = 32;
-			Format _staticFormat = Format::D16_UNORM;
+			unsigned _faceDims = 256;
+			unsigned _maxProbes = 32;
+			Format _format = Format::D16_UNORM;
 
 			Techniques::RSDepthBias _singleSidedBias;
 			Techniques::RSDepthBias _doubleSidedBias;
@@ -99,7 +98,29 @@ namespace RenderCore { namespace LightingEngine
 	class DynamicShadowProbes
 	{
 	public:
+		Techniques::RenderPassInstance Begin(
+			Techniques::ParsingContext& parsingContext,
+			const ShadowProbes::Probe& probe,
+			unsigned probeIndex);		// probeIndex is the index into our table where we're going to write to
+
+		IResourceView& GetDynamicProbesTable() const;
+		IResourceView& GetDynamicProbeUniforms() const;
+		unsigned GetReservedProbeCount();
+
+		void CompleteInitialization(IThreadContext& threadContext);
+
+		DynamicShadowProbes(
+			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+			SharedTechniqueDelegateBox& sharedTechniqueDelegate,
+			const ShadowProbes::Configuration& config);
+
+		DynamicShadowProbes(
+			LightingEngineApparatus& apparatus,
+			const ShadowProbes::Configuration& config);
+
 	private:
+		class Pimpl;
+		std::unique_ptr<Pimpl> _pimpl;
 	};
 
 }}

@@ -78,33 +78,33 @@ namespace RenderCore { namespace LightingEngine
 	namespace Internal { class ILightBase; }
 	class SequenceIterator;
 
-	class ICompiledShadowPreparer
+	// Manages rendering to a pool-managed attachment and building a descriptor set for the generated result, which can be
+	// used to sample the shadow during light
+	// typically used with PriorityShadowProjectionScheduler
+	class IShadowPreparer
 	{
 	public:
 		virtual Techniques::RenderPassInstance Begin(
-			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
 			Internal::ILightBase& projection,
 			Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
 			Techniques::IAttachmentPool& shadowGenAttachmentPool,
 			ViewPool& viewPool) = 0;
 		virtual void End(
-			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
 			Techniques::RenderPassInstance& rpi,
-			PipelineType descSetPipelineType,
 			IPreparedShadowResult& res) = 0;
 		virtual std::pair<std::shared_ptr<Techniques::SequencerConfig>, std::shared_ptr<Techniques::IShaderResourceDelegate>> GetSequencerConfig() = 0;
 		virtual std::shared_ptr<IPreparedShadowResult> CreatePreparedShadowResult() = 0;
 		virtual void SetDescriptorSetLayout(
 			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
 			PipelineType pipelineType) = 0;
-		virtual ~ICompiledShadowPreparer();
+		virtual ~IShadowPreparer();
 	};
 
 	struct ShadowOperatorDesc;
 	class SharedTechniqueDelegateBox;
-	std::future<std::shared_ptr<ICompiledShadowPreparer>> CreateCompiledShadowPreparer(
+	std::future<std::shared_ptr<IShadowPreparer>> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
@@ -118,15 +118,6 @@ namespace RenderCore { namespace LightingEngine
 		Sequence& sequence,
 		Internal::ILightBase& proj,
 		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester);
-
-	class IDynamicShadowProjectionScheduler
-	{
-	public:
-		virtual void SetDescriptorSetLayout(
-			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
-			PipelineType pipelineType) = 0;
-		virtual ~IDynamicShadowProjectionScheduler() = default;
-	};
 
 	std::unique_ptr<Internal::ILightBase> CreateStandardShadowProjectionInterface(const ShadowOperatorDesc& desc);
 

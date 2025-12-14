@@ -309,7 +309,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		if (_pimpl->_pendingClearOfProbeUniforms) {
-			auto probeUniformsSize = sizeof(CB_StaticShadowProbeDesc)*6*_pimpl->_config._maxStaticProbes;
+			auto probeUniformsSize = sizeof(CB_StaticShadowProbeDesc)*6*_pimpl->_config._maxProbes;
 			VLA(uint8_t, blank, probeUniformsSize);
 			std::memset(blank, 0, probeUniformsSize);
 			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*_pimpl->_probeUniforms, MakeIteratorRange(blank, blank+probeUniformsSize));
@@ -336,7 +336,7 @@ namespace RenderCore { namespace LightingEngine
 
 		{
 			// Create the pipeline accelerator configuration
-			AttachmentDesc attachmentDesc { _pimpl->_config._staticFormat, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource };
+			AttachmentDesc attachmentDesc { _pimpl->_config._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource };
 			SubpassDesc spDesc;
 			spDesc.SetDepthStencil(0);
 			FrameBufferDesc fbDesc {
@@ -365,10 +365,10 @@ namespace RenderCore { namespace LightingEngine
 					});
 		}
 
-		_pimpl->_probes.resize(config._maxStaticProbes, Probe{Zero<Float3>(), 1.f, 1024.f});
+		_pimpl->_probes.resize(config._maxProbes, Probe{Zero<Float3>(), 1.f, 1024.f});
 
-		auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._staticFaceDims, _pimpl->_config._staticFaceDims, Format::D16_UNORM);
-		staticDatabaseDesc._arrayCount = 6*_pimpl->_config._maxStaticProbes;
+		auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._faceDims, _pimpl->_config._faceDims, _pimpl->_config._format);
+		staticDatabaseDesc._arrayCount = 6*_pimpl->_config._maxProbes;
 		auto device = _pimpl->_pipelineAccelerators->GetDevice().get();
 		_pimpl->_staticTable = device->CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil | BindFlag::TransferDst, staticDatabaseDesc), "probe-prepare");
 		_pimpl->_staticTableSRV = _pimpl->_staticTable->CreateTextureView(BindFlag::ShaderResource);
@@ -386,12 +386,129 @@ namespace RenderCore { namespace LightingEngine
 	ShadowProbes::~ShadowProbes()
 	{}
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	class DynamicShadowProbes::Pimpl
+	{
+	public:
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
+		std::shared_ptr<IResource> _staticTable, _probeUniforms;
+		std::shared_ptr<IResourceView> _staticTableSRV, _probeUniformsUAV;
+		ShadowProbes::Configuration _config;
+		std::shared_ptr<MultiViewUniformsDelegate> _multiViewUniformsDelegate;
+		std::shared_future<std::shared_ptr<Techniques::SequencerConfig>> _probePrepareCfg;
+		bool _pendingClearOfProbeUniforms = true;
+		bool _pendingStaticTableInit = true;
+	};
+
+	Techniques::RenderPassInstance DynamicShadowProbes::Begin(
+		Techniques::ParsingContext& parsingContext,
+		const ShadowProbes::Probe& probe,
+		unsigned probeIndex)
+	{
+		_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(_pendingViews));
+		parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
+		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
+		auto firstSlice = _probesToRender[probeIndex].first*6, sliceCount = (unsigned)_pendingViews.size();
+
+		Techniques::FrameBufferDescFragment fragment;
+		SubpassDesc sp;
+		TextureViewDesc viewDesc;
+		viewDesc._arrayLayerRange = {firstSlice, sliceCount};
+		sp.SetDepthStencil(fragment.DefineAttachment(semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
+		sp.SetName("static-shadow-prepare");
+		fragment.AddSubpass(std::move(sp));
+
+		Techniques::RenderPassBeginDesc beginInfo;
+		return Techniques::RenderPassInstance{parsingContext, fragment, beginInfo};
+	}
+
+	IResourceView& GetStaticProbesTable() const;
+	IResourceView& GetShadowProbeUniforms() const;
+	unsigned GetReservedProbeCount();
+
+	void DynamicShadowProbes::CompleteInitialization(IThreadContext& threadContext)
+	{
+		if (_pimpl->_pendingStaticTableInit) {
+			// Ensure that we initialize all subresources into depth buffer's ShaderResource state
+			// individual subresources will be switched to this state when rendered to; but Vulkan validation layer still complains about the unwritten layers
+			auto tableRes = _pimpl->_staticTable.get();
+			Metal::BarrierHelper{*Metal::DeviceContext::Get(threadContext)}.Add(*tableRes, Metal::BarrierResourceUsage::NoState(), BindFlag::ShaderResource);
+		}
+
+		if (_pimpl->_pendingClearOfProbeUniforms) {
+			auto probeUniformsSize = sizeof(CB_StaticShadowProbeDesc)*6*_pimpl->_config._maxProbes;
+			VLA(uint8_t, blank, probeUniformsSize);
+			std::memset(blank, 0, probeUniformsSize);
+			Metal::DeviceContext::Get(threadContext)->BeginBlitEncoder().Write(*_pimpl->_probeUniforms, MakeIteratorRange(blank, blank+probeUniformsSize));
+			_pimpl->_pendingClearOfProbeUniforms = false;
+		}
+	}
+
+	DynamicShadowProbes::DynamicShadowProbes(
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+		SharedTechniqueDelegateBox& sharedTechniqueDelegate,
+		const ShadowProbes::Configuration& config)
+	{
+		_pimpl = std::make_unique<Pimpl>();
+		_pimpl->_config = config;
+		_pimpl->_pipelineAccelerators = std::move(pipelineAccelerators);
+		_pimpl->_multiViewUniformsDelegate = std::make_shared<MultiViewUniformsDelegate>();
+
+		{
+			// Create the pipeline accelerator configuration
+			AttachmentDesc attachmentDesc { _pimpl->_config._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource };
+			SubpassDesc spDesc;
+			spDesc.SetDepthStencil(0);
+			FrameBufferDesc fbDesc {
+				std::vector<AttachmentDesc>{attachmentDesc},
+				std::vector<SubpassDesc>{spDesc}};
+
+			// Coordinate space for cubemap rendering is defined by the API to make shader lookups simple
+			// However, if it's not the same as our typical conventions, we may need to flip the winding
+			// direction
+			bool flipCulling = Techniques::GetGeometricCoordinateSpaceForCubemaps() != GeometricCoordinateSpace::RightHanded;
+			std::promise<std::shared_ptr<Techniques::SequencerConfig>> futureSequencerConfig;
+			_pimpl->_probePrepareCfg = futureSequencerConfig.get_future();
+			::Assets::WhenAll(
+				sharedTechniqueDelegate.GetShadowGenTechniqueDelegate(
+					Techniques::ShadowGenType::VertexIdViewInstancing, 
+					_pimpl->_config._singleSidedBias, 
+					_pimpl->_config._doubleSidedBias, 
+					CullMode::Back, flipCulling ? FaceWinding::CW : FaceWinding::CCW))
+				.ThenConstructToPromise(
+					std::move(futureSequencerConfig),
+					[pipelineAccelerators=_pimpl->_pipelineAccelerators, fbDesc](auto techDel) {
+						auto cfg = pipelineAccelerators->CreateSequencerConfig("shadow-probe");
+						pipelineAccelerators->SetTechniqueDelegate(*cfg, techDel);
+						pipelineAccelerators->SetFrameBufferDesc(*cfg, fbDesc, 0);
+						return cfg;
+					});
+		}
+
+		auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._faceDims, _pimpl->_config._faceDims, _pimpl->_config._format);
+		staticDatabaseDesc._arrayCount = 6*_pimpl->_config._maxProbes;
+		auto device = _pimpl->_pipelineAccelerators->GetDevice().get();
+		_pimpl->_staticTable = device->CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil | BindFlag::TransferDst, staticDatabaseDesc), "dynamic-probe-prepare");
+		_pimpl->_staticTableSRV = _pimpl->_staticTable->CreateTextureView(BindFlag::ShaderResource);
+		_pimpl->_pendingStaticTableInit = true;
+
+		_pimpl->_probeUniforms = device->CreateResource(
+			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_StaticShadowProbeDesc)*staticDatabaseDesc._arrayCount, sizeof(CB_StaticShadowProbeDesc))), "dynamic-shadow-probe-list");
+		_pimpl->_probeUniformsUAV = _pimpl->_probeUniforms->CreateBufferView(BindFlag::UnorderedAccess);
+	}
+
+	DynamicShadowProbes::DynamicShadowProbes(
+		LightingEngineApparatus& apparatus,
+		const ShadowProbes::Configuration& config)
+	: DynamicShadowProbes(apparatus._pipelineAccelerators, *apparatus._sharedDelegates, config)
+	{}
+
 	bool operator==(const ShadowProbes::Configuration& lhs, const ShadowProbes::Configuration& rhs)
 	{
-		return lhs._staticFaceDims == rhs._staticFaceDims
-		 	&& lhs._dynamicFaceDims == rhs._dynamicFaceDims
-			&& lhs._maxDynamicProbes == rhs._maxDynamicProbes
-			&& lhs._staticFormat == rhs._staticFormat
+		return lhs._faceDims == rhs._faceDims
+		 	&& lhs._maxProbes == rhs._maxProbes
+			&& lhs._format == rhs._format
 			&& lhs._singleSidedBias._slopeScaledBias == rhs._singleSidedBias._slopeScaledBias
 			&& lhs._singleSidedBias._depthBiasClamp == rhs._singleSidedBias._depthBiasClamp
 			&& lhs._singleSidedBias._depthBias == rhs._singleSidedBias._depthBias

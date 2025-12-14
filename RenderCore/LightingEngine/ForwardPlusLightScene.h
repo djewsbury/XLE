@@ -89,6 +89,7 @@ namespace RenderCore { namespace LightingEngine
 
 		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
 		std::shared_ptr<ShadowProbes> _shadowProbes;
+		std::shared_ptr<DynamicShadowProbes> _dynamicShadowProbes;
 		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
 		std::shared_ptr<Internal::DynamicShadowProbeScheduler> _dynamicShadowProbesManager;
 		std::shared_ptr<Internal::PriorityShadowProjectionScheduler> _shadowScheduler;

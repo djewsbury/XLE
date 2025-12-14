@@ -38,11 +38,10 @@ namespace RenderCore { namespace LightingEngine
 
 	IPreparedShadowResult::~IPreparedShadowResult() {}
 
-	class DMShadowPreparer : public ICompiledShadowPreparer
+	class DMShadowPreparer : public IShadowPreparer
 	{
 	public:
 		Techniques::RenderPassInstance Begin(
-			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
 			Internal::ILightBase& projection,
 			Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
@@ -50,10 +49,8 @@ namespace RenderCore { namespace LightingEngine
 			ViewPool& viewPool) override;
 
 		void End(
-			IThreadContext& threadContext, 
 			Techniques::ParsingContext& parsingContext,
 			Techniques::RenderPassInstance& rpi,
-			PipelineType,
 			IPreparedShadowResult& res) override;
 
 		std::pair<std::shared_ptr<Techniques::SequencerConfig>, std::shared_ptr<Techniques::IShaderResourceDelegate>> GetSequencerConfig() override;
@@ -138,7 +135,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 	};
 
-	ICompiledShadowPreparer::~ICompiledShadowPreparer() {}
+	IShadowPreparer::~IShadowPreparer() {}
 
 	namespace Internal
 	{
@@ -305,7 +302,6 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	Techniques::RenderPassInstance DMShadowPreparer::Begin(
-		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		Internal::ILightBase& projectionBase,
 		Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
@@ -320,7 +316,7 @@ namespace RenderCore { namespace LightingEngine
 		_savedProjectionDesc = parsingContext.GetProjectionDesc();
 		_savedViewport = parsingContext.GetViewport();
 		auto rpi = Techniques::RenderPassInstance{
-			threadContext,
+			parsingContext.GetThreadContext(),
 			_fbDesc._fbDesc, _fbDesc._fullAttachmentDescriptions,
 			shadowGenFrameBufferPool, shadowGenAttachmentPool, nullptr, {}};
 		parsingContext.GetViewport() = rpi.GetDefaultViewport();
@@ -329,10 +325,8 @@ namespace RenderCore { namespace LightingEngine
 	}
 
 	void DMShadowPreparer::End(
-		IThreadContext& threadContext,
 		Techniques::ParsingContext& parsingContext,
 		Techniques::RenderPassInstance& rpi,
-		PipelineType descSetPipelineType,
 		IPreparedShadowResult& res)
 	{
 		assert(_descSetGood);
@@ -357,7 +351,7 @@ namespace RenderCore { namespace LightingEngine
 		// We can only use this descriptor set during this frame -- but there's no protections for this, we're on our own
 		auto* descSet = _descSetHeap.Allocate();
 		assert(descSet);
-		Techniques::WriteWithSubframeImmediates(threadContext, *descSet, descSetInit);
+		Techniques::WriteWithSubframeImmediates(parsingContext.GetThreadContext(), *descSet, descSetInit);
 		checked_cast<PreparedShadowResult*>(&res)->_descriptorSet = descSet;
 
 		parsingContext.GetProjectionDesc() = _savedProjectionDesc;
@@ -445,8 +439,8 @@ namespace RenderCore { namespace LightingEngine
 		
 		Techniques::FragmentStitchingContext stitchingContext;
 		
-		// Create a preregistered attachmentso we can specify a full resource desc
-		// for the shadow texture. This helps distinquish between drawing to a cubemap
+		// Create a preregistered attachment so we can specify a full resource desc
+		// for the shadow texture. This helps distinguish between drawing to a cubemap
 		// vs drawing to texture array
 		Techniques::PreregisteredAttachment pregAttach;
 		pregAttach._semantic = Techniques::AttachmentSemantics::ShadowDepthMap;
@@ -480,7 +474,7 @@ namespace RenderCore { namespace LightingEngine
 
 	DMShadowPreparer::~DMShadowPreparer() {}
 
-	std::future<std::shared_ptr<ICompiledShadowPreparer>> CreateCompiledShadowPreparer(
+	std::future<std::shared_ptr<IShadowPreparer>> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
@@ -489,7 +483,7 @@ namespace RenderCore { namespace LightingEngine
 			desc._multiViewInstancingPath ? Techniques::ShadowGenType::VertexIdViewInstancing : Techniques::ShadowGenType::GSAmplify,
 			desc._singleSidedBias, desc._doubleSidedBias, desc._cullMode);
 
-		std::promise<std::shared_ptr<ICompiledShadowPreparer>> promise;
+		std::promise<std::shared_ptr<IShadowPreparer>> promise;
 		auto result = promise.get_future();
 		::Assets::WhenAll(shadowGenDelegateFuture).ThenConstructToPromise(
 			std::move(promise),

@@ -116,6 +116,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		float GetNearRadius(float);
 		void SetFadeTransition(unsigned newValue);
 
+		void DoShadowPrepare(
+			SequenceIterator& iterator,
+			Sequence& sequence);
+		void ClearPreparedShadows();
+
 		struct AllocatedDatabaseEntry
 		{
 			unsigned _databaseIndex = ~0u;
@@ -125,7 +130,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		DynamicShadowProbeScheduler(
 			std::shared_ptr<DynamicShadowProbes> shadowProbes,
-			IteratorRange<const ILightScene::LightOperatorId*>);
+			std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers);
 		~DynamicShadowProbeScheduler();
 	private:
 
@@ -134,11 +139,15 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<SharedProbeSceneSet> _sceneSets;
 		std::shared_ptr<DynamicShadowProbes> _shadowProbes;
 		std::vector<std::pair<LightIndex, AllocatedDatabaseEntry>> _activeLights[2];
-		std::vector<ILightScene::LightOperatorId> _operatorIds;
 		float _defaultNearRadius = 1.f;
 		unsigned _fadeTransitionInFrames = 16;
 		unsigned _probeSlotsCount = 0;
 		uint64_t _unassociatedProbeSlots = 0ull;
+
+		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
+		std::shared_ptr<Techniques::IFrameBufferPool> _shadowGenFrameBufferPool;
+		ViewPool _shadowGenViewPool;
+		std::vector<unsigned> _operatorToPreparerIdMapping;
 
 		void UpdateActiveLights(const Float3& newViewPosition, float drawDistance);
 
@@ -147,6 +156,15 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
 		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
 		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
+	};
+
+	class IDynamicShadowProjectionScheduler
+	{
+	public:
+		virtual void SetDescriptorSetLayout(
+			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
+			PipelineType pipelineType) = 0;
+		virtual ~IDynamicShadowProjectionScheduler() = default;
 	};
 
 	// PriorityShadowProjectionScheduler handles shadow projections that are always active, and are recalculated every frame
@@ -175,9 +193,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
 		unsigned _totalProjectionCount;
 
-		PriorityShadowProjectionScheduler(
-			std::shared_ptr<IDevice> device, std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers, 
-			IteratorRange<const unsigned*> operatorToPreparerIdMapping);
+		PriorityShadowProjectionScheduler(std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers);
 		~PriorityShadowProjectionScheduler();
 	private:
 		// ILightSceneComponent

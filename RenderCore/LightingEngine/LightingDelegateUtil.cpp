@@ -13,6 +13,7 @@
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/CommonBindings.h"
+#include "../Techniques/PipelineAccelerator.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
@@ -27,7 +28,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 	public:
 		std::shared_ptr<Internal::ILightBase> _driver;
-		std::shared_ptr<ICompiledShadowPreparer> _preparer;
+		std::shared_ptr<IShadowPreparer> _preparer;
 		ILightBase* _srcLight = nullptr;
 
 		virtual void AttachDriver(std::shared_ptr<Internal::ILightBase> driver) override
@@ -42,11 +43,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		struct Preparer
 		{
 			unsigned _srcLightOperator = ~0u;
-			std::shared_ptr<ICompiledShadowPreparer> _preparer;
+			std::shared_ptr<IShadowPreparer> _preparer;
 			ShadowOperatorDesc _desc;
-			std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> CreateShadowProjection();
+			std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<IShadowPreparer>> CreateShadowProjection();
 		};
 		std::vector<Preparer> _preparers;
+		std::shared_ptr<IDevice> _device;
 	};
 
 	static std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
@@ -183,16 +185,17 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			preparer._preparer->SetDescriptorSetLayout(descSetLayout, pipelineType);
 	}
 
-	PriorityShadowProjectionScheduler::PriorityShadowProjectionScheduler(
-		std::shared_ptr<IDevice> device, std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers,
-		IteratorRange<const unsigned*> operatorToPreparerIdMapping)
+	PriorityShadowProjectionScheduler::PriorityShadowProjectionScheduler(std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers)
 	: _shadowPreparers(std::move(shadowPreparers)), _totalProjectionCount(0)
 	{
-		_shadowGenAttachmentPool = Techniques::CreateAttachmentPool(device);
+		_shadowGenAttachmentPool = Techniques::CreateAttachmentPool(_shadowPreparers->_device);
 		_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
 
-		assert(!operatorToPreparerIdMapping.empty());
-		_operatorToPreparerIdMapping.insert(_operatorToPreparerIdMapping.end(), operatorToPreparerIdMapping.begin(), operatorToPreparerIdMapping.end());
+		for (const auto& preparers:_shadowPreparers->_preparers) {
+			if (_operatorToPreparerIdMapping.size() < preparers._srcLightOperator)
+				_operatorToPreparerIdMapping.resize(preparers._srcLightOperator+1, ~0u);
+			_operatorToPreparerIdMapping[preparers._srcLightOperator] = unsigned(&preparers-_shadowPreparers->_preparers.data());
+		}
 	}
 	PriorityShadowProjectionScheduler::~PriorityShadowProjectionScheduler() {}
 
@@ -253,7 +256,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return res;
 	}
 
-	std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> PriorityShadowSchedulerUtil::Preparer::CreateShadowProjection()
+	std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<IShadowPreparer>> PriorityShadowSchedulerUtil::Preparer::CreateShadowProjection()
 	{
 		return { CreateStandardShadowProjectionInterface(_desc), _preparer };
 	}
@@ -272,7 +275,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		struct Helper
 		{
-			using PreparerFuture = std::future<std::shared_ptr<ICompiledShadowPreparer>>;
+			using PreparerFuture = std::future<std::shared_ptr<IShadowPreparer>>;
 			std::vector<PreparerFuture> _futures;
 			unsigned _completedUpTo = 0;
 		};
@@ -294,9 +297,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 						return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
-			[helper,shadowGeneratorCopy=std::move(shadowGeneratorCopy)]() {
+			[helper,shadowGeneratorCopy=std::move(shadowGeneratorCopy),device=pipelineAccelerators->GetDevice()]() mutable {
 				using namespace ::Assets;
-				std::vector<std::shared_ptr<ICompiledShadowPreparer>> actualized;
+				std::vector<std::shared_ptr<IShadowPreparer>> actualized;
 				actualized.resize(helper->_futures.size());
 				auto a=actualized.begin();
 				for (auto& p:helper->_futures)
@@ -311,6 +314,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					++i;
 				}
 
+				finalResult->_device = std::move(device);
 				return finalResult;
 			});
 		return result;
@@ -392,6 +396,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<ProbeEntry> _probes;
 		BitHeap _activeProbes;
 		bool _activeSet = false;
+		unsigned _preparerIndex = ~0u;
 
 		void RegisterLight(unsigned index, ILightBase& light)
 		{
@@ -845,6 +850,48 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::swap(_activeLights[0], _activeLights[1]);
 	}
 
+	void DynamicShadowProbeScheduler::DoShadowPrepare(
+		SequenceIterator& iterator,
+		Sequence& sequence)
+	{
+		sequence.Reset();
+		if (_shadowPreparers->_preparers.empty()) return;
+
+		auto viewPosition = ExtractTranslation(iterator._parsingContext->GetProjectionDesc()._cameraToWorld);
+		auto farClip = iterator._parsingContext->GetProjectionDesc()._farClip;
+		UpdateActiveLights(viewPosition, farClip);
+
+		for (auto& light:_activeLights[0]) {
+			auto& set = _sceneSets[GetSetIndex(light.first)];
+			SequencerAddendums addenums;
+			addenums._preparer = _shadowPreparers->_preparers[set._preparerIndex]._preparer;
+			auto proj = CreateStandardShadowProjectionInterface(_shadowPreparers->_preparers[set._preparerIndex]._desc);
+			auto parseId = SetupShadowParse(iterator, sequence, *proj, addenums);
+
+			// add a step for preparing this shadow
+			auto& preparer = *addenums._preparer;
+			sequence.CreateStep_CallFunction(
+				[&preparer, proj, this, parseId](SequenceIterator& iterator) {
+
+					auto rpi = preparer.Begin(
+						*iterator._threadContext,
+						*iterator._parsingContext,
+						*proj,
+						*this->_shadowGenFrameBufferPool,
+						nullptr,
+						this->_shadowGenViewPool);
+					iterator.ExecuteDrawables(parseId, *preparer.GetSequencerConfig().first, preparer.GetSequencerConfig().second);
+					rpi.End();
+					preparer.End(*iterator._threadContext, *iterator._parsingContext, rpi, descSetPipelineType, *res);
+
+				});
+		}
+	}
+
+	void DynamicShadowProbeScheduler::ClearPreparedShadows()
+	{
+	}
+
 	void DynamicShadowProbeScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light)
 	{
 		_sceneSets[setIdx].RegisterLight(lightIdx, light);
@@ -865,10 +912,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	bool DynamicShadowProbeScheduler::BindToSet(ILightScene::LightOperatorId op, unsigned setIdx)
 	{
-		if (std::find(b2e(_operatorIds), op) == _operatorIds.end()) return false;
-		if (_sceneSets.size() <= setIdx)
-			_sceneSets.resize(setIdx+1);
+		if (op >= _operatorToPreparerIdMapping.size() || _operatorToPreparerIdMapping[op] == ~0u) return false;
+
+		if (_sceneSets.size() <= setIdx) _sceneSets.resize(setIdx+1);
 		_sceneSets[setIdx]._activeSet = true;
+		_sceneSets[setIdx]._preparerIndex = _operatorToPreparerIdMapping[op];
 		return true;
 	}
 
@@ -894,14 +942,21 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	DynamicShadowProbeScheduler::DynamicShadowProbeScheduler(
 		std::shared_ptr<DynamicShadowProbes> shadowProbes,
-		IteratorRange<const ILightScene::LightOperatorId*> ops)
-	: _shadowProbes(std::move(shadowProbes)), _operatorIds(ops.begin(), ops.end())
+		std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers)
+	: _shadowProbes(std::move(shadowProbes)), _shadowPreparers(std::move(shadowPreparers))
 	{
 		_probeSlotsCount = _shadowProbes->GetReservedProbeCount();
 		assert(_probeSlotsCount <= 64);
 		_unassociatedProbeSlots = (_probeSlotsCount == 64u) ? ~0ull : ((1ull << uint64_t(_probeSlotsCount)) - 1ull);
 		_activeLights[0].reserve(_probeSlotsCount*2);
 		_activeLights[1].reserve(_probeSlotsCount*2);		// allow some overfill during UpdateActiveLights
+
+		_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
+		for (const auto& preparers:_shadowPreparers->_preparers) {
+			if (_operatorToPreparerIdMapping.size() < preparers._srcLightOperator)
+				_operatorToPreparerIdMapping.resize(preparers._srcLightOperator+1, ~0u);
+			_operatorToPreparerIdMapping[preparers._srcLightOperator] = unsigned(&preparers-_shadowPreparers->_preparers.data());
+		}
 	}
 
 	DynamicShadowProbeScheduler::~DynamicShadowProbeScheduler() {}

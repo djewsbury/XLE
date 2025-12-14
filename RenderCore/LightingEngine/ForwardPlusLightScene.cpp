@@ -76,6 +76,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		if (_LightOperatorsMapping._operatorForDynamicProbes != ~0u) {
+			_dynamicShadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _LightOperatorsMapping._dynamicShadowProbesCfg);
 			_dynamicShadowProbesManager = std::make_shared<Internal::DynamicShadowProbeScheduler>(_LightOperatorsMapping._operatorForDynamicProbes);
 			RegisterComponent(_dynamicShadowProbesManager);
 		}
@@ -139,8 +140,8 @@ namespace RenderCore { namespace LightingEngine
 		switch (typeCode) {
 		case TypeHashCode<ISemiStaticShadowProbeScheduler>:
 			return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
-		case TypeHashCode<IDynamicShadowProjectionScheduler>:
-			return (IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
+		case TypeHashCode<Internal::IDynamicShadowProjectionScheduler>:
+			return (Internal::IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
 		default:
 			// We get a lambda from the lighting delegate to query for more interfaces. It's a bit awkward, but it's convenient
 			if (_queryInterfaceHelper)
@@ -232,8 +233,8 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardPlusLightScene::Prerender(IThreadContext& threadContext)
 	{
 		_lightTiler->CompleteInitialization(threadContext);
-		if (_shadowProbes)
-			_shadowProbes->CompleteInitialization(threadContext);
+		if (_shadowProbes) _shadowProbes->CompleteInitialization(threadContext);
+		if (_dynamicShadowProbes) _dynamicShadowProbes->CompleteInitialization(threadContext);
 	}
 
 	const IPreparedShadowResult* ForwardPlusLightScene::GetDominantPreparedShadow()
@@ -273,9 +274,9 @@ namespace RenderCore { namespace LightingEngine
 
 			f (bindingFlags & (1ull<<6ull)) {
 				assert(bindingFlags & (1ull<<7ull));
-				if (_lightScene->_dynamicShadowDatabase) {
-					dst[6] = &_lightScene->_dynamicShadowDatabase->GetDynamicCubeProbesTable();
-					dst[7] = &_lightScene->_dynamicShadowDatabase->GetDynamicCubeProbeUniforms();
+				if (_lightScene->_dynamicShadowProbes) {
+					dst[6] = &_lightScene->_dynamicShadowProbes->GetDynamicCubeProbesTable();
+					dst[7] = &_lightScene->_dynamicShadowProbes->GetDynamicCubeProbeUniforms();
 				} else {
 					// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
 					assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
