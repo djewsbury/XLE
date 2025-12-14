@@ -111,23 +111,6 @@ namespace RenderCore { namespace LightingEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class PriorityShadowSchedulerUtil
-	{
-	public:
-		struct Preparer
-		{
-			std::shared_ptr<ICompiledShadowPreparer> _preparer;
-			ShadowOperatorDesc _desc;
-		};
-		std::vector<Preparer> _preparers;
-
-		std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> CreateShadowProjection(unsigned operatorIdx);
-	};
-	std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> CreatePriorityShadowSchedulerUtil(
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
-
 	class Sequence;
 	using SequenceParseId = unsigned;
 	SequenceParseId CreateShadowParseInSequence(
@@ -144,6 +127,8 @@ namespace RenderCore { namespace LightingEngine
 			PipelineType pipelineType) = 0;
 		virtual ~IDynamicShadowProjectionScheduler() = default;
 	};
+
+	std::unique_ptr<Internal::ILightBase> CreateStandardShadowProjectionInterface(const ShadowOperatorDesc& desc);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 

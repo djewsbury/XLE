@@ -36,6 +36,19 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 	};
 
+	class PriorityShadowSchedulerUtil
+	{
+	public:
+		struct Preparer
+		{
+			unsigned _srcLightOperator = ~0u;
+			std::shared_ptr<ICompiledShadowPreparer> _preparer;
+			ShadowOperatorDesc _desc;
+			std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> CreateShadowProjection();
+		};
+		std::vector<Preparer> _preparers;
+	};
+
 	static std::shared_ptr<IPreparedShadowResult> SetupShadowPrepare(
 		SequenceIterator& iterator,
 		Sequence& sequence,
@@ -55,7 +68,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 		assert(!_activeProjections.IsAllocated(index));
 		assert(!_projections[index]);
-		std::tie(_projections[index], _addendums[index]._preparer) = _preparers->CreateShadowProjection(_preparerId);
+		std::tie(_projections[index], _addendums[index]._preparer) = _preparers->_preparers[_preparerId].CreateShadowProjection();
 		_addendums[index]._srcLight = &light;
 		_activeProjections.Allocate(index);
 	}
@@ -238,6 +251,69 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				preparer.End(*iterator._threadContext, *iterator._parsingContext, rpi, descSetPipelineType, *res);
 			});
 		return res;
+	}
+
+	std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> PriorityShadowSchedulerUtil::Preparer::CreateShadowProjection()
+	{
+		return { CreateStandardShadowProjectionInterface(_desc), _preparer };
+	}
+
+	std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> CreatePriorityShadowSchedulerUtil(
+		IteratorRange<const std::pair<unsigned, ShadowOperatorDesc>*> shadowGenerators,
+		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
+		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
+	{
+		std::promise<std::shared_ptr<PriorityShadowSchedulerUtil>> promise;
+		auto result = promise.get_future();
+		if (shadowGenerators.empty()) {
+			promise.set_value(std::make_shared<PriorityShadowSchedulerUtil>());
+			return result;
+		}
+
+		struct Helper
+		{
+			using PreparerFuture = std::future<std::shared_ptr<ICompiledShadowPreparer>>;
+			std::vector<PreparerFuture> _futures;
+			unsigned _completedUpTo = 0;
+		};
+		auto helper = std::make_shared<Helper>();
+		helper->_futures.reserve(shadowGenerators.size());
+		for (unsigned operatorIdx=0; operatorIdx<shadowGenerators.size(); ++operatorIdx) {
+			assert(shadowGenerators[operatorIdx].second._resolveType != ShadowResolveType::SemiStaticProbe && shadowGenerators[operatorIdx].second._resolveType != ShadowResolveType::DynamicProbe && shadowGenerators[operatorIdx].second._resolveType != ShadowResolveType::SemiStaticAndDynamicProbe);
+			auto preparer = CreateCompiledShadowPreparer(shadowGenerators[operatorIdx].second, pipelineAccelerators, delegatesBox);
+			helper->_futures.push_back(std::move(preparer));
+		}
+
+		std::vector<std::pair<unsigned, ShadowOperatorDesc>> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
+		::Assets::PollToPromise(
+			std::move(promise),
+			[helper](auto timeout) {
+				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
+				for (;helper->_completedUpTo<helper->_futures.size(); ++helper->_completedUpTo)
+					if (helper->_futures[helper->_completedUpTo].wait_until(timeoutTime) == std::future_status::timeout)
+						return ::Assets::PollStatus::Continue;
+				return ::Assets::PollStatus::Finish;
+			},
+			[helper,shadowGeneratorCopy=std::move(shadowGeneratorCopy)]() {
+				using namespace ::Assets;
+				std::vector<std::shared_ptr<ICompiledShadowPreparer>> actualized;
+				actualized.resize(helper->_futures.size());
+				auto a=actualized.begin();
+				for (auto& p:helper->_futures)
+					*a++ = p.get();
+
+				auto finalResult = std::make_shared<PriorityShadowSchedulerUtil>();
+				finalResult->_preparers.reserve(actualized.size());
+				assert(actualized.size() == shadowGeneratorCopy.size());
+				auto i = shadowGeneratorCopy.begin();
+				for (auto&a:actualized) {
+					finalResult->_preparers.push_back(PriorityShadowSchedulerUtil::Preparer{i->first, std::move(a), i->second});
+					++i;
+				}
+
+				return finalResult;
+			});
+		return result;
 	}
 
 	class DefaultSequencerResourcesDelegate : public Techniques::IShaderResourceDelegate

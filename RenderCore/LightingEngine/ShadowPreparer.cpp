@@ -480,18 +480,6 @@ namespace RenderCore { namespace LightingEngine
 
 	DMShadowPreparer::~DMShadowPreparer() {}
 
-	std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<ICompiledShadowPreparer>> PriorityShadowSchedulerUtil::CreateShadowProjection(unsigned operatorIdx)
-	{
-		assert(operatorIdx <= _preparers.size());
-		auto result = std::make_unique<Internal::StandardShadowProjection>();
-		auto& op = _preparers[operatorIdx];
-		result->_projections._mode = op._desc._projectionMode;
-		result->_projections._useNearProj = op._desc._enableNearCascade;
-		result->_projections._operatorNormalProjCount = op._desc._normalProjCount;
-		result->_multiViewInstancingPath = op._desc._multiViewInstancingPath;
-		return { std::move(result), op._preparer };
-	}
-
 	std::future<std::shared_ptr<ICompiledShadowPreparer>> CreateCompiledShadowPreparer(
 		const ShadowOperatorDesc& desc,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
@@ -511,59 +499,13 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> CreatePriorityShadowSchedulerUtil(
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators, 
-		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
-		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
+	std::unique_ptr<Internal::ILightBase> CreateStandardShadowProjectionInterface(const ShadowOperatorDesc& desc)
 	{
-		std::promise<std::shared_ptr<PriorityShadowSchedulerUtil>> promise;
-		auto result = promise.get_future();
-		if (shadowGenerators.empty()) {
-			promise.set_value(std::make_shared<PriorityShadowSchedulerUtil>());
-			return result;
-		}
-
-		struct Helper
-		{
-			using PreparerFuture = std::future<std::shared_ptr<ICompiledShadowPreparer>>;
-			std::vector<PreparerFuture> _futures;
-			unsigned _completedUpTo = 0;
-		};
-		auto helper = std::make_shared<Helper>();
-		helper->_futures.reserve(shadowGenerators.size());
-		for (unsigned operatorIdx=0; operatorIdx<shadowGenerators.size(); ++operatorIdx) {
-			assert(shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::SemiStaticProbe && shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::DynamicProbe && shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::SemiStaticAndDynamicProbe);
-			auto preparer = CreateCompiledShadowPreparer(shadowGenerators[operatorIdx], pipelineAccelerators, delegatesBox);
-			helper->_futures.push_back(std::move(preparer));
-		}
-
-		std::vector<ShadowOperatorDesc> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
-		::Assets::PollToPromise(
-			std::move(promise),
-			[helper](auto timeout) {
-				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
-				for (;helper->_completedUpTo<helper->_futures.size(); ++helper->_completedUpTo)
-					if (helper->_futures[helper->_completedUpTo].wait_until(timeoutTime) == std::future_status::timeout)
-						return ::Assets::PollStatus::Continue;
-				return ::Assets::PollStatus::Finish;
-			},
-			[helper,shadowGeneratorCopy=std::move(shadowGeneratorCopy)]() {
-				using namespace ::Assets;
-				std::vector<std::shared_ptr<ICompiledShadowPreparer>> actualized;
-				actualized.resize(helper->_futures.size());
-				auto a=actualized.begin();
-				for (auto& p:helper->_futures)
-					*a++ = p.get();
-
-				auto finalResult = std::make_shared<PriorityShadowSchedulerUtil>();
-				finalResult->_preparers.reserve(actualized.size());
-				assert(actualized.size() == shadowGeneratorCopy.size());
-				auto i = shadowGeneratorCopy.begin();
-				for (auto&a:actualized)
-					finalResult->_preparers.push_back(PriorityShadowSchedulerUtil::Preparer{std::move(a), *i++});
-
-				return finalResult;
-			});
+		auto result = std::make_unique<Internal::StandardShadowProjection>();
+		result->_projections._mode = desc._projectionMode;
+		result->_projections._useNearProj = desc._enableNearCascade;
+		result->_projections._operatorNormalProjCount = desc._normalProjCount;
+		result->_multiViewInstancingPath = desc._multiViewInstancingPath;
 		return result;
 	}
 

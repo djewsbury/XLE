@@ -31,7 +31,6 @@ namespace RenderCore { namespace LightingEngine
 	class SequenceIterator;
 	class Sequence;
 	class IProbeRenderingInstance;
-	class PriorityShadowSchedulerUtil;
 }}
 namespace RenderCore { class IThreadContext; class IDevice; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
@@ -39,6 +38,7 @@ namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	class ILightBase;
+	class PriorityShadowSchedulerUtil;
 
 	std::future<std::shared_ptr<Techniques::IShaderResourceDelegate>> CreateDefaultSequencerResourceDelegate();
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>);
@@ -191,6 +191,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		ViewPool _shadowGenViewPool;
 		std::vector<unsigned> _operatorToPreparerIdMapping;
 	};
+
+	std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> CreatePriorityShadowSchedulerUtil(
+		IteratorRange<const std::pair<unsigned, ShadowOperatorDesc>*> shadowGenerators, 				// src light operator & shadow generator
+		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
+		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
 
 	class DominantLightSet : public ILightSceneComponent
 	{
