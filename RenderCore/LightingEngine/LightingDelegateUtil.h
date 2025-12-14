@@ -123,6 +123,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		struct AllocatedDatabaseEntry
 		{
+			unsigned _clusterIndex = ~0u;
 			unsigned _databaseIndex = ~0u;
 			int _fading = 0;
 			bool _active = true;
@@ -142,9 +143,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		float _defaultNearRadius = 1.f;
 		unsigned _fadeTransitionInFrames = 16;
 		unsigned _probeSlotsCount = 0;
-		uint64_t _unassociatedProbeSlots = 0ull;
+		unsigned _clusterCount = 0;
 
 		void UpdateActiveLights(const Float3& newViewPosition, float drawDistance, const Float4x4& worldToClipSpace);
+		void UpdateClustering();
 
 		// ILightSceneComponent
 		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) override;

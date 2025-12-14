@@ -3,7 +3,9 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightingDelegateUtil.h"
+#include "Core/Prefix.h"
 #include "Math/ProjectionMath.h"
+#include "Math/Quaternion.h"
 #include "Math/Transformations.h"
 #include "Math/XLEMath.h"
 #include "RenderCore/Techniques/TechniqueUtils.h"
@@ -782,7 +784,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					inComponent._fading = currentStateIterator->second._fading = std::max(currentStateIterator->second._fading-1, 0);
 					currentStateIterator->second._active = frustumTester.TestSphere(ExtractTranslation(inComponent._probeDesc._objectToWorld), inComponent._probeDesc._farRadius) != CullTestResult::Culled;
 					if (!currentStateIterator->second._fading) {
-						_unassociatedProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
 						inComponent._attachedDatabaseIndex = ~0u;
 					} else
 						updatedState.emplace_back(*currentStateIterator);
@@ -801,7 +802,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				} else {
 
 					// This light is new to the close lights list
-					updatedState.emplace_back(newDistancesIterator->first, AllocatedDatabaseEntry{ ~0u, 1, true });
+					updatedState.emplace_back(newDistancesIterator->first, AllocatedDatabaseEntry{ ~0u, ~0u, 1, true });
 					++newDistancesIterator;
 
 				}
@@ -812,7 +813,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				auto& inComponent = LookupProbeEntry(currentStateIterator->first);
 				inComponent._fading = currentStateIterator->second._fading = std::max(currentStateIterator->second._fading-1, 0);
 				if (!currentStateIterator->second._fading) {
-					_unassociatedProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
 					inComponent._attachedDatabaseIndex = ~0u;
 				} else
 					updatedState.emplace_back(*currentStateIterator);
@@ -844,33 +844,17 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			assert(updatedState.size() == _probeSlotsCount);
 		}
 
-		// assign probe slots to the newly added lights
-		for (auto& u:updatedState) {
-			if (u.second._databaseIndex == ~0u) {
-				assert(_unassociatedProbeSlots);		// if you get this is means we're not tracking evictions correctly -- a light was freed but it wasn't recorded in this value
-				auto probeSlot = xl_ctz8(_unassociatedProbeSlots);
-				_unassociatedProbeSlots ^= 1ull<<uint64_t(probeSlot);
-
-				auto& inComponent = LookupProbeEntry(u.first);
-				inComponent._attachedDatabaseIndex = probeSlot;
-				inComponent._fading = u.second._fading;
-			}
-		}
+		// Update clustering (this also assign database slot indices)
+		UpdateClustering();
 
 		// swap in the new state
 		std::swap(_activeLights[0], _activeLights[1]);
 	}
 
-	void DynamicShadowProbeScheduler::DoShadowPrepare(
-		SequenceIterator& iterator,
-		Sequence& sequence)
+	static float Sq(float x) { return x*x; }
+
+	void DynamicShadowProbeScheduler::UpdateClustering()
 	{
-		sequence.Reset();
-
-		auto viewPosition = ExtractTranslation(iterator._parsingContext->GetProjectionDesc()._cameraToWorld);
-		auto farClip = iterator._parsingContext->GetProjectionDesc()._farClip;
-		UpdateActiveLights(viewPosition, farClip, iterator._parsingContext->GetProjectionDesc()._worldToProjection);
-
 		//
 		// We can cluster the rendering two combine two separate things:
 		//	1) merging scene parse steps
@@ -888,26 +872,99 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		// At the shader level, there's a limit on the number of views that can be active. If we go the simple route
 		// of one scene parse per render step, can use this to constrain our clustering. Ideally we want to cluster to
 		// maximize the effectiveness of the ArbitraryConvexVolumeTester in the parse step.
-		//  
+		//
 
-		constexpr unsigned s_maxProbesPerCluster = 5;		// 5 * 6 = 30, just under the limit of 32 projections
+		constexpr unsigned s_maxProbesPerCluster = 5;				// 5 * 6 = 30, just under the limit of 32 projections
+		constexpr float s_maxSeparationWithinCluster = 10.f;		// lights with 10m or more between them will never trigger a cluster
+
+		auto& activeLights = _activeLights[1];
+
 		const auto baseClusterCount = (_probeSlotsCount + s_maxProbesPerCluster - 1) / s_maxProbesPerCluster;
-		auto activeProbeCount = std::accumulate(b2e(_activeLights[0]), 0u, [](const auto& q) { return (unsigned)q.second._active; });
+		auto activeProbeCount = std::accumulate(b2e(activeLights), 0u, [](const auto& q) { return (unsigned)q.second._active; });
 		// unsigned clusterCount = std::min(activeProbeCount, baseClusterCount);
 
 		using ClusterIndex = unsigned;
 		std::vector<ClusterIndex> clusterAssignments;
 		{
+			
 			auto LookupProbeEntry = [this](LightIndex lightIndex) -> SharedProbeSceneSet::ProbeEntry& { return this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
 
-			VLA_UNSAFE_FORCE(Float3, positions, _activeLights[0].size());
-			VLA_UNSAFE_FORCE(Float3, radii, _activeLights[0].size());
-			for (unsigned c=0; c<_activeLights[0].size(); ++c) {
-				const auto& desc = LookupProbeEntry(_activeLights[0][c].first)._probeDesc;
-				positions[c] = ExtractTranslation(desc._objectToWorld);
-				radii[c] = desc._farRadius;
+			struct ClusterHelper
+			{
+				Float3 _position; float _radius;
+				unsigned _activeLightIndex = 0;
+			};
+			unsigned clusterHelperCount = 0;
+
+			VLA_UNSAFE_FORCE(ClusterHelper, clusterHelpers, activeLights.size());
+			VLA_UNSAFE_FORCE(Float3, radii, activeLights.size());
+			for (unsigned c=0; c<activeLights.size(); ++c) {
+				if (!activeLights[c].second._active) continue;
+				const auto& desc = LookupProbeEntry(activeLights[c].first)._probeDesc;
+				clusterHelpers[clusterHelperCount]._position = ExtractTranslation(desc._objectToWorld);
+				clusterHelpers[clusterHelperCount]._radius = desc._farRadius;
+				clusterHelpers[clusterHelperCount]._activeLightIndex = c;
+				++clusterHelperCount;
 			}
+
+			// start with every probe in it's own cluster
+			VLA(unsigned, clusterAssignments, clusterHelperCount);
+			VLA(unsigned, clusterCounts, clusterHelperCount);
+			VLA(unsigned, starts, clusterHelperCount);		// (indexed by cluster)
+			VLA(unsigned, nexts, clusterHelperCount);
+			for (unsigned c=0; c<clusterHelperCount; ++c) { clusterAssignments[c] = c; clusterCounts[c] = 1; starts[c] = c; nexts[c] = ~0u; }
+
+			// Generate distances between probes, and then sort -- this is the expensive part of this algorithm
+			std::vector<std::tuple<float, unsigned, unsigned>> probeDistances;
+			probeDistances.reserve(clusterHelperCount*clusterHelperCount/2);
+			for (unsigned i=0; i<clusterHelperCount; ++i)
+				for (unsigned j=i+1; j<clusterHelperCount; ++j)
+					if (float dist = MagnitudeSquared(clusterHelpers[i]._position-clusterHelpers[j]._position)-Sq(clusterHelpers[i]._radius+clusterHelpers[j]._radius); dist < s_maxSeparationWithinCluster)
+						probeDistances.emplace_back(dist, i, j);
+			std::sort(b2e(probeDistances), [](const auto& lhs, const auto& rhs) { return g<0>(lhs) < g<1>(rhs); });
+
+			// greedily merge together clusters were we can
+			for (auto& d:probeDistances) {
+				auto c0 = clusterAssignments[std::get<1>(d)], c1 = clusterAssignments[std::get<2>(d)];
+				if (c0 == c1 || (clusterCounts[c0]+clusterCounts[c1] > s_maxProbesPerCluster)) continue;
+				
+				auto c0Start = starts[c0], c1Start = starts[c1];
+				for (unsigned c=c1Start; c!=~0u; c=nexts[c]) clusterAssignments[c] = c0;
+
+				auto c0End = std::get<1>(d); while (nexts[c0End] != ~0u) c0End = nexts[c0End];
+				nexts[c0End] = c1Start; starts[c1] = c0Start;
+
+				clusterCounts[c0] += clusterCounts[c1]; clusterCounts[c1] = 0;
+			}
+
+			// remap cluster indices to ensure they are dense
+			// also assign database indices at this stage (these must be in cluster order)
+			for (auto& a:activeLights) { a.second._clusterIndex = ~0u; a.second._databaseIndex = ~0u; }
+			unsigned denseClusterIdx = 0;
+			unsigned nextDatabaseIdx = 0;
+			for (unsigned c=0; c<clusterHelperCount; ++c) {
+				if (!clusterCounts[c]) continue;
+
+				for (auto h=starts[c]; h!=~0u; h=nexts[h]) {
+					activeLights[clusterHelpers[h]._activeLightIndex].second._databaseIndex = nextDatabaseIdx++;
+					activeLights[clusterHelpers[h]._activeLightIndex].second._clusterIndex = denseClusterIdx;
+				}
+				++denseClusterIdx;
+			}
+			_clusterCount = denseClusterIdx;
+			assert(nextDatabaseIdx <= _probeSlotsCount);
 		}
+	}
+
+	void DynamicShadowProbeScheduler::DoShadowPrepare(
+		SequenceIterator& iterator,
+		Sequence& sequence)
+	{
+		sequence.Reset();
+
+		auto viewPosition = ExtractTranslation(iterator._parsingContext->GetProjectionDesc()._cameraToWorld);
+		auto farClip = iterator._parsingContext->GetProjectionDesc()._farClip;
+		UpdateActiveLights(viewPosition, farClip, iterator._parsingContext->GetProjectionDesc()._worldToProjection);
 
 		std::vector<Techniques::ProjectionDesc> projDescs;
 		projDescs.resize(standardProj._projections.Count());
