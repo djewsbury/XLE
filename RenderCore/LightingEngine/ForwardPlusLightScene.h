@@ -15,9 +15,8 @@ namespace RenderCore { namespace LightingEngine
 {
 	class ScreenSpaceReflectionsOperator;
 	class HierarchicalDepthsOperator;
-	class PriorityShadowSchedulerUtil;
 	class SHCoefficients;
-	namespace Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProbeScheduler; class PriorityShadowProjectionScheduler; class DominantLightSet; }
+	namespace Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProbeScheduler; class PriorityShadowProjectionScheduler; class DominantLightSet; class PriorityShadowSchedulerUtil; }
 
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
@@ -55,12 +54,13 @@ namespace RenderCore { namespace LightingEngine
 			std::vector<unsigned> _operatorToPositionalLightOperator;
 			std::vector<LightOperatorInfo> _positionalLightOperators;
 
-			std::vector<unsigned> _operatorToShadowPreparerId;
-			std::vector<ShadowOperatorDesc> _shadowPreparers;
+			std::vector<unsigned> _operatorToPriorityShadowPreparerId;
+			std::vector<ShadowOperatorDesc> _priorityShadowPreparers;
 
-			unsigned _operatorForStaticProbes = ~0u;
-			unsigned _operatorForDynamicProbes = ~0u;
-			ShadowProbes::Configuration _shadowProbesCfg;
+			std::vector<bool> _staticShadowProbeMask;
+			std::vector<bool> _dynamicShadowProbeMask;
+			std::optional<ShadowProbes::Configuration> _staticShadowProbesCfg;
+			std::optional<ShadowProbes::Configuration> _dynamicShadowProbesCfg;
 
 			unsigned _dominantLightOperator = ~0u;
 			unsigned _ambientLightOperator = ~0u;
@@ -87,7 +87,7 @@ namespace RenderCore { namespace LightingEngine
 			const RasterizationLightTileOperatorDesc& tilerCfg,
 			const IntegrationParams& integrationParams);
 
-		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
+		std::shared_ptr<Internal::PriorityShadowSchedulerUtil> _shadowPreparers;
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 		std::shared_ptr<DynamicShadowProbes> _dynamicShadowProbes;
 		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
@@ -102,7 +102,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
-		LightOperatorsMapping _LightOperatorsMapping;
+		LightOperatorsMapping _lightOperatorsMapping;
 
 		class AmbientLightConfig;
 		std::shared_ptr<AmbientLightConfig> _ambientLight;
@@ -130,7 +130,7 @@ namespace RenderCore { namespace LightingEngine
 
 		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
 			const ConstructionServices&,
-			std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers,
+			std::shared_ptr<Internal::PriorityShadowSchedulerUtil> shadowPreparers,
 			std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
 			ForwardPlusLightScene::LightOperatorsMapping&& shadowPreparerMapping,
 			std::shared_ptr<IResourceView> glossLut,

@@ -36,6 +36,7 @@
 #include "../../Assets/Assets.h"
 #include "../../xleres/FileList.h"
 #include "../Utility/MemoryUtils.h"
+#include <stdexcept>
 
 using namespace Utility::Literals;
 
@@ -253,8 +254,8 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<ForwardPlusLightScene::LightOperatorInfo> dominantLightOperator; std::optional<ShadowOperatorDesc> dominantShadowOperator;
 		if (lightOperatorMapping._dominantLightOperator != ~0u) {
 			dominantLightOperator = lightOperatorMapping._positionalLightOperators[lightOperatorMapping._operatorToPositionalLightOperator[lightOperatorMapping._dominantLightOperator]];
-			if (lightOperatorMapping._dominantLightOperator < lightOperatorMapping._operatorToShadowPreparerId.size() && lightOperatorMapping._operatorToShadowPreparerId[lightOperatorMapping._dominantLightOperator] != ~0u)
-				dominantShadowOperator = lightOperatorMapping._shadowPreparers[lightOperatorMapping._operatorToShadowPreparerId[lightOperatorMapping._dominantLightOperator]];
+			if (lightOperatorMapping._dominantLightOperator < lightOperatorMapping._operatorToPriorityShadowPreparerId.size() && lightOperatorMapping._operatorToPriorityShadowPreparerId[lightOperatorMapping._dominantLightOperator] != ~0u)
+				dominantShadowOperator = lightOperatorMapping._priorityShadowPreparers[lightOperatorMapping._operatorToPriorityShadowPreparerId[lightOperatorMapping._dominantLightOperator]];
 		}
 
 		RenderStepFragmentInterface result { PipelineType::Graphics };
@@ -298,8 +299,8 @@ namespace RenderCore { namespace LightingEngine
 			} else {
 				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOperator.value()._uniformShapeCode);
 			}
-			if (lightOperatorMapping._operatorForStaticProbes != ~0u) box.SetParameter("SHADOW_PROBE", 1);
-			if (lightOperatorMapping._operatorForDynamicProbes != ~0u) box.SetParameter("DYNAMIC_SHADOW_PROBE", 1);
+			if (lightOperatorMapping._staticShadowProbesCfg) box.SetParameter("SHADOW_PROBE", 1);
+			if (lightOperatorMapping._dynamicShadowProbesCfg) box.SetParameter("DYNAMIC_SHADOW_PROBE", 1);
 		}
 
 		if (hasDistantIBL)
@@ -325,8 +326,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		ShadowProbes::Configuration result;
 		assert(opDesc._width == opDesc._height);		// expecting square probe textures
-		result._staticFaceDims = opDesc._width;
-		result._staticFormat = opDesc._format;
+		result._faceDims = opDesc._width;
+		result._format = opDesc._format;
 		result._singleSidedBias = opDesc._singleSidedBias;
 		result._doubleSidedBias = opDesc._doubleSidedBias;
 		return result;
@@ -425,6 +426,7 @@ namespace RenderCore { namespace LightingEngine
 			// Map the light and shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
 			std::vector<uint64_t> hashedShadowPreparers;
 			chain = globalOperatorsChain;
+			int maxLightOperatorId = -1;
 			while (chain) {
 				switch(chain->_structureType) {
 				case TypeHashCode<LightOperatorAssignment<PositionalLightOperatorDesc>>:
@@ -444,6 +446,7 @@ namespace RenderCore { namespace LightingEngine
 								Throw(std::runtime_error("Multiple dominant light operators found, where only one expected"));
 							_lightOperatorsMapping._dominantLightOperator = op._lightOperatorId;
 						}
+						maxLightOperatorId = std::max(maxLightOperatorId, int(op._lightOperatorId));
 					}
 					break;
 
@@ -453,40 +456,56 @@ namespace RenderCore { namespace LightingEngine
 						if (_lightOperatorsMapping._ambientLightOperator != ~0u)
 							Throw(std::runtime_error("Multiple ambient light operators found, where only one expected"));
 						_lightOperatorsMapping._ambientLightOperator = op._lightOperatorId;
+						maxLightOperatorId = std::max(maxLightOperatorId, int(op._lightOperatorId));
 					}
 					break;
 
 				case TypeHashCode<LightOperatorAssignment<ShadowOperatorDesc>>:
 					{
 						auto& op = Internal::ChainedOperatorCast<LightOperatorAssignment<ShadowOperatorDesc>>(*chain);
-						if (op._desc._resolveType == ShadowResolveType::SemiStaticProbe) {
-							// setup shadow operator for probes
-							if (_lightOperatorsMapping._operatorForStaticProbes != ~0u)
-								Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
-							_lightOperatorsMapping._operatorForStaticProbes = op._lightOperatorId;
-							_lightOperatorsMapping._shadowProbesCfg = MakeShadowProbeConfiguration(op._desc);
-						} else if (op._desc._resolveType == ShadowResolveType::DynamicProbe) {
-							// setup shadow operator for probes
-							if (_lightOperatorsMapping._operatorForDynamicProbes != ~0u)
-								Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
-							_lightOperatorsMapping._operatorForDynamicProbes = op._lightOperatorId;
-							_lightOperatorsMapping._shadowProbesCfg = MakeShadowProbeConfiguration(op._desc);
-						} else {
+						if (op._desc._resolveType == ShadowResolveType::SemiStaticProbe || op._desc._resolveType == ShadowResolveType::SemiStaticAndDynamicProbe) {
+							auto probeCfg = MakeShadowProbeConfiguration(op._desc);
+							if (_lightOperatorsMapping._staticShadowProbesCfg && !(*_lightOperatorsMapping._staticShadowProbesCfg == probeCfg))
+								Throw(std::runtime_error("Shadow probe operators conflict. ALl static shadow probe configurations must be compatible, and all dynamic shadow probe configurations must be compatible."));
+							_lightOperatorsMapping._staticShadowProbesCfg = probeCfg;
+							if (_lightOperatorsMapping._staticShadowProbeMask.size() <= op._lightOperatorId)
+								_lightOperatorsMapping._staticShadowProbeMask.resize(op._lightOperatorId+1, false);
+							_lightOperatorsMapping._staticShadowProbeMask[op._lightOperatorId] = true;
+						}
+						
+						if (op._desc._resolveType == ShadowResolveType::DynamicProbe || op._desc._resolveType == ShadowResolveType::SemiStaticAndDynamicProbe) {
+							auto probeCfg = MakeShadowProbeConfiguration(op._desc);
+							if (_lightOperatorsMapping._dynamicShadowProbesCfg && !(*_lightOperatorsMapping._dynamicShadowProbesCfg == probeCfg))
+								Throw(std::runtime_error("Shadow probe operators conflict. ALl static shadow probe configurations must be compatible, and all dynamic shadow probe configurations must be compatible."));
+							_lightOperatorsMapping._dynamicShadowProbesCfg = probeCfg;
+							if (_lightOperatorsMapping._dynamicShadowProbeMask.size() <= op._lightOperatorId)
+								_lightOperatorsMapping._dynamicShadowProbeMask.resize(op._lightOperatorId+1, false);
+							_lightOperatorsMapping._dynamicShadowProbeMask[op._lightOperatorId] = true;
+						}
+
+						if (op._desc._resolveType == ShadowResolveType::DepthTexture) {
 							auto h = op._desc.GetHash();
 							auto i = std::find(b2e(hashedShadowPreparers), h);
 							if (i == hashedShadowPreparers.end()) {
 								i = hashedShadowPreparers.insert(i, h);
-								_lightOperatorsMapping._shadowPreparers.push_back(op._desc);
+								_lightOperatorsMapping._priorityShadowPreparers.push_back(op._desc);
 							}
 
-							if (_lightOperatorsMapping._operatorToShadowPreparerId.size() <= op._lightOperatorId)
-								_lightOperatorsMapping._operatorToShadowPreparerId.resize(op._lightOperatorId+1, ~0u);
-							_lightOperatorsMapping._operatorToShadowPreparerId[op._lightOperatorId] = unsigned(i-hashedShadowPreparers.begin());
+							if (_lightOperatorsMapping._operatorToPriorityShadowPreparerId.size() <= op._lightOperatorId)
+								_lightOperatorsMapping._operatorToPriorityShadowPreparerId.resize(op._lightOperatorId+1, ~0u);
+							_lightOperatorsMapping._operatorToPriorityShadowPreparerId[op._lightOperatorId] = unsigned(i-hashedShadowPreparers.begin());
 						}
+						maxLightOperatorId = std::max(maxLightOperatorId, int(op._lightOperatorId));
 					}
 					break;
 				}
 				chain = chain->_next;
+			}
+
+			if (maxLightOperatorId >= 0) {
+				_lightOperatorsMapping._operatorToPriorityShadowPreparerId.resize(maxLightOperatorId+1, ~0u);
+				_lightOperatorsMapping._staticShadowProbeMask.resize(maxLightOperatorId+1, false);
+				_lightOperatorsMapping._dynamicShadowProbeMask.resize(maxLightOperatorId+1, false);
 			}
 		}
 	};

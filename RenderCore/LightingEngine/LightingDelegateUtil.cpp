@@ -50,7 +50,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	public:
 		struct Preparer
 		{
-			unsigned _srcLightOperator = ~0u;
 			std::shared_ptr<IShadowPreparer> _preparer;
 			ShadowOperatorDesc _desc;
 			std::pair<std::unique_ptr<Internal::ILightBase>, std::shared_ptr<IShadowPreparer>> CreateShadowProjection();
@@ -191,17 +190,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			preparer._preparer->SetDescriptorSetLayout(descSetLayout, pipelineType);
 	}
 
-	PriorityShadowProjectionScheduler::PriorityShadowProjectionScheduler(std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers)
+	PriorityShadowProjectionScheduler::PriorityShadowProjectionScheduler(std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers, IteratorRange<const unsigned*> operatorToPreparer)
 	: _shadowPreparers(std::move(shadowPreparers)), _totalProjectionCount(0)
 	{
 		_shadowGenAttachmentPool = Techniques::CreateAttachmentPool(_shadowPreparers->_device);
 		_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
-
-		for (const auto& preparers:_shadowPreparers->_preparers) {
-			if (_operatorToPreparerIdMapping.size() < preparers._srcLightOperator)
-				_operatorToPreparerIdMapping.resize(preparers._srcLightOperator+1, ~0u);
-			_operatorToPreparerIdMapping[preparers._srcLightOperator] = unsigned(&preparers-_shadowPreparers->_preparers.data());
-		}
+		_operatorToPreparerIdMapping = {operatorToPreparer.begin(), operatorToPreparer.end()};
 	}
 	PriorityShadowProjectionScheduler::~PriorityShadowProjectionScheduler() {}
 
@@ -266,7 +260,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 
 	std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> CreatePriorityShadowSchedulerUtil(
-		IteratorRange<const std::pair<unsigned, ShadowOperatorDesc>*> shadowGenerators,
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox)
 	{
@@ -286,12 +280,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto helper = std::make_shared<Helper>();
 		helper->_futures.reserve(shadowGenerators.size());
 		for (unsigned operatorIdx=0; operatorIdx<shadowGenerators.size(); ++operatorIdx) {
-			assert(shadowGenerators[operatorIdx].second._resolveType != ShadowResolveType::SemiStaticProbe && shadowGenerators[operatorIdx].second._resolveType != ShadowResolveType::DynamicProbe && shadowGenerators[operatorIdx].second._resolveType != ShadowResolveType::SemiStaticAndDynamicProbe);
-			auto preparer = CreateCompiledShadowPreparer(shadowGenerators[operatorIdx].second, pipelineAccelerators, delegatesBox);
+			assert(shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::SemiStaticProbe && shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::DynamicProbe && shadowGenerators[operatorIdx]._resolveType != ShadowResolveType::SemiStaticAndDynamicProbe);
+			auto preparer = CreateCompiledShadowPreparer(shadowGenerators[operatorIdx], pipelineAccelerators, delegatesBox);
 			helper->_futures.push_back(std::move(preparer));
 		}
 
-		std::vector<std::pair<unsigned, ShadowOperatorDesc>> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
+		std::vector<ShadowOperatorDesc> shadowGeneratorCopy { shadowGenerators.begin(), shadowGenerators.end() };
 		::Assets::PollToPromise(
 			std::move(promise),
 			[helper](auto timeout) {
@@ -314,7 +308,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				assert(actualized.size() == shadowGeneratorCopy.size());
 				auto i = shadowGeneratorCopy.begin();
 				for (auto&a:actualized) {
-					finalResult->_preparers.push_back(PriorityShadowSchedulerUtil::Preparer{i->first, std::move(a), i->second});
+					finalResult->_preparers.push_back(PriorityShadowSchedulerUtil::Preparer{std::move(a), *i});
 					++i;
 				}
 
@@ -401,7 +395,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<ProbeEntry> _probes;
 		BitHeap _activeProbes;
 		bool _activeSet = false;
-		unsigned _preparerIndex = ~0u;
 
 		void RegisterLight(unsigned index, ILightBase& light)
 		{
@@ -676,7 +669,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	bool SemiStaticShadowProbeScheduler::BindToSet(ILightScene::LightOperatorId op, unsigned setIdx)
 	{
-		if (op != _operatorId) return false;
+		if (op >= _maskedLightOperators.size() || !_maskedLightOperators[op]) return false;
 		if (_sceneSets.size() <= setIdx)
 			_sceneSets.resize(setIdx+1);
 		_sceneSets[setIdx]._activeSet = true;
@@ -703,8 +696,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return { p._attachedProbeTableIndex, p._fading };
 	}
 
-	SemiStaticShadowProbeScheduler::SemiStaticShadowProbeScheduler(std::shared_ptr<ShadowProbes> shadowProbes, ILightScene::LightOperatorId operatorId) 
-	: _shadowProbes(std::move(shadowProbes)), _operatorId(operatorId)
+	SemiStaticShadowProbeScheduler::SemiStaticShadowProbeScheduler(std::shared_ptr<ShadowProbes> shadowProbes, const std::vector<bool>& maskedLightOperators)
+	: _shadowProbes(std::move(shadowProbes)), _maskedLightOperators(maskedLightOperators)
 	{
 		_probeSlotsCount = _shadowProbes->GetReservedProbeCount();
 		assert(_probeSlotsCount <= 64);
@@ -1055,11 +1048,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	bool DynamicShadowProbeScheduler::BindToSet(ILightScene::LightOperatorId op, unsigned setIdx)
 	{
-		if (op >= _operatorToPreparerIdMapping.size() || _operatorToPreparerIdMapping[op] == ~0u) return false;
+		if (op >= _maskedLightOperators.size() || !_maskedLightOperators[op]) return false;
 
 		if (_sceneSets.size() <= setIdx) _sceneSets.resize(setIdx+1);
 		_sceneSets[setIdx]._activeSet = true;
-		_sceneSets[setIdx]._preparerIndex = _operatorToPreparerIdMapping[op];
 		return true;
 	}
 
@@ -1083,8 +1075,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return { p._attachedProbeTableIndex, p._fading };
 	}
 
-	DynamicShadowProbeScheduler::DynamicShadowProbeScheduler(std::shared_ptr<DynamicShadowProbes> shadowProbes)
-	: _shadowProbes(std::move(shadowProbes))
+	DynamicShadowProbeScheduler::DynamicShadowProbeScheduler(
+		std::shared_ptr<DynamicShadowProbes> shadowProbes,
+		const std::vector<bool>& maskedLightOperators)
+	: _shadowProbes(std::move(shadowProbes)), _maskedLightOperators(maskedLightOperators)
 	{
 		_probeTableFaceCount = _shadowProbes->GetFaceCount();
 		assert(_probeTableFaceCount <= 64*6);

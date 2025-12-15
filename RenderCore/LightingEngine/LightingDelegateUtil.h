@@ -72,7 +72,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		SemiStaticShadowProbeScheduler(
 			std::shared_ptr<ShadowProbes> shadowProbes,
-			ILightScene::LightOperatorId operatorId);
+			const std::vector<bool>& maskedLightOperators);
 		~SemiStaticShadowProbeScheduler();
 	private:
 		Threading::Mutex _lock;
@@ -94,9 +94,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 
 		std::vector<SharedProbeSceneSet> _sceneSets;
-		ILightScene::LightOperatorId _operatorId;
 		float _defaultNearRadius = 1.f;
 		unsigned _fadeTransitionInFrames = 16;
+		std::vector<bool> _maskedLightOperators;
 
 		// ILightSceneComponent
 		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) override;
@@ -128,7 +128,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		};
 		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
-		DynamicShadowProbeScheduler(std::shared_ptr<DynamicShadowProbes> shadowProbes);
+		DynamicShadowProbeScheduler(
+			std::shared_ptr<DynamicShadowProbes> shadowProbes,
+			const std::vector<bool>& maskedLightOperators);
 		~DynamicShadowProbeScheduler();
 	private:
 		using LightIndex = uint64_t;		// encoded set index and light index within that set
@@ -146,6 +148,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		unsigned _fadeTransitionInFrames = 16;
 		unsigned _probeTableFaceCount = 0;
 		unsigned _clusterCount = 0;
+
+		std::vector<bool> _maskedLightOperators;
 
 		void UpdateActiveLights(const Float3& newViewPosition, float drawDistance, const Float4x4& worldToClipSpace);
 		void UpdateClustering();
@@ -192,7 +196,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
 		unsigned _totalProjectionCount;
 
-		PriorityShadowProjectionScheduler(std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers);
+		PriorityShadowProjectionScheduler(
+			std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers,
+			IteratorRange<const unsigned*> operatorToPreparer);			// maps from the light operator id to one of the preparers in shadowPreparers
 		~PriorityShadowProjectionScheduler();
 	private:
 		// ILightSceneComponent
@@ -208,7 +214,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	};
 
 	std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> CreatePriorityShadowSchedulerUtil(
-		IteratorRange<const std::pair<unsigned, ShadowOperatorDesc>*> shadowGenerators, 				// src light operator & shadow generator
+		IteratorRange<const ShadowOperatorDesc*> shadowGenerators,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerator,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& delegatesBox);
 
