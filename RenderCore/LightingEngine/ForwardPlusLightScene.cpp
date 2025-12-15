@@ -71,20 +71,20 @@ namespace RenderCore { namespace LightingEngine
 
 		if (_lightOperatorsMapping._staticShadowProbesCfg) {
 			_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, *_lightOperatorsMapping._staticShadowProbesCfg);
-			_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, _lightOperatorsMapping._staticShadowProbeMask);
-			RegisterComponent(_shadowProbesManager);
+			_staticProbeScheduler = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, _lightOperatorsMapping._staticShadowProbeMask);
+			RegisterComponent(_staticProbeScheduler);
 		}
 
 		if (_lightOperatorsMapping._dynamicShadowProbesCfg) {
 			_dynamicShadowProbes = std::make_shared<DynamicShadowProbes>(_pipelineAccelerators, *_techDelBox, *_lightOperatorsMapping._dynamicShadowProbesCfg);
-			_dynamicShadowProbesManager = std::make_shared<Internal::DynamicShadowProbeScheduler>(_dynamicShadowProbes, _lightOperatorsMapping._dynamicShadowProbeMask);
-			RegisterComponent(_dynamicShadowProbesManager);
+			_dynamicProbeScheduler = std::make_shared<Internal::DynamicShadowProbeScheduler>(_dynamicShadowProbes, _lightOperatorsMapping._dynamicShadowProbeMask);
+			RegisterComponent(_dynamicProbeScheduler);
 		}
 
 		if (_shadowPreparers) {
-			_shadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(_shadowPreparers, _lightOperatorsMapping._operatorToPriorityShadowPreparerId);
-			_shadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
-			RegisterComponent(_shadowScheduler);
+			_priorityShadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(_shadowPreparers, _lightOperatorsMapping._operatorToPriorityShadowPreparerId);
+			_priorityShadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
+			RegisterComponent(_priorityShadowScheduler);
 		}
 	}
 
@@ -134,9 +134,9 @@ namespace RenderCore { namespace LightingEngine
 	{
 		switch (typeCode) {
 		case TypeHashCode<ISemiStaticShadowProbeScheduler>:
-			return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
+			return (ISemiStaticShadowProbeScheduler*)_staticProbeScheduler.get();
 		case TypeHashCode<Internal::IDynamicShadowProjectionScheduler>:
-			return (Internal::IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
+			return (Internal::IDynamicShadowProjectionScheduler*)_priorityShadowScheduler.get();
 		default:
 			// We get a lambda from the lighting delegate to query for more interfaces. It's a bit awkward, but it's convenient
 			if (_queryInterfaceHelper)
@@ -177,23 +177,23 @@ namespace RenderCore { namespace LightingEngine
 				*i = MakeLightUniforms(lightDesc, _lightOperatorsMapping._positionalLightOperators[op]._uniformShapeCode);
 			}
 
-			if (_shadowProbesManager) {
+			if (_staticProbeScheduler) {
 				i = (Internal::CB_Light*)map.GetData().begin();
 				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
 					assert(_lightSets[setIdx]._operatorId != _lightOperatorsMapping._dominantLightOperator);
-					auto probe = _shadowProbesManager->GetAllocatedDatabaseEntry(setIdx, lightIdx);
+					auto probe = _staticProbeScheduler->GetAllocatedDatabaseEntry(setIdx, lightIdx);
 					i->_staticProbeDatabaseEntry = probe._databaseIndex;
 					++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinel
 				}
 			}
 
-			if (_dynamicShadowProbesManager) {
+			if (_dynamicProbeScheduler) {
 				i = (Internal::CB_Light*)map.GetData().begin();
 				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
 					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
 					assert(_lightSets[setIdx]._operatorId != _lightOperatorsMapping._dominantLightOperator);
-					auto probe = _dynamicShadowProbesManager->GetAllocatedDatabaseEntry(setIdx, lightIdx);
+					auto probe = _dynamicProbeScheduler->GetAllocatedDatabaseEntry(setIdx, lightIdx);
 					i->_dynamicCubeDatabaseEntry = probe._databaseIndex;
 					++i->_dynamicCubeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinel
 				}
@@ -234,8 +234,8 @@ namespace RenderCore { namespace LightingEngine
 
 	const IPreparedShadowResult* ForwardPlusLightScene::GetDominantPreparedShadow()
 	{
-		if (!_shadowScheduler || !_dominantLightSet || !_dominantLightSet->_hasLight) return nullptr;
-		return _shadowScheduler->GetPreparedShadow(_dominantLightSet->_setIdx, 0);
+		if (!_priorityShadowScheduler || !_dominantLightSet || !_dominantLightSet->_hasLight) return nullptr;
+		return _priorityShadowScheduler->GetPreparedShadow(_dominantLightSet->_setIdx, 0);
 	}
 
 	class ForwardPlusLightScene::ShaderResourceDelegate : public Techniques::IShaderResourceDelegate
@@ -256,7 +256,7 @@ namespace RenderCore { namespace LightingEngine
 
 			if (bindingFlags & (1ull<<4ull)) {
 				assert(bindingFlags & (1ull<<5ull));
-				if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady() && _lightScene->_shadowProbesManager->DoneInitialBackgroundPrepare()) {
+				if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady() && _lightScene->_staticProbeScheduler->DoneInitialBackgroundPrepare()) {
 					dst[4] = &_lightScene->_shadowProbes->GetStaticProbeTable();
 					dst[5] = &_lightScene->_shadowProbes->GetShadowProbeUniforms();
 				} else {

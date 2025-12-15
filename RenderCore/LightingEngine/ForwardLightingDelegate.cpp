@@ -88,8 +88,10 @@ namespace RenderCore { namespace LightingEngine
 
 	void ForwardLightingCaptures::DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence)
 	{
-		if (_lightScene->_shadowScheduler)
-			_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
+		if (_lightScene->_priorityShadowScheduler)
+			_lightScene->_priorityShadowScheduler->DoShadowPrepare(iterator, sequence);
+		if (_lightScene->_dynamicProbeScheduler)
+			_lightScene->_dynamicProbeScheduler->DoShadowPrepare(iterator, sequence);
 	}
 
 	void ForwardLightingCaptures::SetupCameraJitter(Techniques::ParsingContext& parsingContext, const FrameToFrameProperties& f2fp)
@@ -113,8 +115,10 @@ namespace RenderCore { namespace LightingEngine
 		if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
 			parsingContext.GetUniformDelegateManager()->UnbindFixedDescriptorSet(*dominantShadow->GetDescriptorSet());
 		parsingContext.GetUniformDelegateManager()->UnbindSemiConstantDescriptorSet(*_forwardLightingSemiConstant);
-		if (_lightScene->_shadowScheduler)
-			_lightScene->_shadowScheduler->ClearPreparedShadows();
+		if (_lightScene->_dynamicProbeScheduler)
+			_lightScene->_dynamicProbeScheduler->ClearPreparedShadows();
+		if (_lightScene->_priorityShadowScheduler)
+			_lightScene->_priorityShadowScheduler->ClearPreparedShadows();
 
 		// Remove TAA jitter again, because we've applied the temporal smoothing
 		if (_taaOperator)
