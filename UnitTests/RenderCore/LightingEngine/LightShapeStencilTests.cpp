@@ -4,6 +4,7 @@
 
 #include "LightingEngineTestHelper.h"
 #include "../Metal/MetalTestHelper.h"
+#include "../../../SceneEngine/IScene.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../../RenderCore/LightingEngine/ILightScene.h"
@@ -11,25 +12,17 @@
 #include "../../../RenderCore/LightingEngine/DeferredLightingDelegate.h"
 #include "../../../RenderCore/LightingEngine/StandardLightOperators.h"
 #include "../../../RenderCore/LightingEngine/ShadowPreparer.h"
-#include "../../../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"
-#include "../../../RenderCore/Techniques/PipelineCollection.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
-#include "../../../RenderCore/Techniques/CommonResources.h"
-#include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
-#include "../../../RenderCore/Metal/Resource.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"
 #include "../../../RenderCore/Metal/QueryPool.h"
-#include "../../../RenderCore/Metal/ObjectFactory.h"
 #include "../../../RenderCore/IDevice.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
-#include "../../../Assets/IAsyncMarker.h"
 #include "../../../Assets/Assets.h"
-#include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 
@@ -127,6 +120,9 @@ namespace UnitTests
 				LightingEngine::PositionalLightOperatorDesc{ LightingEngine::LightSourceShape::Sphere, LightingEngine::DiffuseModel::Disney, LightingEngine::PositionalLightOperatorDesc::Flags::NeverStencil },
 			};
 
+			SceneEngine::MergedLightingEngineCfg mergedLightingCfg;
+			for (auto& op:resolveOperators) mergedLightingCfg.Register(op);
+
 			auto targetDesc = CreateDesc(
 				BindFlag::RenderTarget | BindFlag::TransferSrc,
 				TextureDesc::Plain2D(2048, 2048, RenderCore::Format::R8G8B8A8_UNORM_SRGB));
@@ -138,7 +134,7 @@ namespace UnitTests
 			LightingEngine::CreateDeferredLightingTechnique(
 				std::move(promisedLightingTechnique),
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-				MakeIteratorRange(resolveOperators), {}, nullptr,
+				mergedLightingCfg.GetChainedGlobalOperators(),
 				stitchingContext.GetPreregisteredAttachments());
 			auto lightingTechnique = lightingTechniqueFuture.get();
 
@@ -151,7 +147,7 @@ namespace UnitTests
 			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 			SECTION("sphere light")
 			{
-				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+				auto& lightScene = *LightingEngine::TryGetLightScene(*lightingTechnique);
 				auto baseInvocations = CountPixelShaderInvocations(*threadContext, parsingContext, *lightingTechnique, testApparatus, *drawableWriter);
 
 				auto lightId = CreateTestLight(lightScene, {0.f, 2.0f, 0.f}, 4);

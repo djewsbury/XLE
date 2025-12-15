@@ -13,7 +13,6 @@
 #include "../../../RenderCore/Techniques/RenderPass.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/CommonBindings.h"
-#include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Techniques/TechniqueDelegateUtil.h"
@@ -22,19 +21,12 @@
 #include "../../../RenderCore/Techniques/DrawableDelegates.h"
 #include "../../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../../RenderCore/Techniques/RenderPassUtils.h"
-#include "../../../RenderCore/Metal/DeviceContext.h"
-#include "../../../RenderCore/Metal/QueryPool.h"
-#include "../../../RenderCore/Metal/ObjectFactory.h"
 #include "../../../RenderCore/IDevice.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Assets/Assets.h"
-#include "../../../Assets/AssetTraits.h"
-#include "../../../Assets/MountingTree.h"
-#include "../../../Assets/MemoryFile.h"
-#include "../../../Assets/ConfigFileContainer.h"
 #include "../../../Assets/Continuation.h"
-#include "../../../Utility/ArithmeticUtils.h"
+#include "../../../Assets/ConfigFileContainer.h"
 #include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
@@ -51,7 +43,7 @@ namespace UnitTests
 		void BindLightScene()
 		{
 			if (_lightingStateDelegate && _compiledLightingTechnique) {
-				auto& lightScene = RenderCore::LightingEngine::GetLightScene(*_compiledLightingTechnique);
+				auto& lightScene = *RenderCore::LightingEngine::TryGetLightScene(*_compiledLightingTechnique);
 				_lightingStateDelegate->BindScene(lightScene);
 			}
 		}
@@ -59,7 +51,7 @@ namespace UnitTests
 		void UnbindLightScene()
 		{
 			if (_lightingStateDelegate && _compiledLightingTechnique) {
-				auto& lightScene = RenderCore::LightingEngine::GetLightScene(*_compiledLightingTechnique);
+				auto& lightScene = *RenderCore::LightingEngine::TryGetLightScene(*_compiledLightingTechnique);
 				_lightingStateDelegate->UnbindScene(lightScene);
 			}
 		}
@@ -121,7 +113,7 @@ namespace UnitTests
 			RenderCore::LightingEngine::CreateDeferredLightingTechnique(
 				std::move(promisedTechnique),
 				lightingApparatus._pipelineAccelerators, lightingApparatus._pipelineCollection, lightingApparatus._sharedDelegates,
-				lightingEngineCfg.GetLightOperators(), lightingEngineCfg.GetShadowOperators(), nullptr,
+				lightingEngineCfg.GetChainedGlobalOperators(),
 				preregAttachments);
 
 			::Assets::WhenAll(std::move(techniqueFuture)).ThenConstructToPromise(
@@ -135,7 +127,7 @@ namespace UnitTests
 
 					// Complete preparing shadow probes before we consider the "prepared scene" complete
 					auto threadContext = RenderCore::Techniques::GetThreadContext();
-					auto& lightScene = RenderCore::LightingEngine::GetLightScene(*result._compiledLightingTechnique);
+					auto& lightScene = *RenderCore::LightingEngine::TryGetLightScene(*result._compiledLightingTechnique);
 
 					auto* shadowProbes = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(TypeHashCode<RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler>);
 					REQUIRE(shadowProbes);
@@ -176,7 +168,7 @@ namespace UnitTests
 		void PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override {}
 		void BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>) override 
 		{
-			REQUIRE(_lightOperatorId != ~0u); REQUIRE(_shadowOperatorId != ~0u);
+			REQUIRE(_lightOperatorId != ~0u);
 			REQUIRE(_lightSourcesId.empty());
 			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
 			_lightSourcesId.emplace_back(lightScene.CreateLightSource(_lightOperatorId));
@@ -196,9 +188,6 @@ namespace UnitTests
 			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(_lightSourcesId[2])->SetLocalToWorld(AsFloat4x4(Float3(55, 5, 60)));
 			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(_lightSourcesId[2])->SetCutoffRange(50);
 			lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(_lightSourcesId[2])->SetBrightness(Float3{0.f, 0.f, 100.f});
-
-			for (auto l:_lightSourcesId)
-				lightScene.SetShadowOperator(l, _shadowOperatorId);
 		}
 		void UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override
 		{
@@ -220,21 +209,20 @@ namespace UnitTests
 		{
 			RenderCore::LightingEngine::PositionalLightOperatorDesc lightOp;
 			lightOp._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
-			_lightOperatorId = cfg.Register(lightOp);
 
 			RenderCore::LightingEngine::ShadowOperatorDesc shadowOp;
-			shadowOp._resolveType = RenderCore::LightingEngine::ShadowResolveType::Probe;
+			shadowOp._resolveType = RenderCore::LightingEngine::ShadowResolveType::SemiStaticProbe;
 			// we need some bias to avoid rampant acne
 			shadowOp._singleSidedBias._depthBias = 6 * -8;
 			shadowOp._singleSidedBias._slopeScaledBias = -0.75f;
 			shadowOp._doubleSidedBias = shadowOp._singleSidedBias;
 			shadowOp._width = shadowOp._height = 128;
-			_shadowOperatorId = cfg.Register(shadowOp);
+			_lightOperatorId = cfg.Register(lightOp, shadowOp);
 		}
 
 		std::vector<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSourcesId;
 
-		unsigned _lightOperatorId = ~0u, _shadowOperatorId = ~0u;
+		unsigned _lightOperatorId = ~0u;
 	};
 
 	TEST_CASE( "LightingEngine-BackgroundShadowProbeRender", "[rendercore_lighting_engine]" )
@@ -294,7 +282,7 @@ namespace UnitTests
 		{
 			// We must call OnFrameBarrier on the ISemiStaticShadowProbeScheduler at least once to
 			// update the status of the probe manager (since it's cmdlist has not been committed)
-			auto& lightScene = RenderCore::LightingEngine::GetLightScene(*scene._compiledLightingTechnique);
+			auto& lightScene = *RenderCore::LightingEngine::TryGetLightScene(*scene._compiledLightingTechnique);
 			auto* shadowProbes = (RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler*)lightScene.QueryInterface(TypeHashCode<RenderCore::LightingEngine::ISemiStaticShadowProbeScheduler>);
 			REQUIRE(shadowProbes);
 			shadowProbes->OnFrameBarrier(Float3(0,0,0), 1000);
@@ -415,9 +403,8 @@ namespace UnitTests
 
 		const Float3 negativeLightDirection = Normalize(Float3{0.0f, 1.0f, 0.5f});
 
-		LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
-			LightingEngine::PositionalLightOperatorDesc{}
-		};
+		SceneEngine::MergedLightingEngineCfg lightingCfg;
+		lightingCfg.Register(LightingEngine::PositionalLightOperatorDesc{});
 
 		auto threadContext = Techniques::GetThreadContext();
 		auto techniqueContext = ForkTechniqueContext(*testApparatus._techniqueContext);
@@ -428,7 +415,7 @@ namespace UnitTests
 		LightingEngine::CreateDeferredLightingTechnique(
 			std::move(promisedLightingTechnique),
 			testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-			MakeIteratorRange(resolveOperators), {}, nullptr,
+			lightingCfg.GetChainedGlobalOperators(),
 			parsingContext.GetFragmentStitchingContext().GetPreregisteredAttachments());
 		auto lightingTechnique = lightingTechniqueFuture.get();
 
@@ -439,7 +426,7 @@ namespace UnitTests
 		parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 		parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 
-		auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+		auto& lightScene = *LightingEngine::TryGetLightScene(*lightingTechnique);
 		auto lightId = lightScene.CreateLightSource(0);
 		lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
 
