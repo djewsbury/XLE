@@ -118,8 +118,8 @@ namespace RenderCore { namespace LightingEngine
 			switch (typeCode) {
 			case TypeHashCode<ISemiStaticShadowProbeScheduler>:
 				return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
-			case TypeHashCode<Internal::IDynamicShadowProjectionScheduler>:
-				return (Internal::IDynamicShadowProjectionScheduler*)_priorityShadowScheduler.get();
+			case TypeHashCode<Internal::IPriorityShadowProjectionScheduler>:
+				return (Internal::IPriorityShadowProjectionScheduler*)_priorityShadowScheduler.get();
 			default:
 				if (_queryInterfaceHelper)
 					if (auto* result = _queryInterfaceHelper(typeCode))

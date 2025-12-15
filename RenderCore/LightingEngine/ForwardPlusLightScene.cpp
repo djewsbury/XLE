@@ -135,8 +135,10 @@ namespace RenderCore { namespace LightingEngine
 		switch (typeCode) {
 		case TypeHashCode<ISemiStaticShadowProbeScheduler>:
 			return (ISemiStaticShadowProbeScheduler*)_staticProbeScheduler.get();
-		case TypeHashCode<Internal::IDynamicShadowProjectionScheduler>:
-			return (Internal::IDynamicShadowProjectionScheduler*)_priorityShadowScheduler.get();
+		case TypeHashCode<Internal::IPriorityShadowProjectionScheduler>:
+			return (Internal::IPriorityShadowProjectionScheduler*)_priorityShadowScheduler.get();
+		case TypeHashCode<Internal::IDynamicShadowProbeSchedulerMetrics>:
+			return (Internal::IDynamicShadowProbeSchedulerMetrics*)_dynamicProbeScheduler.get();
 		default:
 			// We get a lambda from the lighting delegate to query for more interfaces. It's a bit awkward, but it's convenient
 			if (_queryInterfaceHelper)

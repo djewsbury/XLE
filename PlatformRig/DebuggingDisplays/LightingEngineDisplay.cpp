@@ -3,6 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightingEngineDisplay.h"
+#include "../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../RenderCore/LightingEngine/LightingDelegateUtil.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
@@ -17,6 +18,7 @@
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/StreamUtils.h"
+#include "../../Utility/MemoryUtils.h"
 
 namespace PlatformRig { namespace Overlays
 {
@@ -76,7 +78,11 @@ namespace PlatformRig { namespace Overlays
 					.Draw(context, titleRect, "Shadow Probes");
 		}
 
-		if (auto* metricsInterface = RenderCore::LightingEngine::QueryInterface<RenderCore::LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics>(*_technique)) {
+		LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics* metricsInterface = nullptr;
+		if (auto* lightScene = RenderCore::LightingEngine::TryGetLightScene(*_technique))
+			metricsInterface = (LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics*)lightScene->QueryInterface(TypeHashCode<LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics>);
+
+		if (metricsInterface) {
 			auto metrics = metricsInterface->GetMetrics();
 
 			// write some key metrics
@@ -153,6 +159,8 @@ namespace PlatformRig { namespace Overlays
 					context.DrawLines(ProjectionMode::P3D, lines, dimof(lines), ColorB{215, 100, 100}, 3.f);  // rgba(215, 100, 100, 1)
 				}
 			}
+		} else {
+			DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "No metrics interface for dynamic shadow probes");
 		}
 	}
 

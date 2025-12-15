@@ -873,11 +873,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		// ensure lights that have become inactive are cleared of their database allocation
 		{
-			auto i2 = _activeLights[2].begin();
+			auto i2 = _activeLights[1].begin();
 			for (auto& i:_activeLights[0]) {
 				if (!i.second._active) continue;
-				while (i2!=_activeLights[2].end() && i2->first < i.first) ++i2;
-				if (i2==_activeLights[2].end() || i2->first != i.first || !i2->second._active)
+				while (i2!=_activeLights[1].end() && i2->first < i.first) ++i2;
+				if (i2==_activeLights[1].end() || i2->first != i.first || !i2->second._active)
 					LookupProbeEntry(i.first)._attachedProbeTableIndex = ~0u;		// received shadowing last frame, but will not this frame
 			}
 		}
@@ -1031,9 +1031,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					for (auto& a:_activeLights[0])
 						if (a.second._clusterIndex == c) {
 							auto& probe = LookupProbeEntry(a.first)._probeDesc;
-							LookupProbeEntry(a.first)._attachedProbeTableIndex = nextProbeTableFaceIdx;
+							LookupProbeEntry(a.first)._attachedProbeTableIndex = nextProbeTableFaceIdx + unsigned(projDescs.size());
 							WriteProjectionDescs(projDescs, {&probe, &probe+1});
-							nextProbeTableFaceIdx += unsigned(projDescs.size());
 
 							// sphere rules
 							auto p = ExtractTranslation(probe._objectToWorld);
@@ -1047,8 +1046,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 						}
 
 					auto volumeTester = std::make_shared<ArbitraryConvexVolumeTester>(ArbitraryConvexVolumeTesterFromAABB(clusterToWorld, clusterMins, clusterMaxs));
-					workingCluster._parseId = sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::move(projDescs), std::move(volumeTester));
+					workingCluster._parseId = sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::vector<Techniques::ProjectionDesc>{projDescs}, std::move(volumeTester));
 				}
+
+				assert(!projDescs.empty());
+				nextProbeTableFaceIdx += unsigned(projDescs.size());
 
 				// preparation step
 				sequence.CreateStep_CallFunction(

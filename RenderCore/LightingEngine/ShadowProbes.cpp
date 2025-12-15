@@ -7,6 +7,7 @@
 #include "LightingEngineApparatus.h"
 #include "Math/XLEMath.h"
 #include "RenderCore/ResourceDesc.h"
+#include "RenderCore/Techniques/RenderPass.h"
 #include "RenderCore/Vulkan/Metal/DeviceContext.h"
 #include "SequenceIterator.h"
 #include "../Techniques/RenderPass.h"
@@ -408,6 +409,7 @@ namespace RenderCore { namespace LightingEngine
 		parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
 		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 		parsingContext.GetAttachmentReservation().Bind(s_semanticProbePrepare, _pimpl->_staticTable, BindFlag::ShaderResource);
+		parsingContext.GetFragmentStitchingContext().DefineAttachment(s_semanticProbePrepare, _pimpl->_staticTable->GetDesc(), "dynamic-probe-prepare", Techniques::PreregisteredAttachment::State::Uninitialized);
 	}
 
 	void DynamicShadowProbes::UnbindAndBarrier(Techniques::ParsingContext& parsingContext)
@@ -418,6 +420,7 @@ namespace RenderCore { namespace LightingEngine
 		parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*_pimpl->_multiViewUniformsDelegate);
 		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 		parsingContext.GetAttachmentReservation().Unbind(*_pimpl->_staticTable);
+		parsingContext.GetFragmentStitchingContext().Undefine(s_semanticProbePrepare);
 
 		Metal::BarrierHelper{*Metal::DeviceContext::Get(parsingContext.GetThreadContext())}.Add(*_pimpl->_staticTable, BindFlag::DepthStencil, BindFlag::ShaderResource);
 	}

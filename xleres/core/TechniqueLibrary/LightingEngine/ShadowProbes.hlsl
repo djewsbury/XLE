@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "SHadowDynamicSample.hlsl"
+#include "ShadowDynamicSample.hlsl"
 
 #define SHADOW_PROBE_BIQUADRATIC 1
 
@@ -22,7 +22,7 @@
 
 	float SampleStaticShadowDatabase(uint databaseEntry, float3 offset, LightScreenDest screenDest)
 	{
-		ResolveShadows_CubeMapArray(StaticShadowProbeDatabase, databaseEntry, StaticShadowProbeProperties[databaseEntry]._miniProjZW, offset);
+		return ResolveShadows_CubeMapArray(StaticShadowProbeDatabase, databaseEntry, StaticShadowProbeProperties[databaseEntry]._miniProjZW, offset);
 	}
 
 #endif

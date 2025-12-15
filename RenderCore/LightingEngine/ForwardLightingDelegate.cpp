@@ -751,8 +751,6 @@ namespace RenderCore { namespace LightingEngine
 								return (ISSAmbientOcclusion*)captures->_ssaoOperator.get();
 							case TypeHashCode<ILightScene>:
 								return (ILightScene*)captures->_lightScene.get();
-							case TypeHashCode<Internal::IDynamicShadowProjectionScheduler>:
-								return (Internal::IDynamicShadowProjectionScheduler*)captures->_lightScene->_dynamicProbeScheduler.get();
 							}
 							return nullptr;
 						};

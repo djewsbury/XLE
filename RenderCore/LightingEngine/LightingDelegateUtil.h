@@ -192,19 +192,19 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
-	class IDynamicShadowProjectionScheduler
+	class IPriorityShadowProjectionScheduler
 	{
 	public:
 		virtual void SetDescriptorSetLayout(
 			const std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>& descSetLayout,
 			PipelineType pipelineType) = 0;
-		virtual ~IDynamicShadowProjectionScheduler() = default;
+		virtual ~IPriorityShadowProjectionScheduler() = default;
 	};
 
 	// PriorityShadowProjectionScheduler handles shadow projections that are always active, and are recalculated every frame
 	// It's typically used for the dominant light, player held torches, or other important shadowing sources that should
 	// never go inactive
-	class PriorityShadowProjectionScheduler : public IDynamicShadowProjectionScheduler, public ILightSceneComponent
+	class PriorityShadowProjectionScheduler : public IPriorityShadowProjectionScheduler, public ILightSceneComponent
 	{
 	public:
 		const IPreparedShadowResult* GetPreparedShadow(unsigned setIdx, unsigned lightIdx);
