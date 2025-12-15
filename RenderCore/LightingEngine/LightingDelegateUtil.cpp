@@ -1050,69 +1050,70 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		struct WorkingCluster { SequenceParseId _parseId; };
 
 		// generate scene parse operations & prepare steps
-		{
-			auto LookupProbeEntry = [this](LightIndex lightIndex) -> SharedProbeSceneSet::ProbeEntry& { return *this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
+		auto LookupProbeEntry = [this](LightIndex lightIndex) -> SharedProbeSceneSet::ProbeEntry& { return *this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
+		unsigned nextProbeTableFaceIdx = 0;
+		std::vector<ShadowProbes::Probe> updatedProbesInDatabaseOrder;		// subframe heap candidate
+		updatedProbesInDatabaseOrder.reserve(_probeTableFaceReserved/6);
 
-			unsigned nextProbeTableFaceIdx = 0;
+		for (unsigned c=0; c<_clusterCount; ++c) {
 
-			for (unsigned c=0; c<_clusterCount; ++c) {
+			// scene parse
+			WorkingCluster workingCluster;
+			std::vector<Techniques::ProjectionDesc> projDescs;		// subframe heap candidate (we're actually only going to use a few members from this)
+			projDescs.reserve(_probeTableFaceReserved);
+			unsigned firstFaceIndex = nextProbeTableFaceIdx;
+			{
+				// Orient the cluster bounding box such that the axis between the two most distant lights is one of the cardinal axes
+				Float3 clusterMins { std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max() };
+				Float3 clusterMaxs { std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
+				auto clusterToWorld = MakeObjectToWorld(_clusterBestAxes[c], Float3{0,0,1}, Float3{0,0,0});
 
-				// scene parse
-				WorkingCluster workingCluster;
-				std::vector<Techniques::ProjectionDesc> projDescs;		// subframe heap candidate
-				projDescs.reserve(_probeTableFaceReserved);
-				unsigned firstFaceIndex = nextProbeTableFaceIdx;
-				{
-					// Orient the cluster bounding box such that the axis between the two most distant lights is one of the cardinal axes
-					Float3 clusterMins { std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max() };
-					Float3 clusterMaxs { std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
-					auto clusterToWorld = MakeObjectToWorld(_clusterBestAxes[c], Float3{0,0,1}, Float3{0,0,0});
+				for (auto& a:_activeLights[0])
+					if (a.second._clusterIndex == c) {
+						auto& probe = LookupProbeEntry(a.first)._probeDesc;
+						LookupProbeEntry(a.first)._attachedProbeTableIndex = nextProbeTableFaceIdx + unsigned(projDescs.size());
+						WriteProjectionDescs(projDescs, {&probe, &probe+1});
+						updatedProbesInDatabaseOrder.push_back(probe);
 
-					for (auto& a:_activeLights[0])
-						if (a.second._clusterIndex == c) {
-							auto& probe = LookupProbeEntry(a.first)._probeDesc;
-							LookupProbeEntry(a.first)._attachedProbeTableIndex = nextProbeTableFaceIdx + unsigned(projDescs.size());
-							WriteProjectionDescs(projDescs, {&probe, &probe+1});
+						// sphere rules
+						auto p = ExtractTranslation(probe._objectToWorld);
+						p = TransformPointByOrthonormalInverse(clusterToWorld, p);
+						clusterMins[0] = std::min(clusterMins[0], p[0] - probe._farRadius);
+						clusterMins[1] = std::min(clusterMins[1], p[1] - probe._farRadius);
+						clusterMins[2] = std::min(clusterMins[2], p[2] - probe._farRadius);
+						clusterMaxs[0] = std::max(clusterMaxs[0], p[0] + probe._farRadius);
+						clusterMaxs[1] = std::max(clusterMaxs[1], p[1] + probe._farRadius);
+						clusterMaxs[2] = std::max(clusterMaxs[2], p[2] + probe._farRadius);
+					}
 
-							// sphere rules
-							auto p = ExtractTranslation(probe._objectToWorld);
-							p = TransformPointByOrthonormalInverse(clusterToWorld, p);
-							clusterMins[0] = std::min(clusterMins[0], p[0] - probe._farRadius);
-							clusterMins[1] = std::min(clusterMins[1], p[1] - probe._farRadius);
-							clusterMins[2] = std::min(clusterMins[2], p[2] - probe._farRadius);
-							clusterMaxs[0] = std::max(clusterMaxs[0], p[0] + probe._farRadius);
-							clusterMaxs[1] = std::max(clusterMaxs[1], p[1] + probe._farRadius);
-							clusterMaxs[2] = std::max(clusterMaxs[2], p[2] + probe._farRadius);
-						}
-
-					auto volumeTester = std::make_shared<ArbitraryConvexVolumeTester>(ArbitraryConvexVolumeTesterFromAABB(clusterToWorld, clusterMins, clusterMaxs));
-					workingCluster._parseId = sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::vector<Techniques::ProjectionDesc>{projDescs}, std::move(volumeTester));
-				}
-
-				assert(!projDescs.empty());
-				nextProbeTableFaceIdx += unsigned(projDescs.size());
-
-				// preparation step
-				sequence.CreateStep_CallFunction(
-					[this, workingCluster, projDescs=std::move(projDescs), firstFaceIndex, firstCluster=c==0, lastCluster=(c+1)==_clusterCount](SequenceIterator& iterator) {
-
-						if (firstCluster)
-							this->_shadowProbes->Bind(*iterator._parsingContext);
-
-						auto rpi = this->_shadowProbes->Begin(*iterator._parsingContext, projDescs, firstFaceIndex);
-						if (auto cfg = this->_shadowProbes->GetSequencerConfig())		// returns null if still pending
-							iterator.ExecuteDrawables(workingCluster._parseId, *cfg);
-						rpi.End();
-
-						if (lastCluster)
-							this->_shadowProbes->UnbindAndBarrier(*iterator._parsingContext);
-
-					});
+				auto volumeTester = std::make_shared<ArbitraryConvexVolumeTester>(ArbitraryConvexVolumeTesterFromAABB(clusterToWorld, clusterMins, clusterMaxs));
+				workingCluster._parseId = sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::vector<Techniques::ProjectionDesc>{projDescs}, std::move(volumeTester));
 			}
 
-			_probeTableFaceUsed = nextProbeTableFaceIdx;
-			assert(_probeTableFaceUsed <= _probeTableFaceReserved);
+			assert(!projDescs.empty());
+			nextProbeTableFaceIdx += unsigned(projDescs.size());
+
+			// preparation step
+			sequence.CreateStep_CallFunction(
+				[this, workingCluster, projDescs=std::move(projDescs), firstFaceIndex, firstCluster=c==0](SequenceIterator& iterator) {
+
+					if (firstCluster)
+						this->_shadowProbes->Bind(*iterator._parsingContext);
+
+					auto rpi = this->_shadowProbes->Begin(*iterator._parsingContext, projDescs, firstFaceIndex);
+					if (auto cfg = this->_shadowProbes->GetSequencerConfig())		// returns null if still pending
+						iterator.ExecuteDrawables(workingCluster._parseId, *cfg);
+					rpi.End();
+				});
 		}
+
+		sequence.CreateStep_CallFunction(
+			[this, updatedProbesInDatabaseOrder=std::move(updatedProbesInDatabaseOrder)](SequenceIterator& iterator) {
+				this->_shadowProbes->UnbindAndBarrier(*iterator._parsingContext, updatedProbesInDatabaseOrder);
+			});
+
+		_probeTableFaceUsed = nextProbeTableFaceIdx;
+		assert(_probeTableFaceUsed <= _probeTableFaceReserved);
 	}
 
 	void DynamicShadowProbeScheduler::ClearPreparedShadows()

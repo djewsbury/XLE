@@ -412,7 +412,7 @@ namespace RenderCore { namespace LightingEngine
 		parsingContext.GetFragmentStitchingContext().DefineAttachment(s_semanticProbePrepare, _pimpl->_staticTable->GetDesc(), "dynamic-probe-prepare", Techniques::PreregisteredAttachment::State::Uninitialized);
 	}
 
-	void DynamicShadowProbes::UnbindAndBarrier(Techniques::ParsingContext& parsingContext)
+	void DynamicShadowProbes::UnbindAndBarrier(Techniques::ParsingContext& parsingContext, IteratorRange<const ShadowProbes::Probe*> updatedUniformState)
 	{
 		assert(_pimpl->_boundParsingContext == &parsingContext);
 		DEBUG_ONLY(_pimpl->_boundParsingContext = nullptr);
@@ -423,6 +423,9 @@ namespace RenderCore { namespace LightingEngine
 		parsingContext.GetFragmentStitchingContext().Undefine(s_semanticProbePrepare);
 
 		Metal::BarrierHelper{*Metal::DeviceContext::Get(parsingContext.GetThreadContext())}.Add(*_pimpl->_staticTable, BindFlag::DepthStencil, BindFlag::ShaderResource);
+
+		assert(updatedUniformState.size() <= 6*_pimpl->_config._maxProbes);
+		WriteStaticShadowProbeTable(parsingContext.GetThreadContext(), *_pimpl->_probeUniforms, updatedUniformState);
 	}
 
 	Techniques::RenderPassInstance DynamicShadowProbes::Begin(
