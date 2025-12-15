@@ -5,7 +5,6 @@
 #pragma once
 
 #include "ILightScene.h"
-#include "RenderCore/Techniques/Drawables.h"
 #include "StandardLightScene.h"		// for ILightSceneComponent
 #include "ShadowProbes.h"
 #include "ShadowPreparer.h"
@@ -33,7 +32,7 @@ namespace RenderCore { namespace LightingEngine
 	class Sequence;
 	class IProbeRenderingInstance;
 }}
-namespace RenderCore { class IThreadContext; class IDevice; }
+namespace RenderCore { class IThreadContext; class IDevice; class IResourceView; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
@@ -131,6 +130,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			std::vector<Cluster> _clusters;
 		};
 		virtual Metrics GetMetrics() const = 0;
+		virtual std::shared_ptr<IResourceView> GetCubeMapView(unsigned lightIdx) = 0;
 	};
 
 	// DynamicShadowProbeScheduler is like SemiStaticShadowProbeScheduler, but probes are updated every frame

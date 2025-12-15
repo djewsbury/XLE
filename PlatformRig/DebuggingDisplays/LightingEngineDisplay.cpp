@@ -7,6 +7,15 @@
 #include "../../RenderCore/LightingEngine/LightingDelegateUtil.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
+#include "../../RenderCore/Techniques/ManualDrawables.h"
+#include "../../RenderCore/Techniques/DescriptorSetAccelerator.h"
+#include "../../RenderCore/Techniques/PipelineAccelerator.h"
+#include "../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../RenderCore/Assets/ScaffoldCmdStream.h"
+#include "../../RenderCore/Assets/RawMaterial.h"
+#include "../../RenderCore/Assets/ShaderPatchCollection.h"
+#include "../../RenderCore/Assets/MaterialCompiler.h"
+#include "../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/ShapesRendering.h"
 #include "../../RenderOverlays/DrawText.h"
@@ -14,18 +23,82 @@
 #include "../../RenderOverlays/IOverlayContext.h"
 #include "../../RenderOverlays/OverlayPrimitives.h"
 #include "../../Assets/Marker.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../Math/Transformations.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/StreamUtils.h"
 #include "../../Utility/MemoryUtils.h"
+#include <chrono>
+#include <future>
+
+using namespace Utility::Literals;
 
 namespace PlatformRig { namespace Overlays
 {
+
+	class DescriptorSetConstructorHelper
+	{
+	public:
+		IteratorRange<RenderCore::Assets::ScaffoldCmdIterator> _matMachine;
+		std::shared_ptr<RenderCore::Assets::CompiledMaterialSet> _matScaffold;
+		std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> _patchCollection;
+		std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> _matDescSet;
+		RenderCore::Techniques::MatMachineDecompositionHelper _matMachineDecomposed;
+
+		DescriptorSetConstructorHelper(RenderCore::Assets::RawMaterial&& rawMat);
+		DescriptorSetConstructorHelper(RenderCore::Assets::RawMaterial&& rawMat, std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> shaderPatches, std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> matDescSet);
+	};
+
+	DescriptorSetConstructorHelper::DescriptorSetConstructorHelper(RenderCore::Assets::RawMaterial&& rawMat)
+	{
+		auto matScaffoldConstr = std::make_shared<RenderCore::Assets::MaterialSetConstruction>();
+		std::string baseMaterials[] { "main" };
+		matScaffoldConstr->SetBaseMaterials(baseMaterials);
+		matScaffoldConstr->AddOverride("main", std::move(rawMat));
+
+		std::promise<std::shared_ptr<RenderCore::Assets::CompiledMaterialSet>> promisedMatScaffold;
+		auto futureMatScaffold = promisedMatScaffold.get_future();
+		RenderCore::Assets::ConstructMaterialSet(std::move(promisedMatScaffold), std::move(matScaffoldConstr));
+
+		YieldToPool(futureMatScaffold);
+		_matScaffold = futureMatScaffold.get();
+
+		using namespace Utility::Literals;
+		_matMachine = _matScaffold->GetMaterialMachine("main"_h);
+
+		_matMachineDecomposed = RenderCore::Techniques::DecomposeMaterialMachine(_matMachine);
+		if (_matMachineDecomposed._shaderPatchCollection != ~0u)
+			_patchCollection = _matScaffold->GetShaderPatchCollection(_matMachineDecomposed._shaderPatchCollection);
+	}
+
+	DescriptorSetConstructorHelper::DescriptorSetConstructorHelper(RenderCore::Assets::RawMaterial&& rawMat, std::shared_ptr<RenderCore::Assets::ShaderPatchCollection> shaderPatches, std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout> matDescSet)
+	: _patchCollection(std::move(shaderPatches)), _matDescSet(std::move(matDescSet))
+	{
+		auto matScaffoldConstr = std::make_shared<RenderCore::Assets::MaterialSetConstruction>();
+		std::string baseMaterials[] { "main" };
+		matScaffoldConstr->SetBaseMaterials(baseMaterials);
+		matScaffoldConstr->AddOverride("main", std::move(rawMat));
+
+		std::promise<std::shared_ptr<RenderCore::Assets::CompiledMaterialSet>> promisedMatScaffold;
+		auto futureMatScaffold = promisedMatScaffold.get_future();
+		RenderCore::Assets::ConstructMaterialSet(std::move(promisedMatScaffold), std::move(matScaffoldConstr));
+
+		YieldToPool(futureMatScaffold);
+		_matScaffold = futureMatScaffold.get();
+
+		using namespace Utility::Literals;
+		_matMachine = _matScaffold->GetMaterialMachine("main"_h);
+
+		_matMachineDecomposed = RenderCore::Techniques::DecomposeMaterialMachine(_matMachine);
+	}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	class ShadowProbesDisplay : public RenderOverlays::DebuggingDisplay::IWidget
 	{
 	public:
-		ShadowProbesDisplay(std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique);
+		ShadowProbesDisplay(std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> overlayAccelerators, std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique);
 		~ShadowProbesDisplay();
 	protected:
 		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
@@ -33,6 +106,12 @@ namespace PlatformRig { namespace Overlays
 		
 		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _technique;
 		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
+
+		struct Resources
+		{
+			std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _depthMapVisPipeline;
+		};
+		std::shared_future<Resources> _futureResources;
 	};
 
 	static void DrawCircle(RenderOverlays::IOverlayContext& context, Float3 position, Float3 camRight, Float3 camUp, const RenderOverlays::ColorB col)
@@ -55,6 +134,8 @@ namespace PlatformRig { namespace Overlays
 		}
 		context.DrawTriangles(RenderOverlays::ProjectionMode::P3D, vertices, dimof(vertices), col);
 	}
+
+	static const RenderCore::UniformsStreamInterface s_usiCubeMapVis = RenderCore::UniformsStreamInterface{}.BindResourceView(0, "CubeMap"_h);
 
 	void    ShadowProbesDisplay::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
 	{
@@ -159,6 +240,24 @@ namespace PlatformRig { namespace Overlays
 					context.DrawLines(ProjectionMode::P3D, lines, dimof(lines), ColorB{215, 100, 100}, 3.f);  // rgba(215, 100, 100, 1)
 				}
 			}
+
+			if (_futureResources.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+				auto& resources = _futureResources.get();
+
+				auto rect = layout.AllocateFullWidth(700);
+				auto srv = metricsInterface->GetCubeMapView(0);
+				RenderCore::ResourceViewStream srvs { *srv };
+				auto vertices = context.GetImmediateDrawables().QueueDraw(
+					6, sizeof(Vertex_PT), resources._depthMapVisPipeline, resources._depthMapVisDescSet, &s_usiCubeMapVis, srvs).Cast<Vertex_PT*>();
+				vertices[0] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._topLeft[0]), Float2{0.f, 0.f} };
+				vertices[1] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[0]), Float2{1.f, 0.f} };
+				vertices[2] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[0]), Float2{0.f, 1.f} };
+
+				vertices[3] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[0]), Float2{0.f, 1.f} };
+				vertices[4] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[0]), Float2{1.f, 0.f} };
+				vertices[5] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._bottomRight[0]), Float2{1.f, 1.f} };
+			}
+			
 		} else {
 			DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "No metrics interface for dynamic shadow probes");
 		}
@@ -169,19 +268,41 @@ namespace PlatformRig { namespace Overlays
 		return ProcessInputResult::Passthrough;
 	}
 
-	ShadowProbesDisplay::ShadowProbesDisplay(std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique)
+	ShadowProbesDisplay::ShadowProbesDisplay(
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> overlayAccelerators,
+		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique)
 	: _technique(std::move(technique))
 	{
 		_headingFont = RenderOverlays::MakeFont("DosisExtraBold", 20);
+
+		std::promise<Resources> promisedResources;
+		_futureResources = promisedResources.get_future();
+
+		std::shared_ptr<AssetsNew::CompoundAssetUtil> util;
+		::AssetsNew::ContextAndIdentifier indexer { "xleres/RenderOverlays/DepthMapVis.hlsl" };
+		auto inputAssembly = RenderOverlays::Vertex_PT::s_inputElements2D;
+		auto topology = RenderCore::Topology::TriangleList;
+
+		auto futureMaterial = util->GetFuture<RenderCore::Assets::RawMaterial>("RawMaterial"_h, indexer);
+		auto futureShaderPatches = util->GetFuture<std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>>("ShaderPatchCollection"_h, indexer);
+		::Assets::WhenAll(std::move(futureMaterial), std::move(futureShaderPatches)).ThenConstructToPromise(
+			std::move(promisedResources),
+			[pa=std::move(overlayAccelerators), topology, ia=std::vector<RenderCore::MiniInputElementDesc>(inputAssembly.begin(), inputAssembly.end())](const auto& material, const auto& shaderPatches) {
+				Resources result;
+				RenderCore::Assets::RawMaterial rawMat = std::get<0>(std::move(material));
+				DescriptorSetConstructorHelper descSetHelper { std::move(rawMat) };
+				result._depthMapVisPipeline = pa->CreatePipelineAccelerator(shaderPatches, descSetHelper._matDescSet, std::move(descSetHelper._matMachineDecomposed._matSelectors), ia, topology, descSetHelper._matMachineDecomposed._stateSet);
+				return result;
+			});
 	}
 
 	ShadowProbesDisplay::~ShadowProbesDisplay()
 	{
 	}
 
-	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateShadowProbesDisplay(std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique)
+	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateShadowProbesDisplay(std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> overlayAccelerators, std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique)
 	{
-		return std::make_shared<ShadowProbesDisplay>(std::move(technique));
+		return std::make_shared<ShadowProbesDisplay>(std::move(overlayAccelerators), std::move(technique));
 	}
 
 }}

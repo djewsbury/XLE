@@ -6,11 +6,13 @@
 
 #include <memory>
 
-namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
-namespace RenderCore { namespace LightingEngine { class CompiledLightingTechnique; }}
+namespace RenderOverlays::DebuggingDisplay { class IWidget; }
+namespace RenderCore::LightingEngine { class CompiledLightingTechnique; }
+namespace RenderCore::Techniques { class IPipelineAcceleratorPool; }
 
 namespace PlatformRig { namespace Overlays
 {
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateShadowProbesDisplay(
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> overlayAccelerators,
 		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique>);
 }}
