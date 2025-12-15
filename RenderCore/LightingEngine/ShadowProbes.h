@@ -10,9 +10,10 @@
 #include "../Format.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/IteratorUtils.h"
+#include "RenderCore/Techniques/DrawableDelegates.h"
 #include <memory>
 
-namespace RenderCore { namespace Techniques { class ProjectionDesc; class IPipelineAcceleratorPool; }}
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class IPipelineAcceleratorPool; class SequencerConfig; }}
 namespace RenderCore { class IResourceView; class IThreadContext; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 namespace RenderCore { namespace LightingEngine
@@ -102,23 +103,30 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		Techniques::RenderPassInstance Begin(
 			Techniques::ParsingContext& parsingContext,
-			IteratorRange<const ShadowProbes::Probe*> probes,
+			IteratorRange<const Techniques::ProjectionDesc*> multiViewDesc,
 			unsigned firstFaceIndex);		// firstFaceIndex is the index into our table where we're going to write to
+
+		void Bind(Techniques::ParsingContext& parsingContext);
+		void UnbindAndBarrier(Techniques::ParsingContext& parsingContext);
 
 		IResourceView& GetDynamicProbesTable() const;
 		IResourceView& GetDynamicProbeUniforms() const;
 		unsigned GetFaceCount();
 
+		Techniques::SequencerConfig* GetSequencerConfig() const;
+
 		void CompleteInitialization(IThreadContext& threadContext);
 
 		DynamicShadowProbes(
-			std::shared_ptr<Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+			std::shared_ptr<Techniques::IPipelineAcceleratorPool>,
 			SharedTechniqueDelegateBox& sharedTechniqueDelegate,
 			const ShadowProbes::Configuration& config);
 
 		DynamicShadowProbes(
 			LightingEngineApparatus& apparatus,
 			const ShadowProbes::Configuration& config);
+
+		~DynamicShadowProbes();
 
 	private:
 		class Pimpl;

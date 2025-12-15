@@ -7,6 +7,7 @@
 #include "LightingEngineApparatus.h"
 #include "Math/XLEMath.h"
 #include "RenderCore/ResourceDesc.h"
+#include "RenderCore/Vulkan/Metal/DeviceContext.h"
 #include "SequenceIterator.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/ParsingContext.h"
@@ -25,6 +26,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
 #include "../../xleres/FileList.h"
+#include <future>
 
 using namespace Utility::Literals;
 
@@ -77,6 +79,9 @@ namespace RenderCore { namespace LightingEngine
 			BindImmediateData(0, "MultiViewProperties"_h);
 		}
 	};
+
+	static ::Assets::MarkerPtr<Techniques::SequencerConfig> CreateProbePrepareCfg(
+		std::shared_ptr<Techniques::IPipelineAcceleratorPool>, SharedTechniqueDelegateBox&, const ShadowProbes::Configuration&);
 
 	class ShadowProbes::Pimpl
 	{
@@ -351,37 +356,7 @@ namespace RenderCore { namespace LightingEngine
 			Throw(std::runtime_error("Missing 'Sequencer' descriptor set entry in sequencer pipeline file"));
 		_pimpl->_sequencerDescSetLayout = i->second;
 		_pimpl->_sequencerDescSetLayoutName = SEQUENCER_DS ":Sequencer";
-
-		{
-			// Create the pipeline accelerator configuration
-			AttachmentDesc attachmentDesc { _pimpl->_config._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource };
-			SubpassDesc spDesc;
-			spDesc.SetDepthStencil(0);
-			FrameBufferDesc fbDesc {
-				std::vector<AttachmentDesc>{attachmentDesc},
-				std::vector<SubpassDesc>{spDesc}};
-
-			// Coordinate space for cubemap rendering is defined by the API to make shader lookups simple
-			// However, if it's not the same as our typical conventions, we may need to flip the winding
-			// direction
-			bool flipCulling = Techniques::GetGeometricCoordinateSpaceForCubemaps() != GeometricCoordinateSpace::RightHanded;
-			std::promise<std::shared_ptr<Techniques::SequencerConfig>> futureSequencerConfig;
-			_pimpl->_probePrepareCfg = futureSequencerConfig.get_future();
-			::Assets::WhenAll(
-				sharedTechniqueDelegate.GetShadowGenTechniqueDelegate(
-					Techniques::ShadowGenType::VertexIdViewInstancing, 
-					_pimpl->_config._singleSidedBias, 
-					_pimpl->_config._doubleSidedBias, 
-					CullMode::Back, flipCulling ? FaceWinding::CW : FaceWinding::CCW))
-				.ThenConstructToPromise(
-					std::move(futureSequencerConfig),
-					[pipelineAccelerators=_pimpl->_pipelineAccelerators, fbDesc](auto techDel) {
-						auto cfg = pipelineAccelerators->CreateSequencerConfig("shadow-probe");
-						pipelineAccelerators->SetTechniqueDelegate(*cfg, techDel);
-						pipelineAccelerators->SetFrameBufferDesc(*cfg, fbDesc, 0);
-						return cfg;
-					});
-		}
+		_pimpl->_probePrepareCfg = CreateProbePrepareCfg(_pimpl->_pipelineAccelerators, sharedTechniqueDelegate, _pimpl->_config).ShareFuture();
 
 		_pimpl->_probes.resize(config._maxProbes, Probe{Identity<Float4x4>(), 1.f, 1024.f, 0.5f*gPI, TextureDesc::Dimensionality::Undefined});
 
@@ -411,37 +386,53 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<IResource> _staticTable, _probeUniforms;
-		std::shared_ptr<IResourceView> _staticTableSRV, _probeUniformsUAV;
+		std::shared_ptr<IResourceView> _staticTableSRV, _staticTableDS, _probeUniformsUAV;
 		ShadowProbes::Configuration _config;
 		std::shared_ptr<MultiViewUniformsDelegate> _multiViewUniformsDelegate;
-		std::shared_future<std::shared_ptr<Techniques::SequencerConfig>> _probePrepareCfg;
+		::Assets::MarkerPtr<Techniques::SequencerConfig> _futureProbePrepareCfg;
 		bool _pendingClearOfProbeUniforms = true;
 		bool _pendingStaticTableInit = true;
+		DEBUG_ONLY(Techniques::ParsingContext* _boundParsingContext = nullptr);
 	};
+
+	void DynamicShadowProbes::Bind(Techniques::ParsingContext& parsingContext)
+	{
+		assert(_pimpl->_boundParsingContext == nullptr);
+		DEBUG_ONLY(_pimpl->_boundParsingContext = &parsingContext);
+		parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
+		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
+		parsingContext.GetAttachmentReservation().Bind(s_semanticProbePrepare, _pimpl->_staticTable, BindFlag::ShaderResource);
+	}
+
+	void DynamicShadowProbes::UnbindAndBarrier(Techniques::ParsingContext& parsingContext)
+	{
+		assert(_pimpl->_boundParsingContext == &parsingContext);
+		DEBUG_ONLY(_pimpl->_boundParsingContext = nullptr);
+
+		parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*_pimpl->_multiViewUniformsDelegate);
+		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
+		parsingContext.GetAttachmentReservation().Unbind(*_pimpl->_staticTable);
+
+		Metal::BarrierHelper{*Metal::DeviceContext::Get(parsingContext.GetThreadContext())}.Add(*_pimpl->_staticTable, BindFlag::DepthStencil, BindFlag::ShaderResource);
+	}
 
 	Techniques::RenderPassInstance DynamicShadowProbes::Begin(
 		Techniques::ParsingContext& parsingContext,
-		IteratorRange<const ShadowProbes::Probe*> probes,
+		IteratorRange<const Techniques::ProjectionDesc*> multiViewDesc,
 		unsigned firstFaceIndex)
 	{
-		std::vector<Techniques::ProjectionDesc> multiViewDesc;
-		multiViewDesc.reserve(probes.size()*6);
-		WriteProjectionDescs(multiViewDesc, probes);
-		assert(!multiViewDesc.empty());
-
+		assert(_pimpl->_boundParsingContext == &parsingContext);
 		VLA_UNSAFE_FORCE(Float4x4, worldToProjections, multiViewDesc.size());
 		for (unsigned c=0; c<multiViewDesc.size(); ++c) worldToProjections[c] = multiViewDesc[c]._worldToProjection;
 
 		_pimpl->_multiViewUniformsDelegate->SetWorldToProjections({worldToProjections, worldToProjections+multiViewDesc.size()});
-		parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);		// todo -- this needs to be unbound after we've finished
-		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 
 		Techniques::FrameBufferDescFragment fragment;
 		SubpassDesc sp;
 		TextureViewDesc viewDesc;
 		viewDesc._arrayLayerRange = {firstFaceIndex, (unsigned)multiViewDesc.size()};
 		sp.SetDepthStencil(fragment.DefineAttachment(s_semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
-		sp.SetName("static-shadow-prepare");
+		sp.SetName("dynamic-shadow-prepare");
 		fragment.AddSubpass(std::move(sp));
 
 		Techniques::RenderPassBeginDesc beginInfo;
@@ -458,6 +449,11 @@ namespace RenderCore { namespace LightingEngine
 	{
 		assert(_pimpl->_probeUniformsUAV);
 		return *_pimpl->_probeUniformsUAV;
+	}
+
+	Techniques::SequencerConfig* DynamicShadowProbes::GetSequencerConfig() const
+	{
+		return _pimpl->_futureProbePrepareCfg.TryActualize2().get();
 	}
 
 	unsigned DynamicShadowProbes::GetFaceCount()
@@ -492,48 +488,28 @@ namespace RenderCore { namespace LightingEngine
 		_pimpl->_config = config;
 		_pimpl->_pipelineAccelerators = std::move(pipelineAccelerators);
 		_pimpl->_multiViewUniformsDelegate = std::make_shared<MultiViewUniformsDelegate>();
-
-		{
-			// Create the pipeline accelerator configuration
-			AttachmentDesc attachmentDesc { _pimpl->_config._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource };
-			SubpassDesc spDesc;
-			spDesc.SetDepthStencil(0);
-			FrameBufferDesc fbDesc {
-				std::vector<AttachmentDesc>{attachmentDesc},
-				std::vector<SubpassDesc>{spDesc}};
-
-			// Coordinate space for cubemap rendering is defined by the API to make shader lookups simple
-			// However, if it's not the same as our typical conventions, we may need to flip the winding
-			// direction
-			bool flipCulling = Techniques::GetGeometricCoordinateSpaceForCubemaps() != GeometricCoordinateSpace::RightHanded;
-			std::promise<std::shared_ptr<Techniques::SequencerConfig>> futureSequencerConfig;
-			_pimpl->_probePrepareCfg = futureSequencerConfig.get_future();
-			::Assets::WhenAll(
-				sharedTechniqueDelegate.GetShadowGenTechniqueDelegate(
-					Techniques::ShadowGenType::VertexIdViewInstancing, 
-					_pimpl->_config._singleSidedBias, 
-					_pimpl->_config._doubleSidedBias, 
-					CullMode::Back, flipCulling ? FaceWinding::CW : FaceWinding::CCW))
-				.ThenConstructToPromise(
-					std::move(futureSequencerConfig),
-					[pipelineAccelerators=_pimpl->_pipelineAccelerators, fbDesc](auto techDel) {
-						auto cfg = pipelineAccelerators->CreateSequencerConfig("shadow-probe");
-						pipelineAccelerators->SetTechniqueDelegate(*cfg, techDel);
-						pipelineAccelerators->SetFrameBufferDesc(*cfg, fbDesc, 0);
-						return cfg;
-					});
-		}
+		_pimpl->_futureProbePrepareCfg = CreateProbePrepareCfg(_pimpl->_pipelineAccelerators, sharedTechniqueDelegate, _pimpl->_config);
 
 		auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._faceDims, _pimpl->_config._faceDims, _pimpl->_config._format);
 		staticDatabaseDesc._arrayCount = 6*_pimpl->_config._maxProbes;
 		auto device = _pimpl->_pipelineAccelerators->GetDevice().get();
 		_pimpl->_staticTable = device->CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::DepthStencil | BindFlag::TransferDst, staticDatabaseDesc), "dynamic-probe-prepare");
 		_pimpl->_staticTableSRV = _pimpl->_staticTable->CreateTextureView(BindFlag::ShaderResource);
+		_pimpl->_staticTableDS = _pimpl->_staticTable->CreateTextureView(BindFlag::DepthStencil);
 		_pimpl->_pendingStaticTableInit = true;
 
 		_pimpl->_probeUniforms = device->CreateResource(
 			CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_ShadowProbeDesc)*staticDatabaseDesc._arrayCount, sizeof(CB_ShadowProbeDesc))), "dynamic-shadow-probe-list");
 		_pimpl->_probeUniformsUAV = _pimpl->_probeUniforms->CreateBufferView(BindFlag::UnorderedAccess);
+
+		// not the most ideal/thread safe pattern for updating the 
+		// _pimpl->_onFrameBarrierSignalDelegate = Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Bind([this]() {
+		// 	if (this->_pimpl->_futureProbePrepareCfg.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+		// 		this->_pimpl->_probePrepareCfg = this->_pimpl->_futureProbePrepareCfg.get();
+		// 		Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Unbind(this->_pimpl->_onFrameBarrierSignalDelegate);
+		// 		this->_pimpl->_onFrameBarrierSignalDelegate = ~0u;
+		// 	}
+		// });
 	}
 
 	DynamicShadowProbes::DynamicShadowProbes(
@@ -541,6 +517,12 @@ namespace RenderCore { namespace LightingEngine
 		const ShadowProbes::Configuration& config)
 	: DynamicShadowProbes(apparatus._pipelineAccelerators, *apparatus._sharedDelegates, config)
 	{}
+
+	DynamicShadowProbes::~DynamicShadowProbes()
+	{
+		// if (_pimpl->_onFrameBarrierSignalDelegate != ~0u)
+		// 	Techniques::Services::GetSubFrameEvents()._onFrameBarrier.Unbind(_pimpl->_onFrameBarrierSignalDelegate)
+	}
 
 	bool operator==(const ShadowProbes::Configuration& lhs, const ShadowProbes::Configuration& rhs)
 	{
@@ -554,6 +536,38 @@ namespace RenderCore { namespace LightingEngine
 			&& lhs._doubleSidedBias._depthBiasClamp == rhs._doubleSidedBias._depthBiasClamp
 			&& lhs._doubleSidedBias._depthBias == rhs._doubleSidedBias._depthBias
 			;
+	}
+
+	static ::Assets::MarkerPtr<Techniques::SequencerConfig> CreateProbePrepareCfg(std::shared_ptr<Techniques::IPipelineAcceleratorPool> pa, SharedTechniqueDelegateBox& sharedTechniqueDelegate, const ShadowProbes::Configuration& config)
+	{
+		// Create the pipeline accelerator configuration
+		AttachmentDesc attachmentDesc { config._format, 0, LoadStore::Clear, LoadStore::Retain, 0, BindFlag::ShaderResource };
+		SubpassDesc spDesc;
+		spDesc.SetDepthStencil(0);
+		FrameBufferDesc fbDesc {
+			std::vector<AttachmentDesc>{attachmentDesc},
+			std::vector<SubpassDesc>{spDesc}};
+
+		// Coordinate space for cubemap rendering is defined by the API to make shader lookups simple
+		// However, if it's not the same as our typical conventions, we may need to flip the winding
+		// direction
+		bool flipCulling = Techniques::GetGeometricCoordinateSpaceForCubemaps() != GeometricCoordinateSpace::RightHanded;
+		::Assets::MarkerPtr<Techniques::SequencerConfig> result;
+		::Assets::WhenAll(
+			sharedTechniqueDelegate.GetShadowGenTechniqueDelegate(
+				Techniques::ShadowGenType::VertexIdViewInstancing,
+				config._singleSidedBias,
+				config._doubleSidedBias,
+				CullMode::Back, flipCulling ? FaceWinding::CW : FaceWinding::CCW))
+			.ThenConstructToPromise(
+				result.AdoptPromise(),
+				[pa=std::move(pa), fbDesc](auto techDel) {
+					auto cfg = pa->CreateSequencerConfig("shadow-probe");
+					pa->SetTechniqueDelegate(*cfg, techDel);
+					pa->SetFrameBufferDesc(*cfg, fbDesc, 0);
+					return cfg;
+				});
+		return result;
 	}
 
 	ISemiStaticShadowProbeScheduler::~ISemiStaticShadowProbeScheduler() {}

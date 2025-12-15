@@ -81,13 +81,8 @@ namespace RenderCore { namespace LightingEngine
 			RegisterComponent(_dynamicShadowProbesManager);
 		}
 
-		bool atLeastOneShadowPreparer = false;
-		for (auto i:_LightOperatorsMapping._operatorToShadowPreparerId) atLeastOneShadowPreparer |= i != ~0u;
-
-		if (atLeastOneShadowPreparer) {
-			_shadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(
-				_pipelineAccelerators->GetDevice(), _shadowPreparers,
-				_LightOperatorsMapping._operatorToShadowPreparerId);
+		if (_shadowPreparers) {
+			_shadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(_shadowPreparers);
 			_shadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
 			RegisterComponent(_shadowScheduler);
 		}
@@ -380,9 +375,13 @@ namespace RenderCore { namespace LightingEngine
 		};
 		auto helper = std::make_shared<Helper>();
 
-		helper->_shadowPreparationOperatorsFuture = CreatePriorityShadowSchedulerUtil(
-			lightOperatorsMapping._shadowPreparers,
-			constructionServices._pipelineAccelerators, constructionServices._techDelBox);
+		bool atLeastOneShadowPreparer = false;
+		for (auto i:_LightOperatorsMapping._operatorToShadowPreparerId) atLeastOneShadowPreparer |= i != ~0u;
+
+		if (atLeastOneShadowPreparer)
+			helper->_shadowPreparationOperatorsFuture = CreatePriorityShadowSchedulerUtil(
+				lightOperatorsMapping._shadowPreparers,
+				constructionServices._pipelineAccelerators, constructionServices._techDelBox);
 
 		helper->_lightTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
 		helper->_glossLUTFuture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(GLOSS_LUT_TEXTURE);

@@ -64,6 +64,7 @@ namespace Assets
 	public:
 		const Type& Actualize() const;
 		const Type* TryActualize() const;
+		const Type& TryActualize2() const;
 		
         std::optional<AssetState>   StallWhilePending(std::chrono::microseconds timeout = std::chrono::microseconds(0)) const override;
 		std::optional<AssetState>   StallWhilePendingUntil(std::chrono::steady_clock::time_point timeoutTime) const;
@@ -239,6 +240,12 @@ namespace Assets
 		const Type* Marker<Type>::TryActualize() const
 	{
 		return (_state == AssetState::Ready) ? &_actualized : nullptr;
+	}
+
+	template<typename Type>
+		const Type& Marker<Type>::TryActualize2() const
+	{
+		return _actualized;
 	}
 
 	template<typename Type>
