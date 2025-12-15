@@ -46,11 +46,11 @@ namespace PlatformRig { namespace Overlays
 			float t2 = (q+1) / float(segmentCount-1) * 2.f * gPI;
 			float s, c, s2, c2; std::tie(s, c) = XlSinCos(t); std::tie(s2, c2) = XlSinCos(t2);
 			vertices[q*6+0] = position + outerRadius * s * camUp + outerRadius * c * camRight;
-			vertices[q*6+1] = position + innerRadius * s * camUp + innerRadius * c * camRight;
-			vertices[q*6+2] = position + outerRadius * s2 * camUp + outerRadius * c2 * camRight;
+			vertices[q*6+1] = position + outerRadius * s2 * camUp + outerRadius * c2 * camRight;
+			vertices[q*6+2] = position + innerRadius * s * camUp + innerRadius * c * camRight;
 
-			vertices[q*6+3] = position + outerRadius * s2 * camUp + outerRadius * c2 * camRight;
-			vertices[q*6+4] = position + innerRadius * s * camUp + innerRadius * c * camRight;
+			vertices[q*6+3] = position + innerRadius * s * camUp + innerRadius * c * camRight;
+			vertices[q*6+4] = position + outerRadius * s2 * camUp + outerRadius * c2 * camRight;
 			vertices[q*6+5] = position + innerRadius * s2 * camUp + innerRadius * c2 * camRight;
 		}
 		context.DrawTriangles(RenderOverlays::ProjectionMode::P3D, vertices, dimof(vertices), col);
