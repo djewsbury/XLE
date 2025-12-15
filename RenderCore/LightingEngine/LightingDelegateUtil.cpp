@@ -60,6 +60,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Sequence& sequence,
 		ILightBase& proj,
 		const SequencerAddendums& addenums,
+		ShadowProjectionMode shadowProjectionMode,
 		Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::IAttachmentPool& shadowGenAttachmentPool,
 		ViewPool& shadowGenViewPool);
@@ -106,7 +107,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					idx += offset;
 
 					comp._preparedResult[idx] = SetupShadowPrepare(
-						iterator, sequence, *comp._projections[idx], comp._addendums[idx],
+						iterator, sequence, *comp._projections[idx], comp._addendums[idx], comp._projectionMode,
 						*_shadowGenFrameBufferPool, *_shadowGenAttachmentPool, _shadowGenViewPool);
 				}
 				offset += 64;
@@ -157,6 +158,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_sceneSets[setIdx]._activeSet = true;
 		_sceneSets[setIdx]._preparers = _shadowPreparers;
 		_sceneSets[setIdx]._preparerId = _operatorToPreparerIdMapping[opId];
+		_sceneSets[setIdx]._projectionMode = _shadowPreparers->_preparers[_sceneSets[setIdx]._preparerId]._desc._projectionMode;
 		return true;
 	}
 
@@ -209,13 +211,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	constexpr auto s_positionalLightSourceInterface = TypeHashCode<IPositionalLightSource>;
 	constexpr auto s_orthoShadowProjectionsInterface = TypeHashCode<IOrthoShadowProjections>;
+	constexpr auto s_arbitraryShadowProjectionsInterface = TypeHashCode<IArbitraryShadowProjections>;
 	constexpr auto s_finiteLightSourceInterface = TypeHashCode<IFiniteLightSource>;
 
 	static SequenceParseId SetupShadowParse(
 		SequenceIterator& iterator,
 		Sequence& sequence,
 		Internal::ILightBase& proj,
-		const SequencerAddendums& addendums)
+		const SequencerAddendums& addendums, ShadowProjectionMode shadowProjectionMode)
 	{
 		std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> volumeTester;
 
@@ -228,6 +231,26 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			assert(orthoShadowProjections);
 			volumeTester = ((Internal::IShadowProjectionDriver*)addendums._driver->QueryInterface(TypeHashCode<Internal::IShadowProjectionDriver>))->UpdateProjections(
 				*iterator._parsingContext, *positionalLight, *orthoShadowProjections);
+		} else {
+			// we'll attempt to attach the projections to the list
+			// todo -- only implemented for specific case of sphere light & cubemap shadows
+			assert(shadowProjectionMode == ShadowProjectionMode::ArbitraryCubeMap);
+			auto* positionalLight = (IPositionalLightSource*)addendums._srcLight->QueryInterface(s_positionalLightSourceInterface);
+			assert(positionalLight);
+			auto* shadowProjections = (IArbitraryShadowProjections*)proj.QueryInterface(s_arbitraryShadowProjectionsInterface);
+			assert(shadowProjections);
+			Float4x4 worldToCamera[6];
+			Float4x4 cameraToProjection[6];
+			auto lightPosition = ExtractTranslation(positionalLight->GetLocalToWorld()); float lightNearRadius = ExtractUniformScaleFast(AsFloat3x4(positionalLight->GetLocalToWorld()));
+			float lightFarRadius = 8.f;
+			if (auto* cutoff = (IFiniteLightSource*)addendums._srcLight->QueryInterface(s_finiteLightSourceInterface))
+				lightFarRadius = cutoff->GetCutoffRange();
+			for (unsigned c=0; c<6; ++c) {
+				auto projDesc = Techniques::BuildCubemapProjectionDesc(c, lightPosition, lightNearRadius, lightFarRadius);
+				worldToCamera[c] = InvertOrthonormalTransform(projDesc._cameraToWorld);
+				cameraToProjection[c] = projDesc._cameraToProjection;
+			}
+			shadowProjections->SetArbitrarySubProjections(worldToCamera, cameraToProjection);
 		}
 
 		// todo - cull out any offscreen projections
@@ -239,11 +262,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Sequence& sequence,
 		ILightBase& proj,
 		const SequencerAddendums& addenums,
+		ShadowProjectionMode shadowProjectionMode,
 		Techniques::IFrameBufferPool& shadowGenFrameBufferPool,
 		Techniques::IAttachmentPool& shadowGenAttachmentPool,
 		ViewPool& shadowGenViewPool)
 	{
-		auto parseId = SetupShadowParse(iterator, sequence, proj, addenums);
+		auto parseId = SetupShadowParse(iterator, sequence, proj, addenums, shadowProjectionMode);
 
 		auto& preparer = *addenums._preparer;
 		auto res = preparer.CreatePreparedShadowResult();

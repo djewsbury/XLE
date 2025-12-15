@@ -336,6 +336,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		bool _activeSet = false;
 		std::shared_ptr<PriorityShadowSchedulerUtil> _preparers;
 		unsigned _preparerId = ~0u;
+		ShadowProjectionMode _projectionMode = ShadowProjectionMode::Arbitrary;
 
 		void RegisterLight(unsigned index, ILightBase& light);
 		void DeregisterLight(unsigned index);

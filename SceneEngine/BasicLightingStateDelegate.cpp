@@ -1017,6 +1017,12 @@ namespace SceneEngine
                 return true;
             }
             break;
+        case "NormalProjectionCount"_h:
+            if (auto normalProjectionCount = ConvertOrCast<unsigned>(data, type)) {
+                desc._normalProjCount = normalProjectionCount.value();
+                return true;
+            }
+            break;
         }
 
         return true;

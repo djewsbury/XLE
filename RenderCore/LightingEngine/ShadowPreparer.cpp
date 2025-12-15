@@ -500,6 +500,7 @@ namespace RenderCore { namespace LightingEngine
 		result->_projections._useNearProj = desc._enableNearCascade;
 		result->_projections._operatorNormalProjCount = desc._normalProjCount;
 		result->_multiViewInstancingPath = desc._multiViewInstancingPath;
+		assert(desc._projectionMode != ShadowProjectionMode::ArbitraryCubeMap || desc._normalProjCount == 6);		// set _normalProjCount to 6 for cube maps
 		return result;
 	}
 
