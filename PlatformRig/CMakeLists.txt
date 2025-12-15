@@ -30,6 +30,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DebuggingDisplays/PlacementsDisplay.cpp
         #DebuggingDisplays/TestDisplays.cpp
         DebuggingDisplays/InvalidAssetDisplay.cpp
+        DebuggingDisplays/LightingEngineDisplay.cpp
         DebuggingDisplays/QuickMetricsDisplay.cpp
         DebuggingDisplays/PipelineAcceleratorDisplay.cpp
         DebuggingDisplays/ModelCacheDisplay.cpp

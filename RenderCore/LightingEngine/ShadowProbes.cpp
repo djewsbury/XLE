@@ -285,7 +285,7 @@ namespace RenderCore { namespace LightingEngine
 		}
 	};
 
-	unsigned ShadowProbes::GetReservedProbeCount()
+	unsigned ShadowProbes::GetReservedProbeCount() const
 	{
 		return (unsigned)_pimpl->_probes.size();
 	}
@@ -316,6 +316,11 @@ namespace RenderCore { namespace LightingEngine
 	{
 		assert(_pimpl->_probeUniformsUAV);
 		return *_pimpl->_probeUniformsUAV;
+	}
+
+	const ShadowProbes::Configuration& ShadowProbes::GetConfiguration() const
+	{
+		return _pimpl->_config;
 	}
 
 	bool ShadowProbes::IsReady() const
@@ -457,9 +462,14 @@ namespace RenderCore { namespace LightingEngine
 		return _pimpl->_futureProbePrepareCfg.TryActualize2().get();
 	}
 
-	unsigned DynamicShadowProbes::GetFaceCount()
+	unsigned DynamicShadowProbes::GetReservedFaceCount() const
 	{
 		return (unsigned)_pimpl->_config._maxProbes*6;
+	}
+
+	const ShadowProbes::Configuration& DynamicShadowProbes::GetConfiguration() const
+	{
+		return _pimpl->_config;
 	}
 
 	void DynamicShadowProbes::CompleteInitialization(IThreadContext& threadContext)

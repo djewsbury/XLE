@@ -78,7 +78,8 @@ namespace RenderCore { namespace LightingEngine
 		IResourceView& GetStaticProbeTable() const;
 		IResourceView& GetShadowProbeUniforms() const;
 		bool IsReady() const;
-		unsigned GetReservedProbeCount();
+		unsigned GetReservedProbeCount() const;
+		const Configuration& GetConfiguration() const;
 
 		void CompleteInitialization(IThreadContext& threadContext);
 
@@ -111,7 +112,8 @@ namespace RenderCore { namespace LightingEngine
 
 		IResourceView& GetDynamicProbeTable() const;
 		IResourceView& GetDynamicProbeUniforms() const;
-		unsigned GetFaceCount();
+		unsigned GetReservedFaceCount() const;
+		const ShadowProbes::Configuration& GetConfiguration() const;
 
 		Techniques::SequencerConfig* GetSequencerConfig() const;
 

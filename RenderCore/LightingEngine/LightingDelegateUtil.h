@@ -106,11 +106,38 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
+	class IDynamicShadowProbeSchedulerMetrics
+	{
+	public:
+		struct Metrics
+		{
+			size_t _probeTableSizeBytes = 0;
+			unsigned _probeTableFaceUsed = 0, _probeTableFaceReserved = 0;
+			
+			struct Light
+			{
+				Float3 _position; float _radius;
+				TextureDesc::Dimensionality _dimensionality;
+				unsigned _attachedProbeTableIndex;
+				int _fading;
+				unsigned _clusterIndex;
+			};
+			std::vector<Light> _activeLights;
+
+			struct Cluster
+			{
+				Float3 _mainAxis;
+			};
+			std::vector<Cluster> _clusters;
+		};
+		virtual Metrics GetMetrics() const = 0;
+	};
+
 	// DynamicShadowProbeScheduler is like SemiStaticShadowProbeScheduler, but probes are updated every frame
 	// Probe update is handled synchronously with the main scene render. Lights can be shadowed by both
 	// SemiStaticShadowProbeScheduler and DynamicShadowProbeScheduler, allowing animated and static shadowing
 	// geometry to be handled separately
-	class DynamicShadowProbeScheduler : public ILightSceneComponent
+	class DynamicShadowProbeScheduler : public ILightSceneComponent, public IDynamicShadowProbeSchedulerMetrics
 	{
 	public:
 		void SetNearRadius(float nearRadius);
@@ -128,6 +155,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			int _fading = 0;
 		};
 		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
+
+		Metrics GetMetrics() const override;
 
 		DynamicShadowProbeScheduler(
 			std::shared_ptr<DynamicShadowProbes> shadowProbes,
@@ -147,7 +176,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<std::pair<LightIndex, ActiveLight>> _activeLights[2];
 		float _defaultNearRadius = 1.f;
 		unsigned _fadeTransitionInFrames = 16;
-		unsigned _probeTableFaceCount = 0;
+		unsigned _probeTableFaceUsed = 0, _probeTableFaceReserved = 0;
 		unsigned _clusterCount = 0;
 		std::vector<Float3> _clusterBestAxes;
 

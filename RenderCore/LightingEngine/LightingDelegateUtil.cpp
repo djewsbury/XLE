@@ -755,7 +755,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 		}
 
-		auto maxLights = _probeTableFaceCount / 6;
+		auto maxLights = _probeTableFaceReserved / 6;
 		if (lightsAndDistance.size() > maxLights) {
 			// find the smallest N items and then restore sort order
 			std::nth_element(lightsAndDistance.begin(), lightsAndDistance.begin()+maxLights, lightsAndDistance.end(), CompareSecond2{});
@@ -777,7 +777,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		{
 			auto newDistancesIterator = lightsAndDistance.begin();
-			assert(_probeTableFaceCount <= 64u*6);	// has to be small, because we're going to use a bitfield in a uint64_t
+			assert(_probeTableFaceReserved <= 64u*6);	// has to be small, because we're going to use a bitfield in a uint64_t
 			while (newDistancesIterator != lightsAndDistance.end()) {
 
 				if (currentStateIterator != _activeLights[0].end() && currentStateIterator->first < newDistancesIterator->first) {
@@ -890,7 +890,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		auto& activeLights = _activeLights[1];
 
-		const auto maxLights = _probeTableFaceCount / 6;
+		const auto maxLights = _probeTableFaceReserved / 6;
 		const auto baseClusterCount = (maxLights + s_maxProbesPerCluster - 1) / s_maxProbesPerCluster;
 		auto activeProbeCount = std::accumulate(b2e(activeLights), 0u, [](unsigned lhs, const auto& q) { return lhs+(unsigned)q.second._active; });
 
@@ -996,7 +996,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				// scene parse
 				WorkingCluster workingCluster;
 				std::vector<Techniques::ProjectionDesc> projDescs;		// subframe heap candidate
-				projDescs.reserve(_probeTableFaceCount);
+				projDescs.reserve(_probeTableFaceReserved);
 				unsigned firstFaceIndex = nextProbeTableFaceIdx;
 				{
 					// Orient the cluster bounding box such that the axis between the two most distant lights is one of the cardinal axes
@@ -1044,7 +1044,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					});
 			}
 
-			assert(nextProbeTableFaceIdx <= _probeTableFaceCount);
+			_probeTableFaceUsed = nextProbeTableFaceIdx;
+			assert(_probeTableFaceUsed <= _probeTableFaceReserved);
 		}
 	}
 
@@ -1101,13 +1102,45 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		const std::vector<bool>& maskedLightOperators)
 	: _shadowProbes(std::move(shadowProbes)), _maskedLightOperators(maskedLightOperators)
 	{
-		_probeTableFaceCount = _shadowProbes->GetFaceCount();
-		assert(_probeTableFaceCount <= 64*6);
-		_activeLights[0].reserve(_probeTableFaceCount*2);
-		_activeLights[1].reserve(_probeTableFaceCount*2);		// allow some overfill during UpdateActiveLights
+		_probeTableFaceReserved = _shadowProbes->GetReservedFaceCount();
+		_probeTableFaceUsed = 0;
+		assert(_probeTableFaceReserved <= 64*6);
+		_activeLights[0].reserve(_probeTableFaceReserved*2);
+		_activeLights[1].reserve(_probeTableFaceReserved*2);		// allow some overfill during UpdateActiveLights
 	}
 
 	DynamicShadowProbeScheduler::~DynamicShadowProbeScheduler() {}
+
+	auto DynamicShadowProbeScheduler::GetMetrics() const -> Metrics
+	{
+		Metrics metrics;
+		metrics._probeTableFaceUsed = _probeTableFaceUsed;
+		metrics._probeTableFaceReserved = _probeTableFaceReserved;
+		const auto& cfg = _shadowProbes->GetConfiguration(); 
+		metrics._probeTableSizeBytes = (cfg._faceDims * cfg._faceDims * BitsPerPixel(cfg._format) / 8) * cfg._maxProbes * 6;
+
+		auto LookupProbeEntry = [this](LightIndex lightIndex) -> const SharedProbeSceneSet::ProbeEntry& { return this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
+
+		metrics._activeLights.reserve(_activeLights[0].size());
+		for (auto& a:_activeLights[0]) {
+			if (!a.second._active) continue;
+			assert(a.second._clusterIndex < _clusterCount);
+			Metrics::Light l;
+			auto& probeEntry = LookupProbeEntry(a.first);
+			l._position = ExtractTranslation(probeEntry._probeDesc._objectToWorld);
+			l._radius = probeEntry._probeDesc._farRadius;
+			l._dimensionality = probeEntry._probeDesc._dimensionality;
+			l._attachedProbeTableIndex = probeEntry._attachedProbeTableIndex;
+			l._fading = a.second._fading;
+			l._clusterIndex = a.second._clusterIndex;
+			metrics._activeLights.push_back(l);
+		}
+
+		for (auto& c:_clusterBestAxes)
+			metrics._clusters.push_back(Metrics::Cluster{c});
+
+		return metrics;
+	}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
