@@ -232,7 +232,7 @@ namespace UnitTests
 
 			if (specularLight) {
 				auto technique = _futureLightingTechnique.get();		// stall
-				auto& lightScene = LightingEngine::GetLightScene(*technique);
+				auto& lightScene = *LightingEngine::TryGetLightScene(*technique);
 				auto lightId = lightScene.CreateLightSource(0);
 				if (auto* positional = lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId))
 					positional->SetLocalToWorld(AsFloat4x4(Float3{1.0f, 1.0f, -1.0f}));

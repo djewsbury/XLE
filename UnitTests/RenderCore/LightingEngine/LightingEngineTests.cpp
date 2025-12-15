@@ -4,6 +4,7 @@
 
 #include "LightingEngineTestHelper.h"
 #include "../Metal/MetalTestHelper.h"
+#include "../../../SceneEngine/IScene.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../../RenderCore/LightingEngine/ILightScene.h"
@@ -14,17 +15,11 @@
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../../RenderCore/Techniques/CommonBindings.h"
-#include "../../../RenderCore/Techniques/Techniques.h"
 #include "../../../RenderCore/Techniques/RenderPass.h"
-#include "../../../RenderCore/Techniques/PipelineCollection.h"
-#include "../../../RenderCore/Techniques/CommonResources.h"
-#include "../../../RenderCore/Assets/PredefinedPipelineLayout.h"
 #include "../../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../../Math/Transformations.h"
 #include "../../../Math/ProjectionMath.h"
-#include "../../../Assets/IAsyncMarker.h"
 #include "../../../Assets/Assets.h"
-#include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
 #include "catch2/catch_approx.hpp"
 
@@ -32,10 +27,10 @@ using namespace Catch::literals;
 using namespace std::chrono_literals;
 namespace UnitTests
 {
-	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene)
+	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightOperatorId opId)
 	{
 		using namespace RenderCore::LightingEngine;
-		auto lightId = lightScene.CreateLightSource(0);
+		auto lightId = lightScene.CreateLightSource(opId);
 
 		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightId);
 		REQUIRE(positional);
@@ -55,8 +50,6 @@ namespace UnitTests
 	static void CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
 	{
 		using namespace RenderCore::LightingEngine;
-		lightScene.SetShadowOperator(lightSourceId, 0);
-
 		auto* projections = lightScene.TryGetLightSourceInterface<IOrthoShadowProjections>(lightSourceId);
 		REQUIRE(projections);
 
@@ -78,17 +71,15 @@ namespace UnitTests
 		preparer->SetDesc(desc);
 	}
 
-	static void ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene)
+	static void ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightOperatorId opId)
 	{
-		auto srcId = CreateTestLight(lightScene);
+		auto srcId = CreateTestLight(lightScene, opId);
 		CreateTestShadowProjection(lightScene, srcId);
 	}
 
 	static void CreateSphereShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId)
 	{
 		using namespace RenderCore::LightingEngine;
-		lightScene.SetShadowOperator(lightSourceId, 0);
-		
 		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightSourceId);
 		REQUIRE(positional);
 
@@ -168,9 +159,6 @@ namespace UnitTests
 
 		testHelper->BeginFrameCapture();
 
-		LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
-			LightingEngine::PositionalLightOperatorDesc{}
-		};
 		LightingEngine::ShadowOperatorDesc shadowOp;
 		shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
 
@@ -182,27 +170,34 @@ namespace UnitTests
 		shadowOp._singleSidedBias._slopeScaledBias = 0.5f;
 		(void)ratio0;
 
-		LightingEngine::ShadowOperatorDesc shadowGenerator[] {
-			shadowOp
-		};
+		SceneEngine::MergedLightingEngineCfg mergedLightingCfg;
+		auto lightOpId = mergedLightingCfg.Register(LightingEngine::PositionalLightOperatorDesc{}, shadowOp);
+		assert(lightOpId == 0);
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		SECTION("Forward lighting")
 		{
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 
+			std::promise<std::shared_ptr<LightingEngine::ILightScene>> promisedLightScene;
+			std::shared_future<std::shared_ptr<LightingEngine::ILightScene>> futureLightScene = promisedLightScene.get_future();
+			LightingEngine::CreateForwardPlusLightScene(
+				std::move(promisedLightScene),
+				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
+				mergedLightingCfg.GetChainedGlobalOperators());
+
 			std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
 			auto futureLightingTechnique = promisedLightingTechnique.get_future();
 			LightingEngine::CreateForwardLightingTechnique(
 				std::move(promisedLightingTechnique),
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator),
-				nullptr,
+				mergedLightingCfg.GetChainedGlobalOperators(),
+				futureLightScene,
 				stitchingContext.GetPreregisteredAttachments());
 			auto lightingTechnique = futureLightingTechnique.get();		// stall
-			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+			auto& lightScene = *LightingEngine::TryGetLightScene(*lightingTechnique);
 
-			ConfigureLightScene(lightScene);
+			ConfigureLightScene(lightScene, lightOpId);
 
 			StallAndPrepareResources(testApparatus, parsingContext, *lightingTechnique, *drawableWriter);
 
@@ -227,10 +222,10 @@ namespace UnitTests
 			LightingEngine::CreateDeferredLightingTechnique(
 				std::move(promisedLightingTechnique),
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+				mergedLightingCfg.GetChainedGlobalOperators(),
 				stitchingContext.GetPreregisteredAttachments());
 			auto lightingTechnique = lightingTechniqueFuture.get();
-			ConfigureLightScene(LightingEngine::GetLightScene(*lightingTechnique));
+			ConfigureLightScene(*LightingEngine::TryGetLightScene(*lightingTechnique), lightOpId);
 
 			StallAndPrepareResources(testApparatus, parsingContext, *lightingTechnique, *drawableWriter);
 
@@ -273,19 +268,15 @@ namespace UnitTests
 		testHelper->BeginFrameCapture();
 
 		{
-			LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
-				LightingEngine::PositionalLightOperatorDesc {
-					LightingEngine::LightSourceShape::Sphere
-				}
-			};
 			LightingEngine::ShadowOperatorDesc shadowOpDesc;
 			shadowOpDesc._projectionMode = LightingEngine::ShadowProjectionMode::ArbitraryCubeMap;
 			shadowOpDesc._normalProjCount = 6;
 			shadowOpDesc._width = 256;
 			shadowOpDesc._height = 256;
-			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
-				shadowOpDesc
-			};
+
+			SceneEngine::MergedLightingEngineCfg mergedLightingCfg;
+			auto lightOpId = mergedLightingCfg.Register(LightingEngine::PositionalLightOperatorDesc { LightingEngine::LightSourceShape::Sphere }, shadowOpDesc);
+			assert(lightOpId == 0);
 
 			auto& stitchingContext = parsingContext.GetFragmentStitchingContext();
 			std::promise<std::shared_ptr<LightingEngine::CompiledLightingTechnique>> promisedLightingTechnique;
@@ -293,12 +284,12 @@ namespace UnitTests
 			LightingEngine::CreateDeferredLightingTechnique(
 				std::move(promisedLightingTechnique),
 				testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-				MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+				mergedLightingCfg.GetChainedGlobalOperators(),
 				stitchingContext.GetPreregisteredAttachments());
 			auto lightingTechnique = lightingTechniqueFuture.get();
 
-			auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
-			auto lightId = CreateTestLight(lightScene);
+			auto& lightScene = *LightingEngine::TryGetLightScene(*lightingTechnique);
+			auto lightId = CreateTestLight(lightScene, lightOpId);
 			CreateSphereShadowProjection(lightScene, lightId);
 
 			// stall until all resources are ready

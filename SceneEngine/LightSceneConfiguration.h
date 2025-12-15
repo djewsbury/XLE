@@ -29,7 +29,7 @@ namespace SceneEngine
 		uint64_t _nextUnnamed = 1; 
 	};
 
-	struct LightOperatorResolveContext
+	struct LightingEngineOperatorSet
 	{
 		ObjectTable<RenderCore::LightingEngine::PositionalLightOperatorDesc> _lightSourceOperators;
 		ObjectTable<RenderCore::LightingEngine::ShadowOperatorDesc> _shadowOperators;

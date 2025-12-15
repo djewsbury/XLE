@@ -7,7 +7,6 @@
 #pragma once
 
 #include "IScene.h"
-#include "../Assets/DepVal.h"
 #include "../Assets/AssetsCore.h"
 
 namespace RenderCore { namespace LightingEngine { struct SunSourceFrustumSettings; struct ScreenSpaceReflectionsOperatorDesc; }}

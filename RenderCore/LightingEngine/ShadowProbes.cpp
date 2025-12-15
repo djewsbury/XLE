@@ -359,7 +359,7 @@ namespace RenderCore { namespace LightingEngine
 		_pimpl->_sequencerDescSetLayoutName = SEQUENCER_DS ":Sequencer";
 		_pimpl->_probePrepareCfg = CreateProbePrepareCfg(_pimpl->_pipelineAccelerators, sharedTechniqueDelegate, _pimpl->_config).ShareFuture();
 
-		_pimpl->_probes.resize(config._maxProbes, Probe{Identity<Float4x4>(), 1.f, 1024.f, 0.5f*gPI, TextureDesc::Dimensionality::Undefined});
+		_pimpl->_probes.resize(config._maxProbes, Probe{Identity<Float3x4>(), 1.f, 1024.f, 0.5f*gPI, TextureDesc::Dimensionality::Undefined});
 
 		auto staticDatabaseDesc = TextureDesc::PlainCube(_pimpl->_config._faceDims, _pimpl->_config._faceDims, _pimpl->_config._format);
 		staticDatabaseDesc._arrayCount = 6*_pimpl->_config._maxProbes;
@@ -426,7 +426,7 @@ namespace RenderCore { namespace LightingEngine
 		VLA_UNSAFE_FORCE(Float4x4, worldToProjections, multiViewDesc.size());
 		for (unsigned c=0; c<multiViewDesc.size(); ++c) worldToProjections[c] = multiViewDesc[c]._worldToProjection;
 
-		_pimpl->_multiViewUniformsDelegate->SetWorldToProjections({worldToProjections, worldToProjections+multiViewDesc.size()});
+		_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(worldToProjections, worldToProjections+multiViewDesc.size()));
 
 		Techniques::FrameBufferDescFragment fragment;
 		SubpassDesc sp;

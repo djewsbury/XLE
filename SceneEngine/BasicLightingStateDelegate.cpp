@@ -131,7 +131,7 @@ namespace SceneEngine
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
     protected:
-        LightOperatorResolveContext _operatorResolveContext;
+        LightingEngineOperatorSet _operatorResolveContext;
         ObjectTable<RenderCore::LightingEngine::SunSourceFrustumSettings> _sunSourceFrustumSettingsInCfgFile;
         std::vector<std::pair<uint64_t, uint64_t>> _shadowToAssociatedLight;
 

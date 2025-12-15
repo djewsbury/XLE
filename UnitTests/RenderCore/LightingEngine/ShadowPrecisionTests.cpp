@@ -4,6 +4,7 @@
 
 #include "LightingEngineTestHelper.h"
 #include "../Metal/MetalTestHelper.h"
+#include "../../../SceneEngine/IScene.h"
 #include "../../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../../RenderCore/LightingEngine/LightingEngineApparatus.h"
 #include "../../../RenderCore/LightingEngine/ILightScene.h"
@@ -36,7 +37,6 @@
 #include "../../../Math/Transformations.h"
 #include "../../../Math/ProjectionMath.h"
 #include "../../../Math/Geometry.h"
-#include "../../../Assets/IAsyncMarker.h"
 #include "../../../Assets/Assets.h"
 #include "../../../xleres/FileList.h"
 #include "catch2/catch_test_macros.hpp"
@@ -50,10 +50,10 @@ using namespace Utility::Literals;
 
 namespace UnitTests
 {
-	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene, float theta)
+	static RenderCore::LightingEngine::ILightScene::LightSourceId CreateTestLight(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightOperatorId opId, float theta)
 	{
 		using namespace RenderCore::LightingEngine;
-		auto lightId = lightScene.CreateLightSource(0);
+		auto lightId = lightScene.CreateLightSource(opId);
 
 		auto* positional = lightScene.TryGetLightSourceInterface<IPositionalLightSource>(lightId);
 		REQUIRE(positional);
@@ -72,7 +72,6 @@ namespace UnitTests
 	static void CreateTestShadowProjection(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId lightSourceId, float theta)
 	{
 		using namespace RenderCore::LightingEngine;
-		lightScene.SetShadowOperator(lightSourceId, 0);
 
 		auto* projections = lightScene.TryGetLightSourceInterface<IOrthoShadowProjections>(lightSourceId);
 		REQUIRE(projections);
@@ -99,9 +98,9 @@ namespace UnitTests
 		preparer->SetDesc(desc);
 	}
 
-	static RenderCore::LightingEngine::ILightScene::LightSourceId ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene, float theta)
+	static RenderCore::LightingEngine::ILightScene::LightSourceId ConfigureLightScene(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightOperatorId opId, float theta)
 	{
-		auto srcId = CreateTestLight(lightScene, theta);
+		auto srcId = CreateTestLight(lightScene, opId, theta);
 		CreateTestShadowProjection(lightScene, srcId, theta);
 		return srcId;
 	}
@@ -142,9 +141,6 @@ namespace UnitTests
 			float ratio1 = std::sqrt(wsXYRange*wsXYRange + wsXYRange*wsXYRange) / wsDepthResolution;
 			(void)ratio0;
 
-			LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
-				LightingEngine::PositionalLightOperatorDesc{}
-			};
 			LightingEngine::ShadowOperatorDesc shadowOp;
 			shadowOp._projectionMode = LightingEngine::ShadowProjectionMode::Ortho;
 			shadowOp._singleSidedBias._depthBias = (int)std::ceil(ratio1);
@@ -153,9 +149,10 @@ namespace UnitTests
 			// shadowOp._rasterDepthBias += worldSpaceExtraBias / wsDepthResolution;
 			shadowOp._enableContactHardening = true;
 			shadowOp._singleSidedBias._slopeScaledBias = 0.5f;
-			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
-				shadowOp
-			};
+
+			SceneEngine::MergedLightingEngineCfg mergedLightingCfg;
+			auto lightOpId = mergedLightingCfg.Register(LightingEngine::PositionalLightOperatorDesc{}, shadowOp);
+			assert(lightOpId == 0);
 
 			///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 			SECTION("acne precision")
@@ -181,7 +178,7 @@ namespace UnitTests
 				LightingEngine::CreateDeferredLightingTechnique(
 					std::move(promisedLightingTechnique),
 					testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+					mergedLightingCfg.GetChainedGlobalOperators(),
 					stitchingContext.GetPreregisteredAttachments());
 				auto lightingTechnique = lightingTechniqueFuture.get();
 
@@ -190,9 +187,9 @@ namespace UnitTests
 				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 
-				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
+				auto& lightScene = *LightingEngine::TryGetLightScene(*lightingTechnique);
 				for (unsigned c=0; c<stripes; ++c) {
-					auto lightId = ConfigureLightScene(lightScene, gPI/2.0f*c/float(stripes));
+					auto lightId = ConfigureLightScene(lightScene, lightOpId, gPI/2.0f*c/float(stripes));
 
 					{
 						auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
@@ -228,7 +225,7 @@ namespace UnitTests
 				LightingEngine::CreateDeferredLightingTechnique(
 					std::move(promisedLightingTechnique),
 					testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+					mergedLightingCfg.GetChainedGlobalOperators(),
 					stitchingContext.GetPreregisteredAttachments());
 				auto lightingTechnique = lightingTechniqueFuture.get();
 
@@ -237,8 +234,8 @@ namespace UnitTests
 				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 
-				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
-				auto lightId = ConfigureLightScene(lightScene, gPI/4.0f);
+				auto& lightScene = *LightingEngine::TryGetLightScene(*lightingTechnique);
+				auto lightId = ConfigureLightScene(lightScene, lightOpId, gPI/4.0f);
 
 				{
 					auto lightingIterator = RenderCore::LightingEngine::BeginLightingTechniquePlayback(
@@ -458,12 +455,11 @@ namespace UnitTests
 			sunSourceFrustumSettings._maxFrustumCount = 5;
 			sunSourceFrustumSettings._frustumSizeFactor = 2.0f;
 
-			LightingEngine::PositionalLightOperatorDesc resolveOperators[] {
-				LightingEngine::PositionalLightOperatorDesc{ LightingEngine::LightSourceShape::Directional }
-			};
-			LightingEngine::ShadowOperatorDesc shadowGenerator[] {
-				CalculateShadowOperatorDesc(sunSourceFrustumSettings)
-			};
+			auto shadowOp = CalculateShadowOperatorDesc(sunSourceFrustumSettings);
+
+			SceneEngine::MergedLightingEngineCfg mergedLightingCfg;
+			auto lightOpId = mergedLightingCfg.Register(LightingEngine::PositionalLightOperatorDesc{ LightingEngine::LightSourceShape::Directional }, shadowOp);
+			assert(lightOpId == 0);
 
 			{
 				auto targetDesc = CreateDesc(
@@ -477,7 +473,7 @@ namespace UnitTests
 				LightingEngine::CreateDeferredLightingTechnique(
 					std::move(promisedLightingTechnique),
 					testApparatus._pipelineAccelerators, testApparatus._pipelineCollection, testApparatus._sharedDelegates,
-					MakeIteratorRange(resolveOperators), MakeIteratorRange(shadowGenerator), nullptr,
+					mergedLightingCfg.GetChainedGlobalOperators(),
 					stitchingContext.GetPreregisteredAttachments(),
 					LightingEngine::DeferredLightingTechniqueFlags::GenerateDebuggingTextures);
 				auto lightingTechnique = lightingTechniqueFuture.get();
@@ -489,9 +485,8 @@ namespace UnitTests
 				parsingContext.SetPipelineAcceleratorsVisibility(newVisibility._pipelineAcceleratorsVisibility);
 				parsingContext.RequireCommandList(newVisibility._bufferUploadsVisibility);
 
-				auto& lightScene = LightingEngine::GetLightScene(*lightingTechnique);
-				auto lightId = lightScene.CreateLightSource(0);
-				lightScene.SetShadowOperator(lightId, 0);
+				auto& lightScene = *LightingEngine::TryGetLightScene(*lightingTechnique);
+				auto lightId = lightScene.CreateLightSource(lightOpId);
 				lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId)->SetLocalToWorld(AsFloat4x4(negativeLightDirection));
 				LightingEngine::SetupSunSourceShadows(lightScene, lightId, sunSourceFrustumSettings);
 				lightScene.TryGetLightSourceInterface<LightingEngine::ISunSourceShadows>(lightId)->FixMainSceneCamera(
