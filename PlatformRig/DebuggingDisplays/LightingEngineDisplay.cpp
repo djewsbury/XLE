@@ -110,6 +110,7 @@ namespace PlatformRig { namespace Overlays
 		struct Resources
 		{
 			std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _depthMapVisPipeline;
+			std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _depthMapVisDS;
 		};
 		std::shared_future<Resources> _futureResources;
 	};
@@ -245,17 +246,18 @@ namespace PlatformRig { namespace Overlays
 				auto& resources = _futureResources.get();
 
 				auto rect = layout.AllocateFullWidth(700);
-				auto srv = metricsInterface->GetCubeMapView(0);
-				RenderCore::ResourceViewStream srvs { *srv };
+				auto idealWidth = rect.Height() * 4 / 3;
+				if (rect.Width() > idealWidth) rect = { rect._topLeft[0] + (rect.Width()-idealWidth)/2, rect._topLeft[1], rect._topLeft[0] + (rect.Width()+idealWidth)/2, rect._bottomRight[1] };
+				RenderCore::Techniques::RetainedUniformsStream uniforms; uniforms._resourceViews.emplace_back(metricsInterface->GetCubeMapSRV(0));
 				auto vertices = context.GetImmediateDrawables().QueueDraw(
-					6, sizeof(Vertex_PT), resources._depthMapVisPipeline, resources._depthMapVisDescSet, &s_usiCubeMapVis, srvs).Cast<Vertex_PT*>();
-				vertices[0] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._topLeft[0]), Float2{0.f, 0.f} };
-				vertices[1] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[0]), Float2{1.f, 0.f} };
-				vertices[2] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[0]), Float2{0.f, 1.f} };
+					6, sizeof(Vertex_PT), *resources._depthMapVisPipeline, *resources._depthMapVisDS, &s_usiCubeMapVis, std::move(uniforms)).Cast<Vertex_PT*>();
+				vertices[0] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._topLeft[1]), Float2{0.f, 0.f} };
+				vertices[1] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[1]), Float2{0.f, 1.f} };
+				vertices[2] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[1]), Float2{1.f, 0.f} };
 
-				vertices[3] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[0]), Float2{0.f, 1.f} };
-				vertices[4] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[0]), Float2{1.f, 0.f} };
-				vertices[5] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._bottomRight[0]), Float2{1.f, 1.f} };
+				vertices[3] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[1]), Float2{1.f, 0.f} };
+				vertices[4] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[1]), Float2{0.f, 1.f} };
+				vertices[5] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._bottomRight[1]), Float2{1.f, 1.f} };
 			}
 			
 		} else {
@@ -278,8 +280,8 @@ namespace PlatformRig { namespace Overlays
 		std::promise<Resources> promisedResources;
 		_futureResources = promisedResources.get_future();
 
-		std::shared_ptr<AssetsNew::CompoundAssetUtil> util;
-		::AssetsNew::ContextAndIdentifier indexer { "xleres/RenderOverlays/DepthMapVis.hlsl" };
+		auto util = std::make_shared<AssetsNew::CompoundAssetUtil>();
+		::AssetsNew::ContextAndIdentifier indexer { "xleres/RenderOverlays/DepthMapVis.hlsl:cubeMapVis" };
 		auto inputAssembly = RenderOverlays::Vertex_PT::s_inputElements2D;
 		auto topology = RenderCore::Topology::TriangleList;
 
@@ -287,10 +289,11 @@ namespace PlatformRig { namespace Overlays
 		auto futureShaderPatches = util->GetFuture<std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>>("ShaderPatchCollection"_h, indexer);
 		::Assets::WhenAll(std::move(futureMaterial), std::move(futureShaderPatches)).ThenConstructToPromise(
 			std::move(promisedResources),
-			[pa=std::move(overlayAccelerators), topology, ia=std::vector<RenderCore::MiniInputElementDesc>(inputAssembly.begin(), inputAssembly.end())](const auto& material, const auto& shaderPatches) {
+			[pa=std::move(overlayAccelerators), topology, ia=std::vector<RenderCore::MiniInputElementDesc>(inputAssembly.begin(), inputAssembly.end()), util](const auto& material, const auto& shaderPatches) {
 				Resources result;
 				RenderCore::Assets::RawMaterial rawMat = std::get<0>(std::move(material));
 				DescriptorSetConstructorHelper descSetHelper { std::move(rawMat) };
+				result._depthMapVisDS = pa->CreateDescriptorSetAccelerator(nullptr, descSetHelper._patchCollection, descSetHelper._matDescSet, descSetHelper._matMachine, descSetHelper._matScaffold, "depth-map-vis");
 				result._depthMapVisPipeline = pa->CreatePipelineAccelerator(shaderPatches, descSetHelper._matDescSet, std::move(descSetHelper._matMachineDecomposed._matSelectors), ia, topology, descSetHelper._matMachineDecomposed._stateSet);
 				return result;
 			});

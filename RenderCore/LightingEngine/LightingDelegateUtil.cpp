@@ -1213,6 +1213,17 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		return metrics;
 	}
 
+	std::shared_ptr<IResourceView> DynamicShadowProbeScheduler::GetCubeMapSRV(unsigned activeLightIdx)
+	{
+		assert(activeLightIdx < _activeLights[0].size());
+		if (activeLightIdx >= _activeLights[0].size()) return nullptr;
+		auto LookupProbeEntry = [this](LightIndex lightIndex) -> const SharedProbeSceneSet::ProbeEntry& { return *this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
+		TextureViewDesc viewDesc;
+		viewDesc._format._aspect = TextureViewDesc::Aspect::Depth;
+		viewDesc._arrayLayerRange = { LookupProbeEntry(_activeLights[0][activeLightIdx].first)._attachedProbeTableIndex, 6 };
+		return _shadowProbes->GetDynamicProbeTable().GetResource()->CreateTextureView(BindFlag::ShaderResource, viewDesc);
+	}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	DominantLightSet::DominantLightSet(ILightScene::LightOperatorId lightOpId)

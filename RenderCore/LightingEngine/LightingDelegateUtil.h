@@ -130,7 +130,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			std::vector<Cluster> _clusters;
 		};
 		virtual Metrics GetMetrics() const = 0;
-		virtual std::shared_ptr<IResourceView> GetCubeMapView(unsigned lightIdx) = 0;
+		virtual std::shared_ptr<IResourceView> GetCubeMapSRV(unsigned activeLightIdx) = 0;
 	};
 
 	// DynamicShadowProbeScheduler is like SemiStaticShadowProbeScheduler, but probes are updated every frame
@@ -157,6 +157,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
 		Metrics GetMetrics() const override;
+		std::shared_ptr<IResourceView> GetCubeMapSRV(unsigned activeLightIdx) override;
 
 		DynamicShadowProbeScheduler(
 			std::shared_ptr<DynamicShadowProbes> shadowProbes,

@@ -37,13 +37,13 @@ Texture2D<float> SSRConfidence : register(t5, space2);
 #endif
 
 #if SPECULAR_IBL
-	TextureCube SpecularIBL : register(t10, space2);
+	TextureCube SpecularIBL : register(t14, space2);
 #endif
-Texture2D<float2> GlossLUT : register(t11, space2);			// this is the look up table used in the split-sum IBL glossy reflections
+Texture2D<float2> GlossLUT : register(t15, space2);			// this is the look up table used in the split-sum IBL glossy reflections
 
 Texture2D<float>			NoiseTexture 			: register(t13, space2);
-SamplerComparisonState		ShadowSampler           : register(s14, space2);
-SamplerState				ShadowDepthSampler      : register(s15, space2);
+SamplerComparisonState		ShadowSampler           : register(s16, space2);
+SamplerState				ShadowDepthSampler      : register(s17, space2);
 Texture2DArray<float> 		PriorityLightShadowTextures BIND_SHADOW_T3;
 
 static const uint TiledLights_DepthGradiations = 1024;

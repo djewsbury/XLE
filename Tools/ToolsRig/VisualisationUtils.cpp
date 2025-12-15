@@ -396,7 +396,7 @@ namespace ToolsRig
 		ConsoleRig::GlobalServices::GetInstance().GetLongTaskThreadPool().Enqueue(
 			[	promise = _preparedSceneFuture->AdoptPromise(),
 				targets = _lightingTechniqueTargets, lightingApparatus = _lightingApparatus, 
-				scene = _scene, envSettings = _envSettings, pipelineAccelerators = _pipelineAccelerators,
+				scene = _scene, envSettings = _envSettings, pipelineAccelerators = _pipelineAccelerators, overlayAccelerators=_immediateDrawables->GetPipelineAcceleratorPool(),
 				loadingContext = _loadingContext]() mutable {
 
 				TRY {
@@ -407,7 +407,7 @@ namespace ToolsRig
 
 					::Assets::WhenAll(std::move(compiledLightingTechniqueFuture)).ThenConstructToPromise(
 						std::move(promise),
-						[pipelineAccelerators, loadingContext, envSettings, scene=std::move(scene)](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto compiledLightingTechnique) mutable {
+						[pipelineAccelerators, overlayAccelerators, loadingContext, envSettings, scene=std::move(scene)](std::promise<std::shared_ptr<PreparedScene>>&& thatPromise, auto compiledLightingTechnique) mutable {
 							
 							TRY {
 								auto preparedScene = std::make_shared<PreparedScene>();
@@ -423,7 +423,7 @@ namespace ToolsRig
 								preparedScene->_envSettings->BindScene(*lightScene, loadingContext);
 
 								#if defined(_DEBUG)
-									preparedScene->_debugScreens.emplace_back("shadow-probes", PlatformRig::Overlays::CreateShadowProbesDisplay(preparedScene->_compiledLightingTechnique));
+									preparedScene->_debugScreens.emplace_back("shadow-probes", PlatformRig::Overlays::CreateShadowProbesDisplay(std::move(overlayAccelerators), preparedScene->_compiledLightingTechnique));
 								#endif
 
 								auto threadContext = RenderCore::Techniques::GetThreadContext();
