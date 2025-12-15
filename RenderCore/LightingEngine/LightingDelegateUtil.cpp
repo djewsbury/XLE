@@ -3,12 +3,6 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "LightingDelegateUtil.h"
-#include "Core/Prefix.h"
-#include "Math/ProjectionMath.h"
-#include "Math/Quaternion.h"
-#include "Math/Transformations.h"
-#include "Math/XLEMath.h"
-#include "RenderCore/Techniques/TechniqueUtils.h"
 #include "Sequence.h"
 #include "SequenceIterator.h"
 #include "ShadowPreparer.h"
@@ -20,9 +14,12 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/PipelineAccelerator.h"
+#include "../Techniques/TechniqueUtils.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
+#include "../../Math/ProjectionMath.h"
+#include "../../Math/Transformations.h"
 #include "../../xleres/FileList.h"
 #include <limits>
 #include <numeric>
@@ -925,7 +922,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			VLA(unsigned, clusterCounts, clusterHelperCount);
 			VLA(unsigned, starts, clusterHelperCount);		// (indexed by cluster)
 			VLA(unsigned, nexts, clusterHelperCount);
-			for (unsigned c=0; c<clusterHelperCount; ++c) { clusterAssignments[c] = c; clusterCounts[c] = 1; starts[c] = c; nexts[c] = ~0u; }
+			VLA_UNSAFE_FORCE(Float4, clusterBestAxis, clusterHelperCount);
+			for (unsigned c=0; c<clusterHelperCount; ++c) { clusterAssignments[c] = c; clusterCounts[c] = 1; starts[c] = c; nexts[c] = ~0u; clusterBestAxis[c] = Zero<Float4>(); }
 
 			// Generate distances between probes, and then sort -- this is the expensive part of this algorithm
 			std::vector<std::tuple<float, unsigned, unsigned>> probeDistances;
@@ -948,17 +946,26 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				nexts[c0End] = c1Start; starts[c1] = c0Start;
 
 				clusterCounts[c0] += clusterCounts[c1]; clusterCounts[c1] = 0;
+
+				if (clusterBestAxis[c1][3] > clusterBestAxis[c0][3]) clusterBestAxis[c0] = clusterBestAxis[c1];
+				if (std::get<0>(d) > clusterBestAxis[c0][3])
+					clusterBestAxis[c0] = Float4(clusterHelpers[std::get<1>(d)]._position-clusterHelpers[std::get<2>(d)]._position, std::get<0>(d));
 			}
 
 			// remap cluster indices to ensure they are dense
 			// also assign database indices at this stage (these must be in cluster order)
 			for (auto& a:activeLights) { a.second._clusterIndex = ~0u; }
+			_clusterBestAxes.clear();
+			_clusterBestAxes.reserve(clusterHelperCount);
 			unsigned denseClusterIdx = 0;
 			for (unsigned c=0; c<clusterHelperCount; ++c) {
 				if (!clusterCounts[c]) continue;
 
 				for (auto h=starts[c]; h!=~0u; h=nexts[h])
 					activeLights[clusterHelpers[h]._activeLightIndex].second._clusterIndex = denseClusterIdx;
+				auto axis = Truncate(clusterBestAxis[c]);
+				if (!Normalize_Checked(&axis, axis)) axis = Float3{1,0,0};		// will trigger when the cluster only has a single element
+				_clusterBestAxes.push_back(axis);
 				++denseClusterIdx;
 			}
 			_clusterCount = denseClusterIdx;
@@ -992,8 +999,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				projDescs.reserve(_probeTableFaceCount);
 				unsigned firstFaceIndex = nextProbeTableFaceIdx;
 				{
+					// Orient the cluster bounding box such that the axis between the two most distant lights is one of the cardinal axes
 					Float3 clusterMins { std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max() };
 					Float3 clusterMaxs { std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
+					auto clusterToWorld = MakeObjectToWorld(_clusterBestAxes[c], Float3{0,0,1}, Float3{0,0,0});
 
 					for (auto& a:_activeLights[0])
 						if (a.second._clusterIndex == c) {
@@ -1004,6 +1013,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 							// sphere rules
 							auto p = ExtractTranslation(probe._objectToWorld);
+							p = TransformPointByOrthonormalInverse(clusterToWorld, p);
 							clusterMins[0] = std::min(clusterMins[0], p[0] - probe._farRadius);
 							clusterMins[1] = std::min(clusterMins[1], p[1] - probe._farRadius);
 							clusterMins[2] = std::min(clusterMins[2], p[2] - probe._farRadius);
@@ -1012,7 +1022,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 							clusterMaxs[2] = std::max(clusterMaxs[2], p[2] + probe._farRadius);
 						}
 
-					auto volumeTester = std::make_shared<ArbitraryConvexVolumeTester>(ArbitraryConvexVolumeTesterFromAABB(clusterMins, clusterMaxs));
+					auto volumeTester = std::make_shared<ArbitraryConvexVolumeTester>(ArbitraryConvexVolumeTesterFromAABB(clusterToWorld, clusterMins, clusterMaxs));
 					workingCluster._parseId = sequence.CreateMultiViewParseScene(Techniques::BatchFlags::Opaque, std::move(projDescs), std::move(volumeTester));
 				}
 

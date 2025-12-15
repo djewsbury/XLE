@@ -122,7 +122,9 @@ namespace XLEMath
         float extrusionLength,
         ClipSpaceType clipSpaceType);
 
-    ArbitraryConvexVolumeTester ArbitraryConvexVolumeTesterFromAABB(Float3 mins, Float3 maxs);
+    ArbitraryConvexVolumeTester ArbitraryConvexVolumeTesterFromAABB(
+        const Float4x4& localToWorld, 
+        Float3 mins, Float3 maxs);
 
     std::vector<Float4> FindFrustumIntersectionExtremities(
         const Float4x4& localToProjection,

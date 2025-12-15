@@ -1268,6 +1268,92 @@ namespace XLEMath
             std::move(finalHullCornerFaceBitMask)};
     }
 
+    ArbitraryConvexVolumeTester ArbitraryConvexVolumeTesterFromAABB(
+        const Float4x4& localToWorld, 
+        Float3 mins, Float3 maxs)
+    {
+        std::vector<Float3> corners {
+            {mins[0], mins[1], mins[2]},
+            {mins[0], maxs[1], mins[2]},
+            {maxs[0], mins[1], mins[2]},
+            {maxs[0], maxs[1], mins[2]},
+            {mins[0], mins[1], maxs[2]},
+            {mins[0], maxs[1], maxs[2]},
+            {maxs[0], mins[1], maxs[2]},
+            {maxs[0], maxs[1], maxs[2]}
+        };
+        for (auto& c:corners) c = TransformPoint(localToWorld, c);
+
+        struct Face { unsigned v0, v1, v2, v3; };
+        Face frustumFaces[] {       // vertices should be in CCW winding for facing away from the frustum
+            Face { 0, 1, 3, 2 },    // [0] front
+            Face { 4, 6, 7, 5 },    // [1] back
+            Face { 1, 0, 4, 5 },    // [2] x=-1
+            Face { 2, 3, 7, 6 },    // [3] x= 1
+            Face { 0, 2, 6, 4 },    // [4] top
+            Face { 3, 1, 5, 7 }     // [5] bottom
+        };
+        struct Edge { unsigned f0, f1, v0, v1; };
+        Edge frustumEdges[] {
+            { 0, 4, 2, 0 },        // front & top
+            { 0, 2, 0, 1 },        // front & x=-1
+            { 0, 5, 1, 3 },        // front & bottom
+            { 0, 3, 3, 2 },        // front & x=1
+
+            { 1, 4, 4, 6 },        // back & top
+            { 1, 3, 6, 7 },        // back & x=1
+            { 1, 5, 7, 5 },        // back & bottom
+            { 1, 2, 5, 4 },        // back & x=1
+
+            { 2, 4, 0, 4 },        // x=-1 & top
+            { 2, 5, 5, 1 },        // x=-1 & bottom
+
+            { 3, 4, 6, 2 },        // x=1 & top
+            { 3, 5, 3, 7 }         // x=1 & bottom
+        };
+
+        #if defined(_DEBUG)
+            Float3 center = corners[0];
+            for (unsigned c=1; c<8; ++c) center += corners[c];
+            center /= 8.f;
+        #endif
+
+        std::vector<Float4> facePlanes; facePlanes.resize(6);
+        {
+            unsigned fIdx = 0;
+            for (const auto& f:frustumFaces) {
+                Float3 pts[4];
+                pts[0] = corners[f.v0];
+                pts[1] = corners[f.v1];
+                pts[2] = corners[f.v2];
+                pts[3] = corners[f.v3];
+                // facePlanes[fIdx] = PlaneFit(pts, 4);
+                facePlanes[fIdx] = PlaneFit(pts[0], pts[1], pts[2]);
+                assert(SignedDistance(center, facePlanes[fIdx]) < 0.f);
+            }
+        }
+
+        std::vector<ArbitraryConvexVolumeTester::Edge> finalEdges;
+        finalEdges.reserve(dimof(frustumEdges));
+        for (auto& e:frustumEdges)
+            finalEdges.push_back({e.v0, e.v1, (1ull<<uint64_t(e.f0))|(1ull<<uint64_t(e.f1))});
+
+        std::vector<unsigned> cornerFaceBitMasks;
+        cornerFaceBitMasks.resize(corners.size(), 0);
+        for (unsigned f=0; f<dimof(frustumFaces); ++f) {
+            cornerFaceBitMasks[frustumFaces[f].v0] |= 1u<<f;
+            cornerFaceBitMasks[frustumFaces[f].v1] |= 1u<<f;
+            cornerFaceBitMasks[frustumFaces[f].v2] |= 1u<<f;
+            cornerFaceBitMasks[frustumFaces[f].v3] |= 1u<<f;
+        }
+
+        return {
+            std::move(facePlanes),
+            std::move(corners),
+            std::move(finalEdges),
+            std::move(cornerFaceBitMasks) };
+    }
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     Float4 ExtractMinimalProjection(const Float4x4& projectionMatrix)

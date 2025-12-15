@@ -149,6 +149,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		unsigned _fadeTransitionInFrames = 16;
 		unsigned _probeTableFaceCount = 0;
 		unsigned _clusterCount = 0;
+		std::vector<Float3> _clusterBestAxes;
 
 		std::vector<bool> _maskedLightOperators;
 
