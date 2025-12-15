@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ILightScene.h"
+#include "RenderCore/Techniques/Drawables.h"
 #include "StandardLightScene.h"		// for ILightSceneComponent
 #include "ShadowProbes.h"
 #include "ShadowPreparer.h"
@@ -178,7 +179,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	public:
 		const IPreparedShadowResult* GetPreparedShadow(unsigned setIdx, unsigned lightIdx);
 
-		struct PreparedShadow { unsigned _preparerIdx = ~0u; const IPreparedShadowResult* _preparedResult = nullptr; };
+		struct PreparedShadow { unsigned _preparerIdx = ~0u; const IPreparedShadowResult* _preparedResult = nullptr; ShadowOperatorDesc _opDesc; };
 		std::vector<PreparedShadow> GetAllPreparedShadows();		// intended for debugging
 
 		void SetDescriptorSetLayout(
@@ -190,11 +191,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			Sequence& sequence);
 		void ClearPreparedShadows();
 
-		struct SceneSet;
-		std::vector<SceneSet> _sceneSets;
-
-		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
-		unsigned _totalProjectionCount;
+		std::vector<std::shared_ptr<Techniques::SequencerConfig>> GetSequencerCfgsForPrepareSteps();
 
 		PriorityShadowProjectionScheduler(
 			std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers,
@@ -206,6 +203,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
 		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
 		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
+
+		struct SceneSet;
+		std::vector<SceneSet> _sceneSets;
+
+		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
+		unsigned _totalProjectionCount;
 
 		std::shared_ptr<Techniques::IFrameBufferPool> _shadowGenFrameBufferPool;
 		std::shared_ptr<Techniques::IAttachmentPool> _shadowGenAttachmentPool;

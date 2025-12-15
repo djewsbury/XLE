@@ -126,6 +126,17 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 	}
 
+	std::vector<std::shared_ptr<Techniques::SequencerConfig>> PriorityShadowProjectionScheduler::GetSequencerCfgsForPrepareSteps()
+	{
+		// return a unique list of sequencer cfgs, which we can use to ensure resources are prepared
+		std::vector<std::shared_ptr<Techniques::SequencerConfig>> result;
+		for(auto& prep:_shadowPreparers->_preparers)
+			result.emplace_back(prep._preparer->GetSequencerConfig().first);
+		std::sort(b2e(result));
+		result.erase(std::unique(b2e(result)), result.end());
+		return result;
+	}
+
 	void PriorityShadowProjectionScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light)
 	{
 		assert(setIdx < _sceneSets.size() && _sceneSets[setIdx]._activeSet);
@@ -177,7 +188,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			if (!sceneSet._activeSet) continue;
 			for (auto& p:sceneSet._preparedResult)
 				if (p)
-					result.push_back({sceneSet._preparerId, p.get()});
+					result.push_back({sceneSet._preparerId, p.get(), _shadowPreparers->_preparers[sceneSet._preparerId]._desc});
 		}
 		return result;
 	}

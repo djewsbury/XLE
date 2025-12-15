@@ -46,18 +46,20 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		std::shared_ptr<LightResolveOperators> _lightResolveOperators;
-		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
-		std::shared_ptr<Internal::PriorityShadowProjectionScheduler> _shadowScheduler;
+		std::shared_ptr<Internal::PriorityShadowSchedulerUtil> _shadowPreparers;
+		std::shared_ptr<Internal::PriorityShadowProjectionScheduler> _priorityShadowScheduler;
 		bool _ambientLightEnabled = false;
 
-		struct ShadowPreparerIdMapping
+		struct LightOperatorsMapping
 		{
-			std::vector<unsigned> _operatorToShadowPreparerId;
-			unsigned _operatorForStaticProbes = ~0u;
-			ShadowProbes::Configuration _shadowProbesCfg;
+			std::vector<unsigned> _operatorToPriorityShadowPreparerId;
+			std::vector<ShadowOperatorDesc> _priorityShadowPreparers;
+
+			std::vector<bool> _staticShadowProbeMask;
+			std::optional<ShadowProbes::Configuration> _staticShadowProbesCfg;
 		};
 
-		ShadowPreparerIdMapping _shadowOperatorIdMapping;
+		LightOperatorsMapping _lightOperatorsMapping;
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 		std::shared_ptr<Internal::SemiStaticShadowProbeScheduler> _shadowProbesManager;
 
@@ -68,18 +70,16 @@ namespace RenderCore { namespace LightingEngine
 
 		void FinalizeConfiguration()
 		{
-			if (_shadowOperatorIdMapping._operatorForStaticProbes != ~0u) {
-				_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, _shadowOperatorIdMapping._shadowProbesCfg);
-				_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, _shadowOperatorIdMapping._operatorForStaticProbes);
+			if (_lightOperatorsMapping._staticShadowProbesCfg) {
+				_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, *_lightOperatorsMapping._staticShadowProbesCfg);
+				_shadowProbesManager = std::make_shared<Internal::SemiStaticShadowProbeScheduler>(_shadowProbes, _lightOperatorsMapping._staticShadowProbeMask);
 				RegisterComponent(_shadowProbesManager);
 			}
 			
-			if (!_shadowOperatorIdMapping._operatorToShadowPreparerId.empty()) {
-				_shadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(
-					_pipelineAccelerators->GetDevice(), _shadowPreparers,
-					_shadowOperatorIdMapping._operatorToShadowPreparerId);
-				_shadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
-				RegisterComponent(_shadowScheduler);
+			if (_shadowPreparers) {
+				_priorityShadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(_shadowPreparers, _lightOperatorsMapping._operatorToPriorityShadowPreparerId);
+				_priorityShadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
+				RegisterComponent(_priorityShadowScheduler);
 			}
 		}
 
@@ -119,7 +119,7 @@ namespace RenderCore { namespace LightingEngine
 			case TypeHashCode<ISemiStaticShadowProbeScheduler>:
 				return (ISemiStaticShadowProbeScheduler*)_shadowProbesManager.get();
 			case TypeHashCode<Internal::IDynamicShadowProjectionScheduler>:
-				return (Internal::IDynamicShadowProjectionScheduler*)_shadowScheduler.get();
+				return (Internal::IDynamicShadowProjectionScheduler*)_priorityShadowScheduler.get();
 			default:
 				if (_queryInterfaceHelper)
 					if (auto* result = _queryInterfaceHelper(typeCode))
@@ -288,8 +288,8 @@ namespace RenderCore { namespace LightingEngine
 	
 	void DeferredLightingCaptures::DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence)
 	{
-		if (_lightScene->_shadowScheduler)
-			_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
+		if (_lightScene->_priorityShadowScheduler)
+			_lightScene->_priorityShadowScheduler->DoShadowPrepare(iterator, sequence);
 	}
 
 	void DeferredLightingCaptures::DoLightResolve(SequenceIterator& iterator)
@@ -299,7 +299,7 @@ namespace RenderCore { namespace LightingEngine
 		ResolveLights(
 			*iterator._threadContext, *iterator._parsingContext, iterator._rpi,
 			*_lightResolveOperators, *_lightScene,
-			_lightScene->_shadowScheduler.get(), shadowProbes, _lightScene->_shadowProbesManager.get());
+			_lightScene->_priorityShadowScheduler.get(), shadowProbes, _lightScene->_shadowProbesManager.get());
 	}
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps, GBufferDelegateType gbufferType, bool precisionTargets = false)
@@ -352,8 +352,8 @@ namespace RenderCore { namespace LightingEngine
 	{
 		ShadowProbes::Configuration result;
 		assert(opDesc._width == opDesc._height);		// expecting square probe textures
-		result._staticFaceDims = opDesc._width;
-		result._staticFormat = opDesc._format;
+		result._faceDims = opDesc._width;
+		result._format = opDesc._format;
 		result._singleSidedBias = opDesc._singleSidedBias;
 		result._doubleSidedBias = opDesc._doubleSidedBias;
 		return result;
@@ -363,41 +363,18 @@ namespace RenderCore { namespace LightingEngine
 		std::promise<std::shared_ptr<DeferredLightScene>>&& promise,
 		const std::shared_ptr<Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
-		IteratorRange<const ShadowOperatorDesc*> shadowGenerators)
+		const DeferredLightScene::LightOperatorsMapping& lightOperatorMapping)
 	{
-		DeferredLightScene::ShadowPreparerIdMapping shadowOperatorMapping;
-		shadowOperatorMapping._operatorToShadowPreparerId.resize(shadowGenerators.size(), ~0u);
-		std::future<std::shared_ptr<PriorityShadowSchedulerUtil>> shadowPreparationOperatorsFuture;
-
-		// Map the shadow operator ids onto the underlying type of shadow (dynamically generated, shadow probes, etc)
-		{
-			VLA_UNSAFE_FORCE(ShadowOperatorDesc, dynShadowGens, shadowGenerators.size());
-			unsigned dynShadowCount = 0;
-			for (unsigned c=0; c<shadowGenerators.size(); ++c) {
-				if (shadowGenerators[c]._resolveType == ShadowResolveType::Probe) {
-					// setup shadow operator for probes
-					if (shadowOperatorMapping._operatorForStaticProbes != ~0u)
-						Throw(std::runtime_error("Multiple operators for shadow probes detected. Only zero or one is supported"));
-					shadowOperatorMapping._operatorForStaticProbes = c;
-					shadowOperatorMapping._shadowProbesCfg = MakeShadowProbeConfiguration(shadowGenerators[c]);
-				} else {
-					dynShadowGens[dynShadowCount] = shadowGenerators[c];
-					shadowOperatorMapping._operatorToShadowPreparerId[c] = dynShadowCount;
-					++dynShadowCount;
-				}
-			}
-			shadowPreparationOperatorsFuture = CreatePriorityShadowSchedulerUtil(
-				MakeIteratorRange(dynShadowGens, &dynShadowGens[dynShadowCount]),
-				pipelineAccelerators, techDelBox);
-		}
+		auto shadowPreparationOperatorsFuture = Internal::CreatePriorityShadowSchedulerUtil(
+			lightOperatorMapping._priorityShadowPreparers, pipelineAccelerators, techDelBox);
 
 		using namespace std::placeholders;
 		::Assets::WhenAll(std::move(shadowPreparationOperatorsFuture)).ThenConstructToPromise(
 			std::move(promise),
-			[shadowOperatorMapping, pipelineAccelerators, techDelBox](auto shadowPreparationOperators) {
+			[lightOperatorMapping, pipelineAccelerators, techDelBox](auto shadowPreparationOperators) mutable {
 				auto lightScene = std::make_shared<DeferredLightScene>();
 				lightScene->_shadowPreparers = std::move(shadowPreparationOperators);
-				lightScene->_shadowOperatorIdMapping = shadowOperatorMapping;
+				lightScene->_lightOperatorsMapping = std::move(lightOperatorMapping);
 				lightScene->_pipelineAccelerators = pipelineAccelerators;
 				lightScene->_techDelBox = techDelBox;
 				lightScene->FinalizeConfiguration();
@@ -411,15 +388,9 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<SkyTextureProcessorDesc> _skyTextureProcessor;
 		std::optional<SkyOperatorDesc> _sky;
 
-		std::vector<PositionalLightOperatorDesc> _resolveOperators;
-		std::vector<ShadowOperatorDesc> _shadowOperators;
+		DeferredLightScene::LightOperatorsMapping _lightOperatorsMapping;
 
-		DeferredOperatorDigest(
-			IteratorRange<const PositionalLightOperatorDesc*> resolveOperatorsInit,
-			IteratorRange<const ShadowOperatorDesc*> shadowOperatorsInit,
-			const ChainedOperatorDesc* globalOperatorsChain)
-		: _resolveOperators { resolveOperatorsInit.begin(), resolveOperatorsInit.end() }
-		, _shadowOperators { shadowOperatorsInit.begin(), shadowOperatorsInit.end() }
+		DeferredOperatorDigest(const ChainedOperatorDesc* globalOperatorsChain)
 		{
 			auto* chain = globalOperatorsChain;
 			while (chain) {
@@ -444,6 +415,8 @@ namespace RenderCore { namespace LightingEngine
 				}
 				chain = chain->_next;
 			}
+
+			// todo -- scan through for LightOperatorAssignment<PositionalLightOperatorDesc>, etc
 		}
 	};
 
@@ -459,13 +432,11 @@ namespace RenderCore { namespace LightingEngine
 		auto buildGBufferFragment = CreateBuildGBufferSceneFragment(*techDelBox, GBufferDelegateType::DepthNormalParameters);
 
 		assert(0);		//  -- these operators must come from the operators digest now
-		IteratorRange<const PositionalLightOperatorDesc*> resolveOperatorsInit;
-		IteratorRange<const ShadowOperatorDesc*> shadowOperatorsInit;
-		DeferredOperatorDigest digest { resolveOperatorsInit, shadowOperatorsInit, globalOperators };
+		DeferredOperatorDigest digest { globalOperators };
 
 		std::promise<std::shared_ptr<DeferredLightScene>> lightScenePromise;
 		auto lightSceneFuture = lightScenePromise.get_future();
-		BeginLightSceneConstruction(std::move(lightScenePromise), pipelineAccelerators, techDelBox, shadowOperatorsInit);
+		BeginLightSceneConstruction(std::move(lightScenePromise), pipelineAccelerators, techDelBox, digest._lightOperatorsMapping);
 
 		auto resolution = Internal::ExtractOutputResolution(preregisteredAttachmentsInit);
 
@@ -566,19 +537,19 @@ namespace RenderCore { namespace LightingEngine
 					}
 
 					// unbind operations
-					if (captures->_lightScene->_shadowScheduler) {
+					if (captures->_lightScene->_priorityShadowScheduler) {
 						mainSequence.CreateStep_CallFunction(
 							[captures](SequenceIterator& iterator) {
-								captures->_lightScene->_shadowScheduler->ClearPreparedShadows();
+								captures->_lightScene->_priorityShadowScheduler->ClearPreparedShadows();
 							});
 					}
 
 					// prepare-only steps
-					for (const auto&shadowPreparer:captures->_lightScene->_shadowPreparers->_preparers) {
+					for (const auto&seqCfg:captures->_lightScene->_priorityShadowScheduler->GetSequencerCfgsForPrepareSteps()) {
 						auto batches = Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending;
 						batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
 						mainSequence.CreatePrepareOnlyParseScene(batches);
-						mainSequence.CreatePrepareOnlyStep_ExecuteDrawables(shadowPreparer._preparer->GetSequencerConfig().first);
+						mainSequence.CreatePrepareOnlyStep_ExecuteDrawables(seqCfg);
 					}
 
 					lightingTechnique->CompleteConstruction(pipelineAccelerators, stitchingContext, fbProps);
@@ -598,10 +569,13 @@ namespace RenderCore { namespace LightingEngine
 					};
 					auto secondStageHelper = std::make_shared<SecondStageConstructionHelper>();
 
+					assert(0);		// positionalLightOperators, shadowOperators has to bubble up to here
+					IteratorRange<const PositionalLightOperatorDesc*> positionalLightOperators;
+					IteratorRange<const ShadowOperatorDesc*> shadowOperators;
 					const unsigned gbufferTypeCode = 1;
 					secondStageHelper->_lightResolveOperators = BuildLightResolveOperators(
 						*pipelineCollection, lightingOperatorLayout,
-						digest._resolveOperators, digest._shadowOperators,
+						positionalLightOperators, shadowOperators,
 						*resolvedFB.first, resolvedFB.second+1,
 						false, gbufferTypeCode);
 
@@ -709,14 +683,14 @@ namespace RenderCore { namespace LightingEngine
 
 	void DeferredLightingCaptures::GenerateDebuggingOutputs(SequenceIterator& iterator)
 	{
-		if (!_lightScene->_shadowScheduler) return;
+		if (!_lightScene->_priorityShadowScheduler) return;
 		iterator._parsingContext->GetUniformDelegateManager()->BringUpToDateGraphics(*iterator._parsingContext);
 		unsigned c=0;
-		for (auto preparedShadow:_lightScene->_shadowScheduler->GetAllPreparedShadows()) {
+		for (auto preparedShadow:_lightScene->_priorityShadowScheduler->GetAllPreparedShadows()) {
 			GenerateShadowingDebugTextures( 
 				*iterator._parsingContext, 
 				_pipelineCollection,
-				_lightScene->_shadowScheduler->_shadowPreparers->_preparers[preparedShadow._preparerIdx]._desc,
+				preparedShadow._opDesc,
 				*preparedShadow._preparedResult, c);
 			++c;
 		}

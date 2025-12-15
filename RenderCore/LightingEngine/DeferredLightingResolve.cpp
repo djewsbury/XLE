@@ -182,7 +182,7 @@ namespace RenderCore { namespace LightingEngine
 
 	static bool IsCompatible(const PositionalLightOperatorDesc& lightSource, const ShadowOperatorDesc& shadowOp)
 	{
-		if (shadowOp._resolveType != ShadowResolveType::Probe) {
+		if (shadowOp._resolveType != ShadowResolveType::SemiStaticProbe && shadowOp._resolveType != ShadowResolveType::SemiStaticAndDynamicProbe && shadowOp._resolveType != ShadowResolveType::DynamicProbe) {
 			switch (shadowOp._projectionMode) {
 			case ShadowProjectionMode::Arbitrary:
 			case ShadowProjectionMode::Ortho:
