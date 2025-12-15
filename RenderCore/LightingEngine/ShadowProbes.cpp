@@ -305,7 +305,7 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	IResourceView& ShadowProbes::GetStaticProbesTable() const
+	IResourceView& ShadowProbes::GetStaticProbeTable() const
 	{
 		assert(_pimpl->_staticTableSRV);
 		return *_pimpl->_staticTableSRV;
@@ -439,7 +439,7 @@ namespace RenderCore { namespace LightingEngine
 		return Techniques::RenderPassInstance{parsingContext, fragment, beginInfo};
 	}
 
-	IResourceView& DynamicShadowProbes::GetDynamicProbesTable() const
+	IResourceView& DynamicShadowProbes::GetDynamicProbeTable() const
 	{
 		assert(_pimpl->_staticTableSRV);
 		return *_pimpl->_staticTableSRV;

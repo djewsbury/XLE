@@ -395,7 +395,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		struct ProbeEntry
 		{
 			ShadowProbes::Probe _probeDesc;
-			unsigned _attachedDatabaseIndex = ~0u;
+			unsigned _attachedProbeTableIndex = ~0u;
 			int _fading = 0;
 		};
 		std::vector<ProbeEntry> _probes;
@@ -502,7 +502,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			i = _allocatedDatabaseEntries.insert(i, {q.first, p});
 			_unassociatedProbeSlots &= ~(1ull << uint64_t(q.second));
 
-			comp._probes[GetLightIndex(q.first)]._attachedDatabaseIndex = p._databaseIndex;
+			comp._probes[GetLightIndex(q.first)]._attachedProbeTableIndex = p._databaseIndex;
 			comp._probes[GetLightIndex(q.first)]._fading = p._fading;
 		}
 
@@ -530,7 +530,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				auto bit = 1ull << uint64_t(l->second._databaseIndex);
 				if (_probeSlotsReservedInBackground & bit) {
 					auto& inComponent = _sceneSets[GetSetIndex(l->first)]._probes[GetLightIndex(l->first)];
-					inComponent._attachedDatabaseIndex = ~0u;
+					inComponent._attachedProbeTableIndex = ~0u;
 					inComponent._fading = 0;
 
 					_unassociatedProbeSlots |= (1ull << uint64_t(l->second._databaseIndex));
@@ -596,7 +596,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				if (!currentStateIterator->second._fading) {
 					_unassociatedProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
 					auto& inComponent = _sceneSets[GetSetIndex(currentStateIterator->first)]._probes[GetLightIndex(currentStateIterator->first)];
-					inComponent._attachedDatabaseIndex = ~0u;
+					inComponent._attachedProbeTableIndex = ~0u;
 					inComponent._fading = 0;
 					currentStateIterator = _allocatedDatabaseEntries.erase(currentStateIterator);
 				} else
@@ -613,7 +613,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				currentStateIterator->second._fading = std::min(currentStateIterator->second._fading+1, int(_fadeTransitionInFrames));
 				auto& inComponent = _sceneSets[GetSetIndex(currentStateIterator->first)]._probes[GetLightIndex(currentStateIterator->first)];
 				inComponent._fading = currentStateIterator->second._fading;
-				assert(inComponent._attachedDatabaseIndex == currentStateIterator->second._databaseIndex);
+				assert(inComponent._attachedProbeTableIndex == currentStateIterator->second._databaseIndex);
 				++currentStateIterator;
 				++newStateIterator;
 			}
@@ -625,7 +625,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			if (!currentStateIterator->second._fading) {
 				_unassociatedProbeSlots |= 1ull << uint64_t(currentStateIterator->second._databaseIndex);
 				auto& inComponent = _sceneSets[GetSetIndex(currentStateIterator->first)]._probes[GetLightIndex(currentStateIterator->first)];
-				inComponent._attachedDatabaseIndex = ~0u;
+				inComponent._attachedProbeTableIndex = ~0u;
 				inComponent._fading = 0;
 				currentStateIterator = _allocatedDatabaseEntries.erase(currentStateIterator);
 			} else
@@ -700,7 +700,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
 		assert(_sceneSets[setIdx]._activeProbes.IsAllocated(lightIdx));
 		auto& p = _sceneSets[setIdx]._probes[lightIdx];
-		return { p._attachedDatabaseIndex, p._fading };
+		return { p._attachedProbeTableIndex, p._fading };
 	}
 
 	SemiStaticShadowProbeScheduler::SemiStaticShadowProbeScheduler(std::shared_ptr<ShadowProbes> shadowProbes, ILightScene::LightOperatorId operatorId) 
@@ -754,10 +754,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 		}
 
-		if (lightsAndDistance.size() > _probeSlotsCount) {
+		auto maxLights = _probeTableFaceCount / 6;
+		if (lightsAndDistance.size() > maxLights) {
 			// find the smallest N items and then restore sort order
-			std::nth_element(lightsAndDistance.begin(), lightsAndDistance.begin()+_probeSlotsCount, lightsAndDistance.end(), CompareSecond2{});
-			lightsAndDistance.erase(lightsAndDistance.begin()+_probeSlotsCount, lightsAndDistance.end());
+			std::nth_element(lightsAndDistance.begin(), lightsAndDistance.begin()+maxLights, lightsAndDistance.end(), CompareSecond2{});
+			lightsAndDistance.erase(lightsAndDistance.begin()+maxLights, lightsAndDistance.end());
 			std::sort(lightsAndDistance.begin(), lightsAndDistance.end(), CompareFirst2{});
 		}
 		
@@ -775,7 +776,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		{
 			auto newDistancesIterator = lightsAndDistance.begin();
-			assert(_probeSlotsCount <= 64u);	// has to be small, because we're going to use a bitfield in a uint64_t
+			assert(_probeTableFaceCount <= 64u*6);	// has to be small, because we're going to use a bitfield in a uint64_t
 			while (newDistancesIterator != lightsAndDistance.end()) {
 
 				if (currentStateIterator != _activeLights[0].end() && currentStateIterator->first < newDistancesIterator->first) {
@@ -820,7 +821,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		// we can have too many due to the fading process slowing down evictions. In this case we must prioritize removals based some heuristic
 		// that considers distance, fading and new light vs old light
-		if (updatedState.size() > _probeSlotsCount) {
+		if (updatedState.size() > maxLights) {
 			using SlotAndScore = std::pair<unsigned, float>;
 			VLA_UNSAFE_FORCE(SlotAndScore, scores, updatedState.size());
 			auto* s = scores;
@@ -834,12 +835,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				float score = fadeFactor*fadeFactor * (drawDistance-dist)*(drawDistance-dist) * offScreenFactor * offScreenFactor;
 				*s++ = {unsigned(&u-updatedState.data()), score};
 			}
-			auto countToRemove = updatedState.size() - _probeSlotsCount;
+			auto countToRemove = updatedState.size() - maxLights;
 			std::nth_element(scores, scores+countToRemove, scores+updatedState.size(), CompareSecond2{});		// smallest scores to the front
 			std::sort(scores, scores+countToRemove, CompareFirst2{});
 			for (unsigned c=0; c<countToRemove; ++c)
 				updatedState.erase(updatedState.begin()+scores[countToRemove-c-1].first);
-			assert(updatedState.size() == _probeSlotsCount);
+			assert(updatedState.size() == maxLights);
 		}
 
 		// Update clustering (this also assign database slot indices)
@@ -852,7 +853,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				if (!i.second._active) continue;
 				while (i2!=_activeLights[2].end() && i2->first < i.first) ++i2;
 				if (i2==_activeLights[2].end() || i2->first != i.first || !i2->second._active)
-					LookupProbeEntry(i.first)._attachedDatabaseIndex = ~0u;		// received shadowing last frame, but will not this frame
+					LookupProbeEntry(i.first)._attachedProbeTableIndex = ~0u;		// received shadowing last frame, but will not this frame
 			}
 		}
 
@@ -888,7 +889,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		auto& activeLights = _activeLights[1];
 
-		const auto baseClusterCount = (_probeSlotsCount + s_maxProbesPerCluster - 1) / s_maxProbesPerCluster;
+		const auto maxLights = _probeTableFaceCount / 6;
+		const auto baseClusterCount = (maxLights + s_maxProbesPerCluster - 1) / s_maxProbesPerCluster;
 		auto activeProbeCount = std::accumulate(b2e(activeLights), 0u, [](const auto& q) { return (unsigned)q.second._active; });
 
 		using ClusterIndex = unsigned;
@@ -976,15 +978,15 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		{
 			auto LookupProbeEntry = [this](LightIndex lightIndex) -> SharedProbeSceneSet::ProbeEntry& { return this->_sceneSets[GetSetIndex(lightIndex)]._probes[GetLightIndex(lightIndex)]; };
 
-			unsigned nextDatabaseIdx = 0;
+			unsigned nextProbeTableFaceIdx = 0;
 
 			for (unsigned c=0; c<_clusterCount; ++c) {
 
 				// scene parse
 				WorkingCluster workingCluster;
 				std::vector<Techniques::ProjectionDesc> projDescs;		// subframe heap candidate
-				projDescs.reserve(_probeSlotsCount*6);
-				unsigned firstFaceIndex = nextDatabaseIdx;
+				projDescs.reserve(_probeTableFaceCount);
+				unsigned firstFaceIndex = nextProbeTableFaceIdx;
 				{
 					Float3 clusterMins { std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max() };
 					Float3 clusterMaxs { std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
@@ -992,9 +994,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					for (auto& a:_activeLights[0])
 						if (a.second._clusterIndex == c) {
 							auto& probe = LookupProbeEntry(a.first)._probeDesc;
-							LookupProbeEntry(a.first)._attachedDatabaseIndex = nextDatabaseIdx;
+							LookupProbeEntry(a.first)._attachedProbeTableIndex = nextProbeTableFaceIdx;
 							WriteProjectionDescs(projDescs, {&probe, &probe+1});
-							nextDatabaseIdx += unsigned(projDescs.size());
+							nextProbeTableFaceIdx += unsigned(projDescs.size());
 
 							// sphere rules
 							auto p = ExtractTranslation(probe._objectToWorld);
@@ -1028,7 +1030,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					});
 			}
 
-			assert(nextDatabaseIdx <= _probeSlotsCount*6);
+			assert(nextProbeTableFaceIdx <= _probeTableFaceCount);
 		}
 	}
 
@@ -1078,26 +1080,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
 		assert(_sceneSets[setIdx]._activeProbes.IsAllocated(lightIdx));
 		auto& p = _sceneSets[setIdx]._probes[lightIdx];
-		return { p._attachedDatabaseIndex, p._fading };
+		return { p._attachedProbeTableIndex, p._fading };
 	}
 
-	DynamicShadowProbeScheduler::DynamicShadowProbeScheduler(
-		std::shared_ptr<DynamicShadowProbes> shadowProbes,
-		std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers)
-	: _shadowProbes(std::move(shadowProbes)), _shadowPreparers(std::move(shadowPreparers))
+	DynamicShadowProbeScheduler::DynamicShadowProbeScheduler(std::shared_ptr<DynamicShadowProbes> shadowProbes)
+	: _shadowProbes(std::move(shadowProbes))
 	{
-		_probeSlotsCount = _shadowProbes->GetReservedProbeCount();
-		assert(_probeSlotsCount <= 64);
-		_unassociatedProbeSlots = (_probeSlotsCount == 64u) ? ~0ull : ((1ull << uint64_t(_probeSlotsCount)) - 1ull);
-		_activeLights[0].reserve(_probeSlotsCount*2);
-		_activeLights[1].reserve(_probeSlotsCount*2);		// allow some overfill during UpdateActiveLights
-
-		_shadowGenFrameBufferPool = Techniques::CreateFrameBufferPool();
-		for (const auto& preparers:_shadowPreparers->_preparers) {
-			if (_operatorToPreparerIdMapping.size() < preparers._srcLightOperator)
-				_operatorToPreparerIdMapping.resize(preparers._srcLightOperator+1, ~0u);
-			_operatorToPreparerIdMapping[preparers._srcLightOperator] = unsigned(&preparers-_shadowPreparers->_preparers.data());
-		}
+		_probeTableFaceCount = _shadowProbes->GetFaceCount();
+		assert(_probeTableFaceCount <= 64*6);
+		_activeLights[0].reserve(_probeTableFaceCount*2);
+		_activeLights[1].reserve(_probeTableFaceCount*2);		// allow some overfill during UpdateActiveLights
 	}
 
 	DynamicShadowProbeScheduler::~DynamicShadowProbeScheduler() {}

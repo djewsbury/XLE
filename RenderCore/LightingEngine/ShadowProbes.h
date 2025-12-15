@@ -75,7 +75,7 @@ namespace RenderCore { namespace LightingEngine
 			IThreadContext& threadContext,
 			IteratorRange<const std::pair<unsigned, Probe>*> probesAndIndices);
 
-		IResourceView& GetStaticProbesTable() const;
+		IResourceView& GetStaticProbeTable() const;
 		IResourceView& GetShadowProbeUniforms() const;
 		bool IsReady() const;
 		unsigned GetReservedProbeCount();
@@ -109,7 +109,7 @@ namespace RenderCore { namespace LightingEngine
 		void Bind(Techniques::ParsingContext& parsingContext);
 		void UnbindAndBarrier(Techniques::ParsingContext& parsingContext);
 
-		IResourceView& GetDynamicProbesTable() const;
+		IResourceView& GetDynamicProbeTable() const;
 		IResourceView& GetDynamicProbeUniforms() const;
 		unsigned GetFaceCount();
 

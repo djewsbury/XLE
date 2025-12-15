@@ -128,9 +128,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		};
 		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
-		DynamicShadowProbeScheduler(
-			std::shared_ptr<DynamicShadowProbes> shadowProbes,
-			std::shared_ptr<PriorityShadowSchedulerUtil> shadowPreparers);
+		DynamicShadowProbeScheduler(std::shared_ptr<DynamicShadowProbes> shadowProbes);
 		~DynamicShadowProbeScheduler();
 	private:
 		using LightIndex = uint64_t;		// encoded set index and light index within that set
@@ -146,7 +144,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<std::pair<LightIndex, ActiveLight>> _activeLights[2];
 		float _defaultNearRadius = 1.f;
 		unsigned _fadeTransitionInFrames = 16;
-		unsigned _probeSlotsCount = 0;
+		unsigned _probeTableFaceCount = 0;
 		unsigned _clusterCount = 0;
 
 		void UpdateActiveLights(const Float3& newViewPosition, float drawDistance, const Float4x4& worldToClipSpace);

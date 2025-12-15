@@ -257,7 +257,7 @@ namespace RenderCore { namespace LightingEngine
 			if (bindingFlags & (1ull<<4ull)) {
 				assert(bindingFlags & (1ull<<5ull));
 				if (_lightScene->_shadowProbes && _lightScene->_shadowProbes->IsReady() && _lightScene->_shadowProbesManager->DoneInitialBackgroundPrepare()) {
-					dst[4] = &_lightScene->_shadowProbes->GetStaticProbesTable();
+					dst[4] = &_lightScene->_shadowProbes->GetStaticProbeTable();
 					dst[5] = &_lightScene->_shadowProbes->GetShadowProbeUniforms();
 				} else {
 					// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
@@ -267,11 +267,11 @@ namespace RenderCore { namespace LightingEngine
 				}
 			}
 
-			f (bindingFlags & (1ull<<6ull)) {
+			if (bindingFlags & (1ull<<6ull)) {
 				assert(bindingFlags & (1ull<<7ull));
 				if (_lightScene->_dynamicShadowProbes) {
-					dst[6] = &_lightScene->_dynamicShadowProbes->GetDynamicCubeProbesTable();
-					dst[7] = &_lightScene->_dynamicShadowProbes->GetDynamicCubeProbeUniforms();
+					dst[6] = &_lightScene->_dynamicShadowProbes->GetDynamicProbeTable();
+					dst[7] = &_lightScene->_dynamicShadowProbes->GetDynamicProbeUniforms();
 				} else {
 					// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes
 					assert(Techniques::GetDefaultClipSpaceType() == ClipSpaceType::Positive_ReverseZ || Techniques::GetDefaultClipSpaceType() == ClipSpaceType::PositiveRightHanded_ReverseZ);
