@@ -574,7 +574,7 @@ namespace RenderCore { namespace LightingEngine
 		{
 			ShadowResolveParam param;
 			param._filterModel = shadowOp._filterModel;
-			if (shadowOp._resolveType != ShadowResolveType::Probe) {
+			if (shadowOp._resolveType != ShadowResolveType::SemiStaticProbe && shadowOp._resolveType != ShadowResolveType::SemiStaticAndDynamicProbe && shadowOp._resolveType != ShadowResolveType::DynamicProbe) {
 				switch (shadowOp._projectionMode) {
 				case ShadowProjectionMode::Arbitrary:
 					param._shadowing = ShadowResolveParam::Shadowing::PerspectiveShadows;
@@ -621,7 +621,9 @@ namespace RenderCore { namespace LightingEngine
 		switch (input) {
 		case ShadowResolveType::DepthTexture: return "DepthTexture";
 		case ShadowResolveType::RayTraced: return "RayTraced";
-		case ShadowResolveType::Probe: return "Probe";
+		case ShadowResolveType::SemiStaticProbe: return "SemiStaticProbe";
+		case ShadowResolveType::SemiStaticAndDynamicProbe: return "SemiStaticAndDynamicProbe";
+		case ShadowResolveType::DynamicProbe: return "DynamicProbe";
 		default:
 			return nullptr;
 		}
@@ -631,7 +633,9 @@ namespace RenderCore { namespace LightingEngine
 	{
 		if (XlEqString(input, "DepthTexture")) return ShadowResolveType::DepthTexture;
 		if (XlEqString(input, "RayTraced")) return ShadowResolveType::RayTraced;
-		if (XlEqString(input, "Probe")) return ShadowResolveType::Probe;
+		if (XlEqString(input, "SemiStaticProbe")) return ShadowResolveType::SemiStaticProbe;
+		if (XlEqString(input, "SemiStaticAndDynamicProbe")) return ShadowResolveType::SemiStaticAndDynamicProbe;
+		if (XlEqString(input, "DynamicProbe")) return ShadowResolveType::DynamicProbe;
 		return {};
 	}
 

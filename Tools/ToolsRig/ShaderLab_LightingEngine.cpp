@@ -40,8 +40,10 @@ namespace ToolsRig
 	public:
 		void DoShadowPrepare(LightingEngine::SequenceIterator& iterator, LightingEngine::Sequence& sequence)
 		{
-			if (_lightScene->_shadowScheduler)
-				_lightScene->_shadowScheduler->DoShadowPrepare(iterator, sequence);
+			if (_lightScene->_priorityShadowScheduler)
+				_lightScene->_priorityShadowScheduler->DoShadowPrepare(iterator, sequence);
+			if (_lightScene->_dynamicProbeScheduler)
+				_lightScene->_dynamicProbeScheduler->DoShadowPrepare(iterator, sequence);
 		}
 
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
@@ -56,8 +58,10 @@ namespace ToolsRig
 		{
 			if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
 				parsingContext.GetUniformDelegateManager()->UnbindFixedDescriptorSet(*dominantShadow->GetDescriptorSet());
-			if (_lightScene->_shadowScheduler)
-				_lightScene->_shadowScheduler->ClearPreparedShadows();
+			if (_lightScene->_dynamicProbeScheduler)
+				_lightScene->_dynamicProbeScheduler->ClearPreparedShadows();
+			if (_lightScene->_priorityShadowScheduler)
+				_lightScene->_priorityShadowScheduler->ClearPreparedShadows();
 		}
 
 		std::shared_ptr<LightingEngine::ForwardPlusLightScene> _lightScene;

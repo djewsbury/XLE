@@ -450,7 +450,7 @@ namespace RenderCore { namespace LightingEngine
 		srvs[SR::DepthTexture] = rpi.GetInputAttachmentView(3).get();
 		if (lightResolveOperators._enableShadowProbes) {
 			if (shadowProbes && shadowProbes->IsReady()) {
-				srvs[SR::StaticShadowProbeDatabase] = &shadowProbes->GetStaticProbesTable();
+				srvs[SR::StaticShadowProbeDatabase] = &shadowProbes->GetStaticProbeTable();
 				srvs[SR::StaticShadowProbeProperties] = &shadowProbes->GetShadowProbeUniforms();
 			} else {
 				// We need a white dummy texture in reverseZ modes, or black in non-reverseZ modes

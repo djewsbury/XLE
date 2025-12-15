@@ -153,10 +153,11 @@ namespace RenderCore { namespace LightingEngine
 				assert(p._fov > 0);
 				// note that we have to shift the matrix around to convert from object-to-world into camera-to-world style
 				Techniques::CameraDesc cameraDesc;
-				cameraDesc._cameraToWorld = Float3x4 {
+				cameraDesc._cameraToWorld = Float4x4 {
 					p._objectToWorld(0, 0), p._objectToWorld(0, 2), -p._objectToWorld(0, 1), p._objectToWorld(0, 3),
 					p._objectToWorld(1, 0), p._objectToWorld(1, 2), -p._objectToWorld(1, 1), p._objectToWorld(1, 3),
-					p._objectToWorld(2, 0), p._objectToWorld(2, 2), -p._objectToWorld(2, 1), p._objectToWorld(2, 3) };
+					p._objectToWorld(2, 0), p._objectToWorld(2, 2), -p._objectToWorld(2, 1), p._objectToWorld(2, 3),
+					0.f, 0.f, 0.f, 1.f };
 				cameraDesc._nearClip = p._nearRadius; cameraDesc._farClip = p._farRadius;
 				cameraDesc._projection = Techniques::CameraDesc::Projection::Perspective;
 				cameraDesc._verticalFieldOfView = p._fov;

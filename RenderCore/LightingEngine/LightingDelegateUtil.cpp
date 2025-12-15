@@ -378,14 +378,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	static ShadowProbes::Probe GetProbeDesc(ILightBase& light)
 	{
 		ShadowProbes::Probe probe;
-		probe._objectToWorld = Identity<Float4x4>();
+		probe._objectToWorld = Identity<Float3x4>();
 		probe._nearRadius = 1.f;
 		probe._farRadius = 1024.f;
 		probe._dimensionality = TextureDesc::Dimensionality::CubeMap;
 		auto* positional = (IPositionalLightSource*)light.QueryInterface(s_positionalLightSourceInterface);
 		assert(positional);
 		if (positional) {
-			probe._objectToWorld = positional->GetLocalToWorld();
+			probe._objectToWorld = AsFloat3x4(positional->GetLocalToWorld());
 			probe._nearRadius = ExtractUniformScaleFast(AsFloat3x4(positional->GetLocalToWorld()));
 		}
 		auto* finite = (IFiniteLightSource*)light.QueryInterface(s_finiteLightSourceInterface);
@@ -895,7 +895,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		const auto maxLights = _probeTableFaceCount / 6;
 		const auto baseClusterCount = (maxLights + s_maxProbesPerCluster - 1) / s_maxProbesPerCluster;
-		auto activeProbeCount = std::accumulate(b2e(activeLights), 0u, [](const auto& q) { return (unsigned)q.second._active; });
+		auto activeProbeCount = std::accumulate(b2e(activeLights), 0u, [](unsigned lhs, const auto& q) { return lhs+(unsigned)q.second._active; });
 
 		using ClusterIndex = unsigned;
 		std::vector<ClusterIndex> clusterAssignments;
