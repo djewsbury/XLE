@@ -38,6 +38,8 @@
 #include "../../RenderCore/IDevice.h"
 #include "../../RenderCore/ResourceDesc.h"
 #include "../../PlatformRig/InputContext.h"
+#include "../../PlatformRig/DebugScreenRegistry.h"
+#include "../../PlatformRig/DebuggingDisplays/LightingEngineDisplay.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
 #include "../../ConsoleRig/GlobalServices.h"
@@ -214,6 +216,10 @@ namespace ToolsRig
 			std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _compiledLightingTechnique;
 			std::shared_ptr<RenderCore::LightingEngine::ILightScene> _lightScene;
 			::Assets::DependencyValidation _depVal;
+
+			#if defined(_DEBUG)
+				std::vector<PlatformRig::DebugScreenRegistration> _debugScreens;
+			#endif
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
@@ -415,6 +421,10 @@ namespace ToolsRig
 								preparedScene->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 
 								preparedScene->_envSettings->BindScene(*lightScene, loadingContext);
+
+								#if defined(_DEBUG)
+									preparedScene->_debugScreens.emplace_back("shadow-probes", PlatformRig::Overlays::CreateShadowProbesDisplay(preparedScene->_compiledLightingTechnique));
+								#endif
 
 								auto threadContext = RenderCore::Techniques::GetThreadContext();
 								std::future<RenderCore::Techniques::PreparedResourcesVisibility> pendingResources;
