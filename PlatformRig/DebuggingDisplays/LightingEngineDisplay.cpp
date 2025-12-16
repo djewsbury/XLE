@@ -25,6 +25,7 @@
 #include "../../Assets/Marker.h"
 #include "../../Assets/CompoundAsset.h"
 #include "../../Math/Transformations.h"
+#include "../../Math/Geometry.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/StreamUtils.h"
@@ -95,26 +96,6 @@ namespace PlatformRig { namespace Overlays
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class ShadowProbesDisplay : public RenderOverlays::DebuggingDisplay::IWidget
-	{
-	public:
-		ShadowProbesDisplay(std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> overlayAccelerators, std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique);
-		~ShadowProbesDisplay();
-	protected:
-		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override;
-		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override;
-		
-		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _technique;
-		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
-
-		struct Resources
-		{
-			std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _depthMapVisPipeline;
-			std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _depthMapVisDS;
-		};
-		std::shared_future<Resources> _futureResources;
-	};
-
 	static void DrawCircle(RenderOverlays::IOverlayContext& context, Float3 position, Float3 camRight, Float3 camUp, const RenderOverlays::ColorB col)
 	{
 		const float outerRadius = 0.2f;
@@ -138,170 +119,207 @@ namespace PlatformRig { namespace Overlays
 
 	static const RenderCore::UniformsStreamInterface s_usiCubeMapVis = RenderCore::UniformsStreamInterface{}.BindResourceView(0, "CubeMap"_h);
 
-	void    ShadowProbesDisplay::Render(IOverlayContext& context, Layout& layout, Interactables& interactables, InterfaceState& interfaceState)
+	class ShadowProbesDisplay : public RenderOverlays::DebuggingDisplay::IWidget
 	{
-		using namespace RenderOverlays;
-		using namespace RenderCore;
-		const unsigned lineHeight = 20;
-		const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
-
+	public:
+		void    Render(IOverlayContext& context, Layout& layout, Interactables&interactables, InterfaceState& interfaceState) override
 		{
-			layout.SetDirection(Layout::Direction::Column);
-			auto titleRect = layout.Allocate(30);
-			FillRectangle(context, titleRect, titleBkground);
-			titleRect._topLeft[0] += 8;
-			auto* font = _headingFont->TryActualize();
-			if (font)
-				DrawText()
-					.Font(**font)
-					.Color({ 191, 123, 0 })
-					.Alignment(RenderOverlays::TextAlignment::Left)
-					.Flags(RenderOverlays::DrawTextFlags::Shadow)
-					.Draw(context, titleRect, "Shadow Probes");
-		}
+			using namespace RenderOverlays;
+			using namespace RenderCore;
+			const unsigned lineHeight = 20;
+			const auto titleBkground = RenderOverlays::ColorB { 51, 51, 51 };
 
-		LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics* metricsInterface = nullptr;
-		if (auto* lightScene = RenderCore::LightingEngine::TryGetLightScene(*_technique))
-			metricsInterface = (LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics*)lightScene->QueryInterface(TypeHashCode<LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics>);
-
-		if (metricsInterface) {
-			auto metrics = metricsInterface->GetMetrics();
-
-			// write some key metrics
 			{
-				char buffer[256];
-				DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Probe table allocation: " << Utility::ByteCount{metrics._probeTableSizeBytes});
-				DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Faces used: " << metrics._probeTableFaceUsed << " / " << metrics._probeTableFaceReserved);
-				DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Active light count: " << metrics._activeLights.size());
-				DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Active light clusters: " << metrics._clusters.size());
-				DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Ave cluster count: " << metrics._activeLights.size()/float(metrics._clusters.size()));
+				layout.SetDirection(Layout::Direction::Column);
+				auto titleRect = layout.Allocate(30);
+				FillRectangle(context, titleRect, titleBkground);
+				titleRect._topLeft[0] += 8;
+				auto* font = _headingFont->TryActualize();
+				if (font)
+					DrawText()
+						.Font(**font)
+						.Color({ 191, 123, 0 })
+						.Alignment(RenderOverlays::TextAlignment::Left)
+						.Flags(RenderOverlays::DrawTextFlags::Shadow)
+						.Draw(context, titleRect, "Shadow Probes");
 			}
 
-			// Draw indicators for the lights and clusters
-			if (auto* parsingContext = context.GetService<Techniques::ParsingContext>()) {
-				const auto& camToWorld = parsingContext->GetProjectionDesc()._cameraToWorld;
-				auto camRight = ExtractRight_Cam(camToWorld), camUp = ExtractUp_Cam(camToWorld);
-				for (auto& l:metrics._activeLights)
-					DrawCircle(context, l._position, camRight, camUp, ColorB{200, 200, 200});		// rgb(200, 200, 200)
+			LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics* metricsInterface = nullptr;
+			if (auto* lightScene = RenderCore::LightingEngine::TryGetLightScene(*_technique))
+				metricsInterface = (LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics*)lightScene->QueryInterface(TypeHashCode<LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics>);
 
-				// Recalculate the cluster boundaries and draw bounding boxes
-				for (auto& cluster:metrics._clusters) {
-					Float3 clusterMins { std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max() };
-					Float3 clusterMaxs { std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
-					auto clusterToWorld = MakeObjectToWorld(cluster._mainAxis, Float3{0,0,1}, Float3{0,0,0});
+			if (metricsInterface) {
+				_metrics = metricsInterface->GetMetrics();
 
-					for (auto& a:metrics._activeLights)
-						if (a._clusterIndex == &cluster-metrics._clusters.data()) {
-							// sphere rules
-							auto p = TransformPointByOrthonormalInverse(clusterToWorld, a._position);
-							clusterMins[0] = std::min(clusterMins[0], p[0] - a._radius);
-							clusterMins[1] = std::min(clusterMins[1], p[1] - a._radius);
-							clusterMins[2] = std::min(clusterMins[2], p[2] - a._radius);
-							clusterMaxs[0] = std::max(clusterMaxs[0], p[0] + a._radius);
-							clusterMaxs[1] = std::max(clusterMaxs[1], p[1] + a._radius);
-							clusterMaxs[2] = std::max(clusterMaxs[2], p[2] + a._radius);
+				// write some key metrics
+				{
+					char buffer[256];
+					DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Probe table allocation: " << Utility::ByteCount{_metrics._probeTableSizeBytes});
+					DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Faces used: " << _metrics._probeTableFaceUsed << " / " << _metrics._probeTableFaceReserved);
+					DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Active light count: " << _metrics._activeLights.size());
+					DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Active light clusters: " << _metrics._clusters.size());
+					DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Ave cluster count: " << _metrics._activeLights.size()/float(_metrics._clusters.size()));
+					DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Selected light: " << _selectedLight);
+				}
+
+				// Draw indicators for the lights and clusters
+				if (auto* parsingContext = context.GetService<Techniques::ParsingContext>()) {
+					_lastProjection = parsingContext->GetProjectionDesc()._worldToProjection;
+
+					const auto& camToWorld = parsingContext->GetProjectionDesc()._cameraToWorld;
+					auto camRight = ExtractRight_Cam(camToWorld), camUp = ExtractUp_Cam(camToWorld);
+					for (auto& l:_metrics._activeLights)
+						DrawCircle(context, l._position, camRight, camUp, _selectedLight == (&l-_metrics._activeLights.data()) ? ColorB{160, 255, 255} : ColorB{200, 200, 200});		// rgb(200, 200, 200)
+
+					// Recalculate the cluster boundaries and draw bounding boxes
+					for (auto& cluster:_metrics._clusters) {
+						Float3 clusterMins { std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max() };
+						Float3 clusterMaxs { std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
+						auto clusterToWorld = MakeObjectToWorld(cluster._mainAxis, Float3{0,0,1}, Float3{0,0,0});
+
+						for (auto& a:_metrics._activeLights)
+							if (a._clusterIndex == &cluster-_metrics._clusters.data()) {
+								// sphere rules
+								auto p = TransformPointByOrthonormalInverse(clusterToWorld, a._position);
+								clusterMins[0] = std::min(clusterMins[0], p[0] - a._radius);
+								clusterMins[1] = std::min(clusterMins[1], p[1] - a._radius);
+								clusterMins[2] = std::min(clusterMins[2], p[2] - a._radius);
+								clusterMaxs[0] = std::max(clusterMaxs[0], p[0] + a._radius);
+								clusterMaxs[1] = std::max(clusterMaxs[1], p[1] + a._radius);
+								clusterMaxs[2] = std::max(clusterMaxs[2], p[2] + a._radius);
+							}
+
+						std::vector<Float3> corners {
+							{clusterMins[0], clusterMins[1], clusterMins[2]},
+							{clusterMins[0], clusterMaxs[1], clusterMins[2]},
+							{clusterMaxs[0], clusterMins[1], clusterMins[2]},
+							{clusterMaxs[0], clusterMaxs[1], clusterMins[2]},
+							{clusterMins[0], clusterMins[1], clusterMaxs[2]},
+							{clusterMins[0], clusterMaxs[1], clusterMaxs[2]},
+							{clusterMaxs[0], clusterMins[1], clusterMaxs[2]},
+							{clusterMaxs[0], clusterMaxs[1], clusterMaxs[2]}
+						};
+						for (auto& c:corners) c = TransformPoint(clusterToWorld, c);
+
+						struct Edge { unsigned f0, f1, v0, v1; };
+						Edge frustumEdges[] {
+							{ 0, 4, 2, 0 },        // front & top
+							{ 0, 2, 0, 1 },        // front & x=-1
+							{ 0, 5, 1, 3 },        // front & bottom
+							{ 0, 3, 3, 2 },        // front & x=1
+
+							{ 1, 4, 4, 6 },        // back & top
+							{ 1, 3, 6, 7 },        // back & x=1
+							{ 1, 5, 7, 5 },        // back & bottom
+							{ 1, 2, 5, 4 },        // back & x=1
+
+							{ 2, 4, 0, 4 },        // x=-1 & top
+							{ 2, 5, 5, 1 },        // x=-1 & bottom
+
+							{ 3, 4, 6, 2 },        // x=1 & top
+							{ 3, 5, 3, 7 }         // x=1 & bottom
+						};
+
+						Float3 lines[dimof(frustumEdges)*2];
+						for (unsigned c=0; c<dimof(frustumEdges); ++c) {
+							lines[c*2+0] = corners[frustumEdges[c].v0];
+							lines[c*2+1] = corners[frustumEdges[c].v1];
 						}
-
-					std::vector<Float3> corners {
-						{clusterMins[0], clusterMins[1], clusterMins[2]},
-						{clusterMins[0], clusterMaxs[1], clusterMins[2]},
-						{clusterMaxs[0], clusterMins[1], clusterMins[2]},
-						{clusterMaxs[0], clusterMaxs[1], clusterMins[2]},
-						{clusterMins[0], clusterMins[1], clusterMaxs[2]},
-						{clusterMins[0], clusterMaxs[1], clusterMaxs[2]},
-						{clusterMaxs[0], clusterMins[1], clusterMaxs[2]},
-						{clusterMaxs[0], clusterMaxs[1], clusterMaxs[2]}
-					};
-					for (auto& c:corners) c = TransformPoint(clusterToWorld, c);
-
-					struct Edge { unsigned f0, f1, v0, v1; };
-					Edge frustumEdges[] {
-						{ 0, 4, 2, 0 },        // front & top
-						{ 0, 2, 0, 1 },        // front & x=-1
-						{ 0, 5, 1, 3 },        // front & bottom
-						{ 0, 3, 3, 2 },        // front & x=1
-
-						{ 1, 4, 4, 6 },        // back & top
-						{ 1, 3, 6, 7 },        // back & x=1
-						{ 1, 5, 7, 5 },        // back & bottom
-						{ 1, 2, 5, 4 },        // back & x=1
-
-						{ 2, 4, 0, 4 },        // x=-1 & top
-						{ 2, 5, 5, 1 },        // x=-1 & bottom
-
-						{ 3, 4, 6, 2 },        // x=1 & top
-						{ 3, 5, 3, 7 }         // x=1 & bottom
-					};
-
-					Float3 lines[dimof(frustumEdges)*2];
-					for (unsigned c=0; c<dimof(frustumEdges); ++c) {
-						lines[c*2+0] = corners[frustumEdges[c].v0];
-						lines[c*2+1] = corners[frustumEdges[c].v1];
+						context.DrawLines(ProjectionMode::P3D, lines, dimof(lines), ColorB{215, 100, 100}, 3.f);  // rgba(215, 100, 100, 1)
 					}
-					context.DrawLines(ProjectionMode::P3D, lines, dimof(lines), ColorB{215, 100, 100}, 3.f);  // rgba(215, 100, 100, 1)
+				}
+
+				if (_futureResources.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+					auto& resources = _futureResources.get();
+
+					if (auto srv = metricsInterface->GetCubeMapSRV(_selectedLight)) {
+						auto rect = layout.AllocateFullWidth(700);
+						auto idealWidth = rect.Height() * 4 / 3;
+						if (rect.Width() > idealWidth) rect = { rect._topLeft[0] + (rect.Width()-idealWidth)/2, rect._topLeft[1], rect._topLeft[0] + (rect.Width()+idealWidth)/2, rect._bottomRight[1] };
+						RenderCore::Techniques::RetainedUniformsStream uniforms; uniforms._resourceViews.emplace_back(srv);
+						auto vertices = context.GetImmediateDrawables().QueueDraw(
+							6, sizeof(Vertex_PT), *resources._depthMapVisPipeline, *resources._depthMapVisDS, &s_usiCubeMapVis, std::move(uniforms)).Cast<Vertex_PT*>();
+						vertices[0] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._topLeft[1]), Float2{0.f, 0.f} };
+						vertices[1] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[1]), Float2{0.f, 1.f} };
+						vertices[2] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[1]), Float2{1.f, 0.f} };
+
+						vertices[3] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[1]), Float2{1.f, 0.f} };
+						vertices[4] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[1]), Float2{0.f, 1.f} };
+						vertices[5] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._bottomRight[1]), Float2{1.f, 1.f} };
+
+						const char* labels[] { "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
+						Float2 positions[] { Float2{0.5f/4.f, 1.5f/3.f}, Float2{2.5f/4.f, 1.5f/3.f}, Float2{1.5f/4.f, 1.5f/3.f}, Float2{3.5f/4.f, 1.5f/3.f}, Float2{1.5f/4.f, 0.5f/3.f}, Float2{1.5f/4.f, 2.5f/3.f} };
+						for (unsigned c=0; c<dimof(labels); ++c) {
+							Coord2 pos  = { LinearInterpolate(rect._topLeft[0], rect._bottomRight[0], positions[c][0]), LinearInterpolate(rect._topLeft[1], rect._bottomRight[1], positions[c][1]) };
+							if (auto* font = _headingFont->TryActualize()) DrawText().Font(**font).FormatAndDraw(context, {pos, pos}, labels[c]);
+						}
+					}
+				}
+				
+			} else {
+				DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "No metrics interface for dynamic shadow probes");
+			}
+		}
+		
+		ProcessInputResult    ProcessInput(InterfaceState& interfaceState, const OSServices::InputSnapshot& input) override
+		{
+			if (input.IsPress_LButton() && _lastProjection) {
+				Float3 frustumCorners[8];
+				CalculateAbsFrustumCorners(frustumCorners, *_lastProjection, RenderCore::Techniques::GetDefaultClipSpaceType());
+				auto ray = BuildRayUnderCursor({input._mousePosition._x, input._mousePosition._y}, frustumCorners, {interfaceState.GetWindowingSystemView()._viewMins, interfaceState.GetWindowingSystemView()._viewMaxs});
+				for (auto& l:_metrics._activeLights) {
+					if (RayVsSphere(ray.first-l._position, ray.second-l._position, 0.2f*0.2f)) {
+						_selectedLight = unsigned(&l - _metrics._activeLights.data());
+						return ProcessInputResult::Consumed;
+					}
 				}
 			}
 
-			if (_futureResources.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-				auto& resources = _futureResources.get();
-
-				auto rect = layout.AllocateFullWidth(700);
-				auto idealWidth = rect.Height() * 4 / 3;
-				if (rect.Width() > idealWidth) rect = { rect._topLeft[0] + (rect.Width()-idealWidth)/2, rect._topLeft[1], rect._topLeft[0] + (rect.Width()+idealWidth)/2, rect._bottomRight[1] };
-				RenderCore::Techniques::RetainedUniformsStream uniforms; uniforms._resourceViews.emplace_back(metricsInterface->GetCubeMapSRV(0));
-				auto vertices = context.GetImmediateDrawables().QueueDraw(
-					6, sizeof(Vertex_PT), *resources._depthMapVisPipeline, *resources._depthMapVisDS, &s_usiCubeMapVis, std::move(uniforms)).Cast<Vertex_PT*>();
-				vertices[0] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._topLeft[1]), Float2{0.f, 0.f} };
-				vertices[1] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[1]), Float2{0.f, 1.f} };
-				vertices[2] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[1]), Float2{1.f, 0.f} };
-
-				vertices[3] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._topLeft[1]), Float2{1.f, 0.f} };
-				vertices[4] = Vertex_PT{ AsPixelCoords(rect._topLeft[0], rect._bottomRight[1]), Float2{0.f, 1.f} };
-				vertices[5] = Vertex_PT{ AsPixelCoords(rect._bottomRight[0], rect._bottomRight[1]), Float2{1.f, 1.f} };
-			}
-			
-		} else {
-			DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), "No metrics interface for dynamic shadow probes");
+			return ProcessInputResult::Passthrough;
 		}
-	}
+		
+		ShadowProbesDisplay(std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> overlayAccelerators, std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique)
+		: _technique(std::move(technique))
+		{
+			_headingFont = RenderOverlays::MakeFont("DosisExtraBold", 20);
 
-	auto    ShadowProbesDisplay::ProcessInput(InterfaceState& interfaceState, const InputSnapshot& input) -> ProcessInputResult
-	{
-		return ProcessInputResult::Passthrough;
-	}
+			std::promise<Resources> promisedResources;
+			_futureResources = promisedResources.get_future();
 
-	ShadowProbesDisplay::ShadowProbesDisplay(
-		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> overlayAccelerators,
-		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique)
-	: _technique(std::move(technique))
-	{
-		_headingFont = RenderOverlays::MakeFont("DosisExtraBold", 20);
+			auto util = std::make_shared<AssetsNew::CompoundAssetUtil>();
+			::AssetsNew::ContextAndIdentifier indexer { "xleres/RenderOverlays/DepthMapVis.hlsl:cubeMapVis" };
+			auto inputAssembly = RenderOverlays::Vertex_PT::s_inputElements2D;
+			auto topology = RenderCore::Topology::TriangleList;
 
-		std::promise<Resources> promisedResources;
-		_futureResources = promisedResources.get_future();
+			auto futureMaterial = util->GetFuture<RenderCore::Assets::RawMaterial>("RawMaterial"_h, indexer);
+			auto futureShaderPatches = util->GetFuture<std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>>("ShaderPatchCollection"_h, indexer);
+			::Assets::WhenAll(std::move(futureMaterial), std::move(futureShaderPatches)).ThenConstructToPromise(
+				std::move(promisedResources),
+				[pa=std::move(overlayAccelerators), topology, ia=std::vector<RenderCore::MiniInputElementDesc>(inputAssembly.begin(), inputAssembly.end()), util](const auto& material, const auto& shaderPatches) {
+					Resources result;
+					RenderCore::Assets::RawMaterial rawMat = std::get<0>(std::move(material));
+					DescriptorSetConstructorHelper descSetHelper { std::move(rawMat) };
+					result._depthMapVisDS = pa->CreateDescriptorSetAccelerator(nullptr, descSetHelper._patchCollection, descSetHelper._matDescSet, descSetHelper._matMachine, descSetHelper._matScaffold, "depth-map-vis");
+					result._depthMapVisPipeline = pa->CreatePipelineAccelerator(shaderPatches, descSetHelper._matDescSet, std::move(descSetHelper._matMachineDecomposed._matSelectors), ia, topology, descSetHelper._matMachineDecomposed._stateSet);
+					return result;
+				});
+		}
 
-		auto util = std::make_shared<AssetsNew::CompoundAssetUtil>();
-		::AssetsNew::ContextAndIdentifier indexer { "xleres/RenderOverlays/DepthMapVis.hlsl:cubeMapVis" };
-		auto inputAssembly = RenderOverlays::Vertex_PT::s_inputElements2D;
-		auto topology = RenderCore::Topology::TriangleList;
+		~ShadowProbesDisplay() {}
+	protected:
+		std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> _technique;
+		::Assets::PtrToMarkerPtr<RenderOverlays::Font> _headingFont;
+		RenderCore::LightingEngine::Internal::IDynamicShadowProbeSchedulerMetrics::Metrics _metrics;
+		unsigned _selectedLight = 0;
+		std::optional<Float4x4> _lastProjection;
 
-		auto futureMaterial = util->GetFuture<RenderCore::Assets::RawMaterial>("RawMaterial"_h, indexer);
-		auto futureShaderPatches = util->GetFuture<std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>>("ShaderPatchCollection"_h, indexer);
-		::Assets::WhenAll(std::move(futureMaterial), std::move(futureShaderPatches)).ThenConstructToPromise(
-			std::move(promisedResources),
-			[pa=std::move(overlayAccelerators), topology, ia=std::vector<RenderCore::MiniInputElementDesc>(inputAssembly.begin(), inputAssembly.end()), util](const auto& material, const auto& shaderPatches) {
-				Resources result;
-				RenderCore::Assets::RawMaterial rawMat = std::get<0>(std::move(material));
-				DescriptorSetConstructorHelper descSetHelper { std::move(rawMat) };
-				result._depthMapVisDS = pa->CreateDescriptorSetAccelerator(nullptr, descSetHelper._patchCollection, descSetHelper._matDescSet, descSetHelper._matMachine, descSetHelper._matScaffold, "depth-map-vis");
-				result._depthMapVisPipeline = pa->CreatePipelineAccelerator(shaderPatches, descSetHelper._matDescSet, std::move(descSetHelper._matMachineDecomposed._matSelectors), ia, topology, descSetHelper._matMachineDecomposed._stateSet);
-				return result;
-			});
-	}
-
-	ShadowProbesDisplay::~ShadowProbesDisplay()
-	{
-	}
+		struct Resources
+		{
+			std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> _depthMapVisPipeline;
+			std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> _depthMapVisDS;
+		};
+		std::shared_future<Resources> _futureResources;
+	};
 
 	std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> CreateShadowProbesDisplay(std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> overlayAccelerators, std::shared_ptr<RenderCore::LightingEngine::CompiledLightingTechnique> technique)
 	{

@@ -39,10 +39,7 @@ float4 cubeMapVis(float2 shapeRel : TEXCOORD0) : SV_Target0
 				(shapeRel.y-panelmins[c].y)/(panelmaxs[c].y-panelmins[c].y));
 
 			float value = CubeMap.SampleLevel(PointClampSampler, float3(panelCoords, c), 0);
-			value = 1-value;
-			value = pow(value, 5);
-			value = 1-value;
-			return float4(value.xxx, 1);
+			return float4(float3(0.8, 0.6, 1)*value, 1);
 		}
 	}
 	return 0;
