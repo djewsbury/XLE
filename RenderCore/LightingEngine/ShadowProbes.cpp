@@ -134,6 +134,8 @@ namespace RenderCore { namespace LightingEngine
 				sp.SetName("static-shadow-prepare");
 				fragment.AddSubpass(std::move(sp));
 
+				_parsingContext->GetViewport() = {};		// reset viewport so that RenderPassInstance will set the default
+
 				Techniques::RenderPassBeginDesc beginInfo;
 				return Techniques::RenderPassInstance{*_parsingContext, fragment, beginInfo};
 			}
@@ -426,6 +428,8 @@ namespace RenderCore { namespace LightingEngine
 
 		assert(updatedUniformState.size() <= 6*_pimpl->_config._maxProbes);
 		WriteStaticShadowProbeTable(parsingContext.GetThreadContext(), *_pimpl->_probeUniforms, updatedUniformState);
+
+		parsingContext.GetViewport() = {};		// reset viewport because we changed it in DynamicShadowProbes::Begin
 	}
 
 	Techniques::RenderPassInstance DynamicShadowProbes::Begin(
@@ -446,6 +450,8 @@ namespace RenderCore { namespace LightingEngine
 		sp.SetDepthStencil(fragment.DefineAttachment(s_semanticProbePrepare).Clear().FinalState(BindFlag::ShaderResource), viewDesc);
 		sp.SetName("dynamic-shadow-prepare");
 		fragment.AddSubpass(std::move(sp));
+
+		parsingContext.GetViewport() = {};		// reset viewport so that RenderPassInstance will set the default
 
 		Techniques::RenderPassBeginDesc beginInfo;
 		return Techniques::RenderPassInstance{parsingContext, fragment, beginInfo};
