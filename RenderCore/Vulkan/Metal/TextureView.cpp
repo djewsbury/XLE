@@ -280,7 +280,7 @@ namespace RenderCore { namespace Metal_Vulkan
         ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
         _imageLayout = layout;
 
-        _arrayLayerCount = std::max(1u, window._arrayLayerRange._min+window._arrayLayerRange._count);
+        _arrayLayerCount = std::max(1u, window._arrayLayerRange._count);
         if (window._arrayLayerRange._count == TextureViewDesc::All._count)
             _arrayLayerCount = 1u; // we don't know this, because we can't query it from the VkImage
     }
@@ -333,7 +333,7 @@ namespace RenderCore { namespace Metal_Vulkan
             ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
             _imageLayout = CalculateImageLayout(formatUsage, createInfo.subresourceRange.aspectMask, window._flags);
 
-            _arrayLayerCount = std::max(1u, window._arrayLayerRange._min+window._arrayLayerRange._count);
+            _arrayLayerCount = std::max(1u, window._arrayLayerRange._count);
             if (window._arrayLayerRange._count == TextureViewDesc::All._count)
                 _arrayLayerCount = ActualArrayLayerCount(tDesc);
 
