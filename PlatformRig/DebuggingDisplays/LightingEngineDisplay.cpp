@@ -160,6 +160,11 @@ namespace PlatformRig { namespace Overlays
 					DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Active light clusters: " << _metrics._clusters.size());
 					DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Ave cluster count: " << _metrics._activeLights.size()/float(_metrics._clusters.size()));
 					DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "Selected light: " << _selectedLight);
+					if (_selectedLight < _metrics._activeLights.size()) {
+						DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "SL- attached probe table: " << _metrics._activeLights[_selectedLight]._attachedProbeTableIndex);
+						DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "SL- fading: " << _metrics._activeLights[_selectedLight]._fading);
+						DrawText().FormatAndDraw(context, layout.Allocate(lineHeight), StringMeldInPlace(buffer) << "SL- cluster index : " << _metrics._activeLights[_selectedLight]._clusterIndex);
+					}
 				}
 
 				// Draw indicators for the lights and clusters

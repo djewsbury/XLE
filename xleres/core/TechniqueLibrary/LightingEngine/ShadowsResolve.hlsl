@@ -647,10 +647,10 @@ float ResolveShadows_CubeMap(
 
             distance = extraBias + WorldSpaceDepthToNDC_Perspective(distance, miniProjZW);
             float result 
-                = database.SampleCmpLevelZero(GetShadowSampler(), float4(A, float(databaseEntry)), distance)
-                + database.SampleCmpLevelZero(GetShadowSampler(), float4(B, float(databaseEntry)), distance)
-                + database.SampleCmpLevelZero(GetShadowSampler(), float4(C, float(databaseEntry)), distance)
-                + database.SampleCmpLevelZero(GetShadowSampler(), float4(D, float(databaseEntry)), distance);
+                = database.SampleCmpLevelZero(GetShadowSampler(), float4(A, float(databaseEntry)), distance).r
+                + database.SampleCmpLevelZero(GetShadowSampler(), float4(B, float(databaseEntry)), distance).r
+                + database.SampleCmpLevelZero(GetShadowSampler(), float4(C, float(databaseEntry)), distance).r
+                + database.SampleCmpLevelZero(GetShadowSampler(), float4(D, float(databaseEntry)), distance).r;
             return result * 0.25;
 
         #else
@@ -668,10 +668,10 @@ float ResolveShadows_CubeMap(
             [branch] if (all(w0 == saturate(w0) && w1 == saturate(w1))) {
                 // cheap -- all samples in the one face
                 float result 
-                    = database.SampleCmpLevelZero(GetShadowSampler(), float3(w0.x, w0.y, float(databaseEntry*6+faceIdx)), distance)
-                    + database.SampleCmpLevelZero(GetShadowSampler(), float3(w0.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
-                    + database.SampleCmpLevelZero(GetShadowSampler(), float3(w1.x, w1.y, float(databaseEntry*6+faceIdx)), distance)
-                    + database.SampleCmpLevelZero(GetShadowSampler(), float3(w1.x, w0.y, float(databaseEntry*6+faceIdx)), distance);
+                    = database.SampleCmpLevelZero(GetShadowSampler(), float3(w0.x, w0.y, float(databaseEntry*6+faceIdx)), distance).r
+                    + database.SampleCmpLevelZero(GetShadowSampler(), float3(w0.x, w1.y, float(databaseEntry*6+faceIdx)), distance).r
+                    + database.SampleCmpLevelZero(GetShadowSampler(), float3(w1.x, w1.y, float(databaseEntry*6+faceIdx)), distance).r
+                    + database.SampleCmpLevelZero(GetShadowSampler(), float3(w1.x, w0.y, float(databaseEntry*6+faceIdx)), distance).r;
                 return result * 0.25;
             } else {
                 // expensive -- samples cross face boundaries
@@ -683,9 +683,9 @@ float ResolveShadows_CubeMap(
 
 #else
 
-    float SampleCubeShadowDatabase(TextureCubeArray<float> database, uint databaseEntry, float3 offset)
+    float SampleCubeShadowDatabase(TextureCubeArray<float> database, uint databaseEntry, MiniProjZW miniProjZW, float3 offset)
     {
-        float distance = WorldSpaceDepthToNDC_Perspective(MajorAxisDistance(offset), StaticShadowProbeProperties[databaseEntry]._miniProjZW);
+        float distance = WorldSpaceDepthToNDC_Perspective(MajorAxisDistance(offset), miniProjZW);
         // distance += 0.5f / 65535.f;     // bias half precision
         return database.SampleCmpLevelZero(GetShadowSampler(), float4(offset, float(databaseEntry)), distance);
     }

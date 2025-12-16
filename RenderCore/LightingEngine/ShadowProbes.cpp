@@ -64,7 +64,7 @@ namespace RenderCore { namespace LightingEngine
 		virtual size_t GetImmediateDataSize(RenderCore::Techniques::ParsingContext& context, const void* objectContext, unsigned idx) override
 		{
 			assert(idx == 0);
-			return sizeof(Float4x4) * dimof(_multProbeProperties._worldToProjection);
+			return sizeof(Float4x4) * dimof(MultiViewProperties::_worldToProjection);
 		}
 
 		void SetWorldToProjections(IteratorRange<const Float4x4*> worldToProjections)
@@ -442,6 +442,7 @@ namespace RenderCore { namespace LightingEngine
 		for (unsigned c=0; c<multiViewDesc.size(); ++c) worldToProjections[c] = multiViewDesc[c]._worldToProjection;
 
 		_pimpl->_multiViewUniformsDelegate->SetWorldToProjections(MakeIteratorRange(worldToProjections, worldToProjections+multiViewDesc.size()));
+		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();		// unfortunately we need to InvalidUniforms here to call the manager _multiViewUniformsDelegate will return different results
 
 		Techniques::FrameBufferDescFragment fragment;
 		SubpassDesc sp;

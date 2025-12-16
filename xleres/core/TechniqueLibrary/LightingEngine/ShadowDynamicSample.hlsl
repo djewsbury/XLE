@@ -17,7 +17,7 @@
 
 	float SampleDynamicCubeShadowDatabase(uint databaseEntry, float3 offset, LightScreenDest screenDest)
 	{
-		return ResolveShadows_CubeMapArray(DynamicCubeShadowDatabase, databaseEntry, DynamicShadowProperties[databaseEntry]._miniProjZW, offset);
+		return ResolveShadows_CubeMapArray(DynamicCubeShadowDatabase, databaseEntry/6, DynamicCubeShadowProperties[databaseEntry/6]._miniProjZW, offset);
 	}
 
 #endif
