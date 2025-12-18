@@ -101,8 +101,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		// ILightSceneComponent
 		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
 		void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) override;
-		void* QueryInterface(LightSetId setIdx, uint64_t interfaceTypeCode) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, QueryInterfaceFunction&&) override;
+		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
 	class IDynamicShadowProbeSchedulerMetrics
@@ -189,8 +189,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		// ILightSceneComponent
 		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
 		void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) override;
-		void* QueryInterface(LightSetId setIdx, uint64_t interfaceTypeCode) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, QueryInterfaceFunction&&) override;
+		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
 	class IPriorityShadowProjectionScheduler
@@ -232,11 +232,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		// ILightSceneComponent
 		void RegisterLight(unsigned setIdx, unsigned lightIdx) override;
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) override;
-		void* QueryInterface(unsigned setIdx, uint64_t interfaceTypeCode) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, QueryInterfaceFunction&&) override;
+		void* QueryInterface(unsigned setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
 
 		struct SceneSet;
 		std::vector<std::unique_ptr<SceneSet>> _sceneSets;
+		friend class SequencerAddendums;
 
 		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
 		unsigned _totalProjectionCount;
@@ -265,8 +266,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		// ILightSceneComponent
 		void RegisterLight(unsigned setIdx, unsigned lightIdx) override;
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) override;
-		void* QueryInterface(unsigned setIdx, uint64_t interfaceTypeCode) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, QueryInterfaceFunction&&) override;
+		void* QueryInterface(unsigned setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
 	};
 
 	class ShaderResourceSplitter : public RenderCore::Techniques::IShaderResourceDelegate

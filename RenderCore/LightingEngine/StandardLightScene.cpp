@@ -9,14 +9,14 @@
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
-	struct StandardLightScene::LightSet : public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
+	struct StandardLightScene::LightSet
 	{
 		LightOperatorId _operatorId = ~0u;
 		PageHeap<StandardPositionalLight> _baseData;
 		std::vector<std::shared_ptr<ILightSceneComponent>> _boundComponents;
 		StandardPositionLightFlags::BitField _flags = 0;
 
-		virtual void SetLocalToWorld(const Float4x4& localToWorld, const void* sys) override { _baseData.GetObject((size_t)sys).SetLocalToWorld(localToWorld); }
+		/*virtual void SetLocalToWorld(const Float4x4& localToWorld, const void* sys) override { _baseData.GetObject((size_t)sys).SetLocalToWorld(localToWorld); }
 		virtual Float4x4 GetLocalToWorld(const void* sys) const override { return _baseData.GetObject((size_t)sys).GetLocalToWorld(); }
 
 		virtual void SetCutoffRange(float cutoff, const void* sys) override { _baseData.GetObject((size_t)sys).SetCutoffRange(cutoff); }
@@ -27,16 +27,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		virtual Float3 GetBrightness(const void* sys) const override { return _baseData.GetObject((size_t)sys).GetBrightness(); }
 
 		virtual void SetDiffuseWideningFactors(Float2 minAndMax, const void* sys) override { _baseData.GetObject((size_t)sys).SetDiffuseWideningFactors(minAndMax); }
-		virtual Float2 GetDiffuseWideningFactors(const void* sys) const override { return _baseData.GetObject((size_t)sys).GetDiffuseWideningFactors(); }
+		virtual Float2 GetDiffuseWideningFactors(const void* sys) const override { return _baseData.GetObject((size_t)sys).GetDiffuseWideningFactors(); }*/
 
-		void* QueryInterface(uint64_t interfaceTypeCode)
+		void* QueryInterface(unsigned lightIdx, uint64_t interfaceTypeCode)
 		{
 			switch (interfaceTypeCode) {
-			case TypeHashCode<IPositionalLightSource>: return (IPositionalLightSource*)this;
-			case TypeHashCode<IUniformEmittance>: return (IUniformEmittance*)this;
+			case TypeHashCode<IPositionalLightSource>: return (IPositionalLightSource*)&_baseData.GetObject(lightIdx);
+			case TypeHashCode<IUniformEmittance>: return (IUniformEmittance*)&_baseData.GetObject(lightIdx);
 			case TypeHashCode<IFiniteLightSource>:
 				if (_flags & StandardPositionLightFlags::SupportFiniteRange)
-					return (IFiniteLightSource*)this;
+					return (IFiniteLightSource*)&_baseData.GetObject(lightIdx);
 				break;
 			}
 			return nullptr;
@@ -156,14 +156,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto newSetIdx =  (unsigned)_lightSets.size()-1;
 		auto& newSet = *_lightSets.back();
 		newSet._boundComponents.reserve(_components.size());
-		for (auto& comp:_components)
-			if (comp->BindToSet(newSet._operatorId, newSetIdx, [&](uint64_t code) -> void* {
-					for (auto i=newSet._boundComponents.rbegin(); i!=newSet._boundComponents.rend(); ++i)
-						if (auto res = (*i)->QueryInterface(newSetIdx, code))
-							return res;
-					return newSet.QueryInterface(code);
-				}))
+		for (auto& comp:_components) {
+
+			auto qi = [set=&newSet, setIdx=newSetIdx, cCount=newSet._boundComponents.size()](ILightScene::LightSourceId lightIdx, uint64_t code) -> void* {
+				for (unsigned c=0; c<cCount; ++c)
+					if (auto res = set->_boundComponents[cCount-1-c]->QueryInterface(setIdx, lightIdx, code))
+						return res;
+				return set->QueryInterface(lightIdx, code);
+			};
+
+			if (comp->BindToSet(newSet._operatorId, newSetIdx, std::move(qi)))
 				newSet._boundComponents.push_back(comp);
+		}
 
 		for (auto& a:_associatedFlags)
 			if (a.first == lightOperator)
@@ -203,12 +207,15 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		for (unsigned setIdx=0; setIdx<_lightSets.size(); ++setIdx) {
 			auto& set = _lightSets[setIdx];
-			if (newComp->BindToSet(set->_operatorId, setIdx, [&](uint64_t code) -> void* {
-					for (auto i=set->_boundComponents.rbegin(); i!=set->_boundComponents.rend(); ++i)
-						if (auto res = (*i)->QueryInterface(setIdx, code))
-							return res;
-					return set->QueryInterface(code);
-				})) {
+
+			auto qi = [set=set.get(), setIdx, cCount=set->_boundComponents.size()](ILightScene::LightSourceId lightIdx, uint64_t code) -> void* {
+				for (unsigned c=0; c<cCount; ++c)
+					if (auto res = set->_boundComponents[cCount-1-c]->QueryInterface(setIdx, lightIdx, code))
+						return res;
+				return set->QueryInterface(lightIdx, code);
+			};
+
+			if (newComp->BindToSet(set->_operatorId, setIdx, std::move(qi))) {
 				set->_boundComponents.push_back(newComp);
 				for (auto i=set->_baseData.begin(); i!=set->_baseData.end(); ++i)
 					newComp->RegisterLight(setIdx, i.GetIndex());

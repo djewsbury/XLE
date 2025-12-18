@@ -24,11 +24,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 	public:
 		using LightSetId = unsigned;
-		using QueryInterfaceFunction = std::function<void*(uint64_t)>;
+		using QueryInterfaceFunction = std::function<void*(ILightScene::LightSourceId, uint64_t)>;
 		virtual void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) = 0;
 		virtual void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) = 0;
-		virtual bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) = 0;
-		virtual void* QueryInterface(LightSetId setIdx, uint64_t interfaceTypeCode) = 0;
+		virtual bool BindToSet(ILightScene::LightOperatorId, LightSetId setIdx, QueryInterfaceFunction&&) = 0;
+		virtual void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) = 0;
 		virtual ~ILightSceneComponent();
 	};
 
@@ -151,7 +151,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<std::pair<LightOperatorId, StandardPositionLightFlags::BitField>> _associatedFlags;
 	};
 
-	class StandardPositionalLight
+	class StandardPositionalLight : public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
 	{
 	public:
 		Float3x3    _orientation;
@@ -164,7 +164,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		float       _diffuseWideningMin;
 		float       _diffuseWideningMax;
 
- 		void SetLocalToWorld(const Float4x4& localToWorld)
+ 		void SetLocalToWorld(const Float4x4& localToWorld) override
 		{
 			ScaleRotationTranslationM srt(localToWorld);
 			_orientation = srt._rotation;
@@ -173,16 +173,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			_radii = Truncate(srt._scale);
 		}
 
-		Float4x4 GetLocalToWorld() const
+		Float4x4 GetLocalToWorld() const override
 		{
 			ScaleRotationTranslationM srt { Expand(_radii, 1.f), _orientation, _position };
 			return AsFloat4x4(srt);
 		}
 
-		void SetCutoffRange(float cutoff) { _cutoffRange = cutoff; }
-		float GetCutoffRange() const { return _cutoffRange; }
+		void SetCutoffRange(float cutoff) override { _cutoffRange = cutoff; }
+		float GetCutoffRange() const override { return _cutoffRange; }
 
-		void SetCutoffBrightness(float cutoffBrightness)
+		void SetCutoffBrightness(float cutoffBrightness) override
 		{
 			// distance attenuation formula:
 			//		1.0f / (distanceSq+1)
@@ -199,14 +199,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 		}
 
-		void SetBrightness(Float3 rgb) { _brightness = rgb; }
-		Float3 GetBrightness() const { return _brightness; }
-		void SetDiffuseWideningFactors(Float2 minAndMax)
+		void SetBrightness(Float3 rgb) override { _brightness = rgb; }
+		Float3 GetBrightness() const override { return _brightness; }
+		void SetDiffuseWideningFactors(Float2 minAndMax) override
 		{
 			_diffuseWideningMin = minAndMax[0];
 			_diffuseWideningMax = minAndMax[1];
 		}
-		Float2 GetDiffuseWideningFactors() const
+		Float2 GetDiffuseWideningFactors() const override
 		{
 			return Float2 { _diffuseWideningMin, _diffuseWideningMax };
 		}

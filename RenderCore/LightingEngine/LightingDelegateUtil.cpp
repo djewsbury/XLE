@@ -30,13 +30,9 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
-	struct SequencerAddendums
-	{
-		std::shared_ptr<Internal::ILightBase> _driver;
-		std::shared_ptr<IShadowPreparer> _preparer;
-	};
+	struct SequencerAddendums;
 
-	struct PriorityShadowProjectionScheduler::SceneSet : public IAttachDriver, public IDepthTextureResolve, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection
+	struct PriorityShadowProjectionScheduler::SceneSet
 	{
 		using ShadowProjectionBasePtr = std::unique_ptr<ILightBase>;
 		std::vector<ShadowProjectionBasePtr> _projections;
@@ -46,18 +42,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<PriorityShadowSchedulerUtil> _preparers;
 		unsigned _preparerId = ~0u;
 		ShadowProjectionMode _projectionMode = ShadowProjectionMode::Arbitrary;
-		IPositionalLightSource* _positionalChain = nullptr;
-		IFiniteLightSource* _finiteChain = nullptr;
-
-		void AttachDriver(std::shared_ptr<ILightBase> driver, const void* system) override
-		{
-			auto idx = (size_t)system;
-			assert(idx < _addendums.size());
-			_addendums[idx]._driver = std::move(driver);
-		}
+		// IPositionalLightSource* _positionalChain = nullptr;
+		// IFiniteLightSource* _finiteChain = nullptr;
+		QueryInterfaceFunction _qi;
 
 		// awkward that we have to redirect each interface function
-		void SetDesc(const Desc& newValue, const void* system) override
+		/*void SetDesc(const Desc& newValue, const void* system) override
 		{
 			auto idx = (size_t)system;
 			assert(idx < _projections.size());
@@ -117,13 +107,22 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			assert(idx < _projections.size());
 			if (auto* interf=(INearShadowProjection*)_projections[idx]->QueryInterface(TypeHashCode<INearShadowProjection>))
 				return interf->SetProjection(proj, nullptr);
-		}
+		}*/
 
 		void RegisterLight(unsigned index);
 		void DeregisterLight(unsigned index);
 		SceneSet();
 		SceneSet(SceneSet&&);
 		SceneSet& operator=(SceneSet&&);
+	};
+
+	struct SequencerAddendums : public IAttachDriver
+	{
+		std::shared_ptr<Internal::ILightBase> _driver;
+		std::shared_ptr<IShadowPreparer> _preparer;
+		PriorityShadowProjectionScheduler::SceneSet *_parent = nullptr;
+
+		void AttachDriver(std::shared_ptr<ILightBase> driver) override { _driver = std::move(driver); }
 	};
 
 	auto PriorityShadowProjectionScheduler::GetPreparedShadow(unsigned setIdx, unsigned lightIdx) -> const IPreparedShadowResult*
@@ -243,7 +242,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		--_totalProjectionCount;
 	}
 
-	bool PriorityShadowProjectionScheduler::BindToSet(ILightScene::LightOperatorId opId, unsigned setIdx, const QueryInterfaceFunction& queryChain)
+	bool PriorityShadowProjectionScheduler::BindToSet(ILightScene::LightOperatorId opId, unsigned setIdx, QueryInterfaceFunction&& queryChain)
 	{
 		if (opId >= _operatorToPreparerIdMapping.size() || _operatorToPreparerIdMapping[opId] == ~0u) return false;
 		if (_sceneSets.size() <= setIdx)
@@ -252,17 +251,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		_sceneSets[setIdx]->_preparers = _shadowPreparers;
 		_sceneSets[setIdx]->_preparerId = _operatorToPreparerIdMapping[opId];
 		_sceneSets[setIdx]->_projectionMode = _shadowPreparers->_preparers[_sceneSets[setIdx]->_preparerId]._desc._projectionMode;
-		_sceneSets[setIdx]->_positionalChain = (IPositionalLightSource*)queryChain(TypeHashCode<IPositionalLightSource>);
-		_sceneSets[setIdx]->_finiteChain = (IFiniteLightSource*)queryChain(TypeHashCode<IFiniteLightSource>);
+		_sceneSets[setIdx]->_qi = std::move(queryChain);
+		// _sceneSets[setIdx]->_positionalChain = (IPositionalLightSource*)queryChain(TypeHashCode<IPositionalLightSource>);
+		// _sceneSets[setIdx]->_finiteChain = (IFiniteLightSource*)queryChain(TypeHashCode<IFiniteLightSource>);
 		return true;
 	}
 
-	void* PriorityShadowProjectionScheduler::QueryInterface(unsigned setIdx, uint64_t interfaceTypeCode)
+	void* PriorityShadowProjectionScheduler::QueryInterface(unsigned setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode)
 	{
 		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) return nullptr;
 
 		switch (interfaceTypeCode) {
-		case TypeHashCode<IAttachDriver>:
+		/*case TypeHashCode<IAttachDriver>:
 			return (IAttachDriver*)_sceneSets[setIdx].get();
 		case TypeHashCode<IDepthTextureResolve>:
 			return (IDepthTextureResolve*)_sceneSets[setIdx].get();
@@ -271,17 +271,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		case TypeHashCode<IOrthoShadowProjections>:
 			return (IOrthoShadowProjections*)_sceneSets[setIdx].get();
 		case TypeHashCode<INearShadowProjection>:
-			return (INearShadowProjection*)_sceneSets[setIdx].get();
+			return (INearShadowProjection*)_sceneSets[setIdx].get();*/
+
+		case TypeHashCode<IAttachDriver>:
+			return (IAttachDriver*)&_sceneSets[setIdx]->_addendums[lightIdx];
 
 		default:
-			assert(0);		// need to provide access to this somehow
-			#if 0
-				if (_sceneSets[setIdx]->_addendums[lightIdx]._driver)
-					if (auto* res = _sceneSets[setIdx]->_addendums[lightIdx]._driver->QueryInterface(interfaceTypeCode))
-						return res;
-				return _sceneSets[setIdx]->_projections[lightIdx]->QueryInterface(interfaceTypeCode);
-			#endif
-			break;
+			if (_sceneSets[setIdx]->_addendums[lightIdx]._driver)
+				if (auto* res = _sceneSets[setIdx]->_addendums[lightIdx]._driver->QueryInterface(interfaceTypeCode))
+					return res;
+			return _sceneSets[setIdx]->_projections[lightIdx]->QueryInterface(interfaceTypeCode);
 		}
 	}
 
@@ -497,20 +496,58 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 
-	struct SharedProbeSceneSet : public IPositionalLightSource, public IFiniteLightSource
+	struct SharedProbeSceneSet
 	{
 		// we just maintain a parallel list of the light probes we're interested in
-		struct ProbeEntry
+		struct ProbeEntry : public IPositionalLightSource, public IFiniteLightSource
 		{
 			ShadowProbes::Probe _probeDesc;
 			unsigned _attachedProbeTableIndex = ~0u;
 			int _fading = 0;
+			SharedProbeSceneSet* _parent = nullptr;
+
+			void SetLocalToWorld(const Float4x4& newLocalToWorld) override
+			{
+				_probeDesc._objectToWorld = AsFloat3x4(newLocalToWorld);
+				_probeDesc._nearRadius = ExtractUniformScaleFast(AsFloat3x4(newLocalToWorld));
+				if (auto positionalChain = (IPositionalLightSource*)_parent->_qi(this-_parent->_probes.data(), TypeHashCode<IPositionalLightSource>))
+					positionalChain->SetLocalToWorld(newLocalToWorld);
+			}
+			Float4x4 GetLocalToWorld(const void* sys) const override { assert(_positionalChain); return _positionalChain->GetLocalToWorld(sys); }
+
+			void SetCutoffBrightness(float cutoffBrightness, const void* sys) override
+			{
+				// Note that since _srcFinite may be null, we have to duplicate the calculations here from IFiniteLightSource
+				Float3 brightnessRGB{1.f, 1.f, 1.f};
+				if (_uniformEmittanceChain)
+					brightnessRGB = _uniformEmittanceChain->GetBrightness(sys);
+
+				auto brightness = std::max(std::max(brightnessRGB[0], brightnessRGB[1]), brightnessRGB[2]);
+				if (cutoffBrightness < brightness) {
+					SetCutoffRange(std::sqrt(brightness / cutoffBrightness - 1.0f), sys);
+				} else {
+					// The light can't actually get as bright as the cutoff brightness.. just set to a small value
+					SetCutoffRange(1e-3f, sys);
+				}
+			}
+			void SetCutoffRange(float cutoff, const void* sys) override
+			{
+				auto& entry = _probes[(size_t)sys];
+				entry._probeDesc._farRadius = cutoff;
+				if (_finiteChain) _finiteChain->SetCutoffRange(cutoff, sys);
+			}
+			float GetCutoffRange(const void* sys) const override
+			{
+				auto& entry = _probes[(size_t)sys];
+				return entry._probeDesc._farRadius;
+			}
 		};
 		std::vector<ProbeEntry> _probes;
 		BitHeap _activeProbes;
-		IPositionalLightSource* _positionalChain = nullptr;
-		IUniformEmittance* _uniformEmittanceChain = nullptr;
-		IFiniteLightSource* _finiteChain = nullptr;
+		ILightSceneComponent::QueryInterfaceFunction _qi;
+		// IPositionalLightSource* _positionalChain = nullptr;
+		// IUniformEmittance* _uniformEmittanceChain = nullptr;
+		// IFiniteLightSource* _finiteChain = nullptr;
 
 		void RegisterLight(unsigned index)
 		{
@@ -522,14 +559,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			newProbe._probeDesc._nearRadius = 1.f;
 			newProbe._probeDesc._farRadius = 1024.f;
 			newProbe._probeDesc._dimensionality = TextureDesc::Dimensionality::CubeMap;
-			assert(_positionalChain);
-			if (_positionalChain) {
-				auto localToWorld = _positionalChain->GetLocalToWorld((const void*)(size_t)index);
+			if (auto positionalChain = (IPositionalLightSource*)_qi(index, TypeHashCode<IPositionalLightSource>)) {
+				auto localToWorld = positionalChain->GetLocalToWorld((const void*)(size_t)index);
 				newProbe._probeDesc._objectToWorld = AsFloat3x4(localToWorld);
 				newProbe._probeDesc._nearRadius = ExtractUniformScaleFast(newProbe._probeDesc._objectToWorld);
 			}
-			if (_finiteChain)
-				newProbe._probeDesc._farRadius = _finiteChain->GetCutoffRange((const void*)(size_t)index);
+			if (auto finiteChain = (IFiniteLightSource*)_qi(index, TypeHashCode<IFiniteLightSource>))
+				newProbe._probeDesc._farRadius = finiteChain->GetCutoffRange((const void*)(size_t)index);
 
 			_probes[index] = std::move(newProbe);
 			_activeProbes.Allocate(index);
@@ -541,41 +577,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			_probes[index] = {};
 		}
 
-		void SetLocalToWorld(const Float4x4& newLocalToWorld, const void* sys) override
-		{
-			auto& entry = _probes[(size_t)sys];
-			entry._probeDesc._objectToWorld = AsFloat3x4(newLocalToWorld);
-			entry._probeDesc._nearRadius = ExtractUniformScaleFast(AsFloat3x4(newLocalToWorld));
-			if (_positionalChain) _positionalChain->SetLocalToWorld(newLocalToWorld, sys);
-		}
-		Float4x4 GetLocalToWorld(const void* sys) const override { assert(_positionalChain); return _positionalChain->GetLocalToWorld(sys); }
-
-		void SetCutoffBrightness(float cutoffBrightness, const void* sys) override
-		{
-			// Note that since _srcFinite may be null, we have to duplicate the calculations here from IFiniteLightSource
-			Float3 brightnessRGB{1.f, 1.f, 1.f};
-			if (_uniformEmittanceChain)
-				brightnessRGB = _uniformEmittanceChain->GetBrightness(sys);
-
-			auto brightness = std::max(std::max(brightnessRGB[0], brightnessRGB[1]), brightnessRGB[2]);
-			if (cutoffBrightness < brightness) {
-				SetCutoffRange(std::sqrt(brightness / cutoffBrightness - 1.0f), sys);
-			} else {
-				// The light can't actually get as bright as the cutoff brightness.. just set to a small value
-				SetCutoffRange(1e-3f, sys);
-			}
-		}
-		void SetCutoffRange(float cutoff, const void* sys) override
-		{
-			auto& entry = _probes[(size_t)sys];
-			entry._probeDesc._farRadius = cutoff;
-			if (_finiteChain) _finiteChain->SetCutoffRange(cutoff, sys);
-		}
-		float GetCutoffRange(const void* sys) const override
-		{
-			auto& entry = _probes[(size_t)sys];
-			return entry._probeDesc._farRadius;
-		}
+		
 
 		SharedProbeSceneSet() = default;
 		SharedProbeSceneSet(SharedProbeSceneSet&&) = default;

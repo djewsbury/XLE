@@ -25,7 +25,6 @@ namespace RenderCore { namespace LightingEngine
 		struct LightInterface
 		{ 
 			void* _interf = nullptr;
-			const void* systemValue = nullptr;
 			template<typename T> T* As() { return (T*)_interf; };
 		};
 		virtual LightInterface TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) = 0;
@@ -41,7 +40,7 @@ namespace RenderCore { namespace LightingEngine
 			Type* TryGetLightSourceInterface(LightSourceId sourceId)
 			{
 				constexpr auto interfaceCode = TypeHashCode<Type>;
-				return (Type*)TryGetLightSourceInterface(sourceId, interfaceCode);
+				return TryGetLightSourceInterface(sourceId, interfaceCode).template As<Type>();
 			}
 	};
 

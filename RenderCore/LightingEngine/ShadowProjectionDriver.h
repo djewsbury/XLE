@@ -26,7 +26,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class IAttachDriver
 	{
 	public:
-		virtual void AttachDriver(std::shared_ptr<ILightBase> driver, const void* system=nullptr) = 0;
+		virtual void AttachDriver(std::shared_ptr<ILightBase> driver) = 0;
 		virtual ~IAttachDriver() = default;
 	};
 }}}
