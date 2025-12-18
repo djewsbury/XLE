@@ -1017,13 +1017,13 @@ namespace RenderCore { namespace LightingEngine
     public:
         virtual std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> UpdateProjections(
 			const Techniques::ParsingContext& parsingContext,
-            IPositionalLightSource& lightSource,
+            const Float4x4& lightLocalToWorld,
 			IOrthoShadowProjections& destination) override
         {
             auto mainSceneProjectionDesc = parsingContext.GetProjectionDesc();
             if (_fixedCamera)
                 mainSceneProjectionDesc = _fixedCamera.value();
-            auto negativeLightDirection = Normalize(ExtractTranslation(lightSource.GetLocalToWorld()));
+            auto negativeLightDirection = Normalize(ExtractTranslation(lightLocalToWorld));
 
             assert(!(_settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades));
             auto clipSpaceType = RenderCore::Techniques::GetDefaultClipSpaceType();

@@ -1,16 +1,24 @@
 
 #pragma once
 
-#include "StandardLightScene.h"			// for ILightBase
+#include "Math/Matrix.h"
+#include <memory>
+
+namespace XLEMath { class ArbitraryConvexVolumeTester; }
+
+namespace RenderCore::LightingEngine { class IOrthoShadowProjections; }
+namespace RenderCore::Techniques { class ParsingContext; }
 
 namespace RenderCore { namespace LightingEngine { namespace Internal
 {
+	class ILightBase;
+
 	class IShadowProjectionDriver
 	{
 	public:
 		virtual std::shared_ptr<XLEMath::ArbitraryConvexVolumeTester> UpdateProjections(
 			const Techniques::ParsingContext&,
-			IPositionalLightSource& lightSource,
+			const Float4x4& lightLocalToWorld,
 			IOrthoShadowProjections& destination) = 0;
 		virtual ~IShadowProjectionDriver() = default;
 	};
@@ -18,7 +26,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class IAttachDriver
 	{
 	public:
-		virtual void AttachDriver(std::shared_ptr<Internal::ILightBase> driver) = 0;
+		virtual void AttachDriver(std::shared_ptr<ILightBase> driver, const void* system=nullptr) = 0;
 		virtual ~IAttachDriver() = default;
 	};
 }}}

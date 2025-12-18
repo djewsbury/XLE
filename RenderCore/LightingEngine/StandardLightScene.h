@@ -24,10 +24,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 	public:
 		using LightSetId = unsigned;
-		virtual void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) = 0;
+		using QueryInterfaceFunction = std::function<void*(uint64_t)>;
+		virtual void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) = 0;
 		virtual void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) = 0;
-		virtual bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) = 0;
-		virtual void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) = 0;
+		virtual bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) = 0;
+		virtual void* QueryInterface(LightSetId setIdx, uint64_t interfaceTypeCode) = 0;
 		virtual ~ILightSceneComponent();
 	};
 
@@ -108,14 +109,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class StandardLightScene : public ILightScene
 	{
 	public:
-		struct LightSet
-		{
-			LightOperatorId _operatorId = ~0u;
-			PageHeap<StandardPositionalLight> _baseData;
-			std::vector<std::shared_ptr<ILightSceneComponent>> _boundComponents;
-			StandardPositionLightFlags::BitField _flags = 0;
-		};
-		std::vector<LightSet> _lightSets;
+		struct LightSet;
+		std::vector<std::unique_ptr<LightSet>> _lightSets;
 
 		struct LightSetAndIndex { unsigned _lightSet, _lightIndex; };
 		std::vector<std::pair<LightSourceId, LightSetAndIndex>> _lookupTable;
@@ -129,7 +124,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void AssociateFlag(LightOperatorId, StandardPositionLightFlags::BitField);
 
 		virtual LightSourceId CreateLightSource(LightOperatorId operatorId) override;
-		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
+		virtual LightInterface TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
 		virtual void DestroyLightSource(LightSourceId) override;
 		virtual void Clear() override;
 		virtual void* QueryInterface(uint64_t) override;
@@ -156,7 +151,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<std::pair<LightOperatorId, StandardPositionLightFlags::BitField>> _associatedFlags;
 	};
 
-	class StandardPositionalLight : public ILightBase, public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
+	class StandardPositionalLight
 	{
 	public:
 		Float3x3    _orientation;
@@ -169,7 +164,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		float       _diffuseWideningMin;
 		float       _diffuseWideningMax;
 
- 		virtual void SetLocalToWorld(const Float4x4& localToWorld) override
+ 		void SetLocalToWorld(const Float4x4& localToWorld)
 		{
 			ScaleRotationTranslationM srt(localToWorld);
 			_orientation = srt._rotation;
@@ -178,16 +173,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			_radii = Truncate(srt._scale);
 		}
 
-		virtual Float4x4 GetLocalToWorld() const override
+		Float4x4 GetLocalToWorld() const
 		{
 			ScaleRotationTranslationM srt { Expand(_radii, 1.f), _orientation, _position };
 			return AsFloat4x4(srt);
 		}
 
-		virtual void SetCutoffRange(float cutoff) override { _cutoffRange = cutoff; }
-		virtual float GetCutoffRange() const override { return _cutoffRange; }
+		void SetCutoffRange(float cutoff) { _cutoffRange = cutoff; }
+		float GetCutoffRange() const { return _cutoffRange; }
 
-		virtual void SetCutoffBrightness(float cutoffBrightness) override
+		void SetCutoffBrightness(float cutoffBrightness)
 		{
 			// distance attenuation formula:
 			//		1.0f / (distanceSq+1)
@@ -204,21 +199,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 		}
 
-		virtual void SetBrightness(Float3 rgb) override { _brightness = rgb; }
-		virtual Float3 GetBrightness() const override { return _brightness; }
-		virtual void SetDiffuseWideningFactors(Float2 minAndMax) override
+		void SetBrightness(Float3 rgb) { _brightness = rgb; }
+		Float3 GetBrightness() const { return _brightness; }
+		void SetDiffuseWideningFactors(Float2 minAndMax)
 		{
 			_diffuseWideningMin = minAndMax[0];
 			_diffuseWideningMax = minAndMax[1];
 		}
-		virtual Float2 GetDiffuseWideningFactors() const override
+		Float2 GetDiffuseWideningFactors() const
 		{
 			return Float2 { _diffuseWideningMin, _diffuseWideningMax };
 		}
 	
-		virtual void* QueryInterface(uint64_t interfaceTypeCode) override;
-		void* QueryInterface(uint64_t interfaceTypeCode, StandardPositionLightFlags::BitField flags);
-
 		StandardPositionalLight()
 		{
 			_position = _unitLengthPosition = Normalize(Float3(-.1f, 0.33f, 1.f));

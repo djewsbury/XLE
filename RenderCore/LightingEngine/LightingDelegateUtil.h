@@ -93,16 +93,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
 
-		std::vector<SharedProbeSceneSet> _sceneSets;
+		std::vector<std::unique_ptr<SharedProbeSceneSet>> _sceneSets;
 		float _defaultNearRadius = 1.f;
 		unsigned _fadeTransitionInFrames = 16;
 		std::vector<bool> _maskedLightOperators;
 
 		// ILightSceneComponent
-		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) override;
+		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
 		void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
-		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) override;
+		void* QueryInterface(LightSetId setIdx, uint64_t interfaceTypeCode) override;
 	};
 
 	class IDynamicShadowProbeSchedulerMetrics
@@ -172,7 +172,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			bool _active = true;
 		};
 
-		std::vector<SharedProbeSceneSet> _sceneSets;
+		std::vector<std::unique_ptr<SharedProbeSceneSet>> _sceneSets;
 		std::shared_ptr<DynamicShadowProbes> _shadowProbes;
 		std::vector<std::pair<LightIndex, ActiveLight>> _activeLights[2];
 		float _defaultNearRadius = 1.f;
@@ -187,10 +187,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void UpdateClustering();
 
 		// ILightSceneComponent
-		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx, ILightBase& light) override;
+		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
 		void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
-		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) override;
+		void* QueryInterface(LightSetId setIdx, uint64_t interfaceTypeCode) override;
 	};
 
 	class IPriorityShadowProjectionScheduler
@@ -230,13 +230,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		~PriorityShadowProjectionScheduler();
 	private:
 		// ILightSceneComponent
-		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
+		void RegisterLight(unsigned setIdx, unsigned lightIdx) override;
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
-		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) override;
+		void* QueryInterface(unsigned setIdx, uint64_t interfaceTypeCode) override;
 
 		struct SceneSet;
-		std::vector<SceneSet> _sceneSets;
+		std::vector<std::unique_ptr<SceneSet>> _sceneSets;
 
 		std::shared_ptr<PriorityShadowSchedulerUtil> _shadowPreparers;
 		unsigned _totalProjectionCount;
@@ -263,10 +263,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		~DominantLightSet();
 	private:
 		// ILightSceneComponent
-		void RegisterLight(unsigned setIdx, unsigned lightIdx, ILightBase& light) override;
+		void RegisterLight(unsigned setIdx, unsigned lightIdx) override;
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
-		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx) override;
-		void* QueryInterface(unsigned setIdx, unsigned lightIdx, uint64_t interfaceTypeCode) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, const QueryInterfaceFunction&) override;
+		void* QueryInterface(unsigned setIdx, uint64_t interfaceTypeCode) override;
 	};
 
 	class ShaderResourceSplitter : public RenderCore::Techniques::IShaderResourceDelegate
@@ -326,32 +326,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 
 	/////////////////////////////// inlines //////////////////////////////////
-	class SequencerAddendums;
-	struct PriorityShadowProjectionScheduler::SceneSet
-	{
-		using ShadowProjectionBasePtr = std::unique_ptr<ILightBase>;
-		std::vector<ShadowProjectionBasePtr> _projections;
-		std::vector<std::shared_ptr<IPreparedShadowResult>> _preparedResult;
-		std::vector<SequencerAddendums> _addendums;
-		BitHeap _activeProjections;
-		bool _activeSet = false;
-		std::shared_ptr<PriorityShadowSchedulerUtil> _preparers;
-		unsigned _preparerId = ~0u;
-		ShadowProjectionMode _projectionMode = ShadowProjectionMode::Arbitrary;
-
-		void RegisterLight(unsigned index, ILightBase& light);
-		void DeregisterLight(unsigned index);
-		SceneSet();
-		SceneSet(SceneSet&&);
-		SceneSet& operator=(SceneSet&&);
-	};
-
-	inline auto PriorityShadowProjectionScheduler::GetPreparedShadow(unsigned setIdx, unsigned lightIdx) -> const IPreparedShadowResult*
-	{
-		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]._activeSet) return {};
-		assert(_sceneSets[setIdx]._activeProjections.IsAllocated(lightIdx));
-		return _sceneSets[setIdx]._preparedResult[lightIdx].get();
-	}
+	
 
 }}}
 

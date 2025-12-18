@@ -21,7 +21,14 @@ namespace RenderCore { namespace LightingEngine
 		using LightOperatorId = unsigned;
 		virtual LightSourceId CreateLightSource(LightOperatorId) = 0;
 		virtual void DestroyLightSource(LightSourceId) = 0;
-		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) = 0;
+
+		struct LightInterface
+		{ 
+			void* _interf = nullptr;
+			const void* systemValue = nullptr;
+			template<typename T> T* As() { return (T*)_interf; };
+		};
+		virtual LightInterface TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) = 0;
 
 		virtual void Clear() = 0;
 
@@ -43,27 +50,27 @@ namespace RenderCore { namespace LightingEngine
 	class IPositionalLightSource
 	{
 	public:
-		virtual void SetLocalToWorld(const Float4x4&) = 0;
-		virtual Float4x4 GetLocalToWorld() const = 0;
+		virtual void SetLocalToWorld(const Float4x4&, const void* system=nullptr) = 0;
+		virtual Float4x4 GetLocalToWorld(const void* system=nullptr) const = 0;
 		virtual ~IPositionalLightSource();
 	};
 
 	class IUniformEmittance
 	{
 	public:
-		virtual void SetBrightness(Float3 rgb) = 0;
-		virtual Float3 GetBrightness() const = 0;
-		virtual void SetDiffuseWideningFactors(Float2) = 0;
-		virtual Float2 GetDiffuseWideningFactors() const = 0;
+		virtual void SetBrightness(Float3 rgb, const void* system=nullptr) = 0;
+		virtual Float3 GetBrightness(const void* system=nullptr) const = 0;
+		virtual void SetDiffuseWideningFactors(Float2, const void* system=nullptr) = 0;
+		virtual Float2 GetDiffuseWideningFactors(const void* system=nullptr) const = 0;
 		virtual ~IUniformEmittance();
 	};
 
 	class IFiniteLightSource
 	{
 	public:
-		virtual void SetCutoffBrightness(float brightness) = 0;
-		virtual void SetCutoffRange(float cutoff) = 0;
-		virtual float GetCutoffRange() const = 0;
+		virtual void SetCutoffBrightness(float brightness, const void* system=nullptr) = 0;
+		virtual void SetCutoffRange(float cutoff, const void* system=nullptr) = 0;
+		virtual float GetCutoffRange(const void* system=nullptr) const = 0;
 		virtual ~IFiniteLightSource();
 	};
 
