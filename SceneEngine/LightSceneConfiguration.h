@@ -2,6 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#pragma once
+
 #include "../../RenderCore/LightingEngine/StandardLightOperators.h"
 #include "../../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../../Formatters/IDynamicFormatter.h"
@@ -53,77 +55,77 @@ namespace SceneEngine
 			uint64_t name;
 			while (TryKeyedItem(fmttr, name)) {
 				switch (name) {
-				case "LightSource"_h:
+				case ConstHash64("LightSource"):
 					RequireBeginElement(fmttr);
 					_lightSourceOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "Shadow"_h:
+				case ConstHash64("Shadow"):
 					RequireBeginElement(fmttr);
 					_shadowOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "Ambient"_h:
+				case ConstHash64("Ambient"):
 					RequireBeginElement(fmttr);
 					_ambientOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "ForwardLighting"_h:
+				case ConstHash64("ForwardLighting"):
 					RequireBeginElement(fmttr);
 					_forwardLightingOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "DeferredLighting"_h:
+				case ConstHash64("DeferredLighting"):
 					RequireBeginElement(fmttr);
 					_deferredLightingOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "UtilityLighting"_h:
+				case ConstHash64("UtilityLighting"):
 					RequireBeginElement(fmttr);
 					_utilityLightingOperator.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "ToneMapAces"_h:
+				case ConstHash64("ToneMapAces"):
 					RequireBeginElement(fmttr);
 					_toneMapAcesOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "MultiSample"_h:
+				case ConstHash64("MultiSample"):
 					RequireBeginElement(fmttr);
 					_multiSampleOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "TAA"_h:
+				case ConstHash64("TAA"):
 					RequireBeginElement(fmttr);
 					_taaOperator.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "Sharpen"_h:
+				case ConstHash64("Sharpen"):
 					RequireBeginElement(fmttr);
 					_sharpenOperator.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "FilmGrain"_h:
+				case ConstHash64("FilmGrain"):
 					RequireBeginElement(fmttr);
 					_filmGrainOperator.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "Sky"_h:
+				case ConstHash64("Sky"):
 					RequireBeginElement(fmttr);
 					_skyOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "SkyTextureProcessor"_h:
+				case ConstHash64("SkyTextureProcessor"):
 					RequireBeginElement(fmttr);
 					_skyTextureProcessors.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "ScreenSpaceReflections"_h:
+				case ConstHash64("ScreenSpaceReflections"):
 					RequireBeginElement(fmttr);
 					_ssr.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
-				case "ScreenSpaceAmbientOcclusion"_h:
+				case ConstHash64("ScreenSpaceAmbientOcclusion"):
 					RequireBeginElement(fmttr);
 					_ssao.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);

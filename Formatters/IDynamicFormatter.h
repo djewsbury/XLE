@@ -5,23 +5,23 @@
 #pragma once
 
 #include "TextFormatter.h"
-#include "../Utility/StringFormat.h"
 
 namespace Assets { class DependencyValidation; }
-namespace Utility { namespace ImpliedTyping { class TypeDesc; }}
+namespace Utility::ImpliedTyping { class TypeDesc; }
+namespace Utility { template <typename T> class StringSection; }
 
 namespace Formatters
 {
     class IDynamicInputFormatter
     {
     public:
-        using InteriorSection = StringSection<>;
+        using InteriorSection = StringSection<char>;
         using Blob = FormatterBlob;
         virtual Blob PeekNext() = 0;
 
         virtual bool TryBeginElement() = 0;
 		virtual bool TryEndElement() = 0;
-		virtual bool TryKeyedItem(StringSection<>& name) = 0;
+		virtual bool TryKeyedItem(StringSection<char>& name) = 0;
         virtual bool TryKeyedItem(uint64_t& name) = 0;
 
         //
@@ -33,7 +33,7 @@ namespace Formatters
         //      TryRawValue()           --> returns the underlying type and data for the underlying type (no copies or conversions)
         //      TryCastValue()          --> attempts to cast the underlying value to the type given and into the destination buffer given (copy and maybe conversion required)
         //
-		virtual bool TryStringValue(StringSection<>& value) = 0;
+		virtual bool TryStringValue(StringSection<char>& value) = 0;
         virtual bool TryRawValue(IteratorRange<const void*>& value, ImpliedTyping::TypeDesc& type) = 0;
         virtual bool TryCastValue(IteratorRange<void*> destinationBuffer, const ImpliedTyping::TypeDesc& type) = 0;
 

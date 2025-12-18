@@ -50,6 +50,7 @@ BuildLog.htm
 **/.vs/*
 *.orig
 .vscode/ipch/**
+.vscode/*
 Working/.vscode/**
 .cache/**
 

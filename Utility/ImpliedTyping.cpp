@@ -394,6 +394,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(bool*)dest.begin() = !!*(uint64_t*)src.begin(); return true;
                     case TypeCat::Float: *(bool*)dest.begin() = !!(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(bool*)dest.begin() = !!(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -409,6 +410,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(int8_t*)dest.begin() = int8_t(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -424,6 +426,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(uint8_t*)dest.begin() = uint8_t(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -439,6 +442,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(int16_t*)dest.begin() = int16_t(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -454,6 +458,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(uint16_t*)dest.begin() = uint16_t(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -469,6 +474,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(int32_t*)dest.begin() = int32_t(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -484,6 +490,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(uint32_t*)dest.begin() = uint32_t(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -499,6 +506,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(int64_t*)dest.begin() = int64_t(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -514,6 +522,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(uint64_t*)dest.begin() = uint64_t(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -529,6 +538,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(float*)dest.begin() = float(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(float*)dest.begin() = float(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(float*)dest.begin() = float(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
@@ -544,6 +554,7 @@ namespace Utility { namespace ImpliedTyping
                     case TypeCat::UInt64: *(double*)dest.begin() = double(FlipEndianHelper<uint64_t>(src.begin())); return true;
                     case TypeCat::Float: *(double*)dest.begin() = double(FlipEndianHelper<float>(src.begin())); return true;
                     case TypeCat::Double: *(double*)dest.begin() = double(FlipEndianHelper<double>(src.begin())); return true;
+                    default:break;
                     }
                 }
                 break;
