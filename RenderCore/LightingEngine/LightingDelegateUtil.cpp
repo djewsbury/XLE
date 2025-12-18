@@ -36,7 +36,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<IShadowPreparer> _preparer;
 	};
 
-	struct PriorityShadowProjectionScheduler::SceneSet : public IAttachDriver
+	struct PriorityShadowProjectionScheduler::SceneSet : public IAttachDriver, public IDepthTextureResolve, public IArbitraryShadowProjections, public IOrthoShadowProjections, public INearShadowProjection
 	{
 		using ShadowProjectionBasePtr = std::unique_ptr<ILightBase>;
 		std::vector<ShadowProjectionBasePtr> _projections;
@@ -49,11 +49,74 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		IPositionalLightSource* _positionalChain = nullptr;
 		IFiniteLightSource* _finiteChain = nullptr;
 
-		void AttachDriver(std::shared_ptr<ILightBase> driver, const void* system=nullptr)
+		void AttachDriver(std::shared_ptr<ILightBase> driver, const void* system) override
 		{
 			auto idx = (size_t)system;
 			assert(idx < _addendums.size());
 			_addendums[idx]._driver = std::move(driver);
+		}
+
+		// awkward that we have to redirect each interface function
+		void SetDesc(const Desc& newValue, const void* system) override
+		{
+			auto idx = (size_t)system;
+			assert(idx < _projections.size());
+			if (auto* interf=(IDepthTextureResolve*)_projections[idx]->QueryInterface(TypeHashCode<IDepthTextureResolve>))
+				interf->SetDesc(newValue, nullptr);
+		}
+		Desc GetDesc(const void* system) const override
+		{
+			auto idx = (size_t)system;
+			assert(idx < _projections.size());
+			if (auto* interf=(IDepthTextureResolve*)_projections[idx]->QueryInterface(TypeHashCode<IDepthTextureResolve>))
+				interf->GetDesc(nullptr);
+		}
+		void SetArbitrarySubProjections(
+			IteratorRange<const Float4x4*> worldToCamera,
+			IteratorRange<const Float4x4*> cameraToProjection,
+			const void* system) override
+		{
+			auto idx = (size_t)system;
+			assert(idx < _projections.size());
+			if (auto* interf=(IArbitraryShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IArbitraryShadowProjections>))
+				interf->SetArbitrarySubProjections(worldToCamera, cameraToProjection, nullptr);
+		}
+		void SetWorldToOrthoView(const Float4x4& worldToCamera, const void* system) override
+		{
+			auto idx = (size_t)system;
+			assert(idx < _projections.size());
+			if (auto* interf=(IOrthoShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IOrthoShadowProjections>))
+				interf->SetWorldToOrthoView(worldToCamera, nullptr);
+		}
+		void SetOrthoSubProjections(IteratorRange<const OrthoSubProjection*> proj, const void* system) override
+		{
+			auto idx = (size_t)system;
+			assert(idx < _projections.size());
+			if (auto* interf=(IOrthoShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IOrthoShadowProjections>))
+				interf->SetOrthoSubProjections(proj, nullptr);
+		}
+		Float4x4 GetWorldToOrthoView(const void* system) const override
+		{
+			auto idx = (size_t)system;
+			assert(idx < _projections.size());
+			if (auto* interf=(IOrthoShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IOrthoShadowProjections>))
+				return interf->GetWorldToOrthoView(nullptr);
+			return Identity<Float4x4>();
+		}
+		std::vector<OrthoSubProjection> GetOrthoSubProjections(const void* system) const override
+		{
+			auto idx = (size_t)system;
+			assert(idx < _projections.size());
+			if (auto* interf=(IOrthoShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IOrthoShadowProjections>))
+				return interf->GetOrthoSubProjections(nullptr);
+			return {};
+		}
+		void SetProjection(const Float4x4& proj, const void* system) override
+		{
+			auto idx = (size_t)system;
+			assert(idx < _projections.size());
+			if (auto* interf=(INearShadowProjection*)_projections[idx]->QueryInterface(TypeHashCode<INearShadowProjection>))
+				return interf->SetProjection(proj, nullptr);
 		}
 
 		void RegisterLight(unsigned index);
@@ -196,22 +259,30 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void* PriorityShadowProjectionScheduler::QueryInterface(unsigned setIdx, uint64_t interfaceTypeCode)
 	{
-		if (setIdx < _sceneSets.size() && _sceneSets[setIdx]) {
-			switch (interfaceTypeCode) {
-			case TypeHashCode<IAttachDriver>:
-				return (IAttachDriver*)_sceneSets[setIdx].get();
-			default:
-				assert(0);		// need to provide access to this somehow
-				#if 0
-					if (_sceneSets[setIdx]->_addendums[lightIdx]._driver)
-						if (auto* res = _sceneSets[setIdx]->_addendums[lightIdx]._driver->QueryInterface(interfaceTypeCode))
-							return res;
-					return _sceneSets[setIdx]->_projections[lightIdx]->QueryInterface(interfaceTypeCode);
-				#endif
-				break;
-			}
+		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) return nullptr;
+
+		switch (interfaceTypeCode) {
+		case TypeHashCode<IAttachDriver>:
+			return (IAttachDriver*)_sceneSets[setIdx].get();
+		case TypeHashCode<IDepthTextureResolve>:
+			return (IDepthTextureResolve*)_sceneSets[setIdx].get();
+		case TypeHashCode<IArbitraryShadowProjections>:
+			return (IArbitraryShadowProjections*)_sceneSets[setIdx].get();
+		case TypeHashCode<IOrthoShadowProjections>:
+			return (IOrthoShadowProjections*)_sceneSets[setIdx].get();
+		case TypeHashCode<INearShadowProjection>:
+			return (INearShadowProjection*)_sceneSets[setIdx].get();
+
+		default:
+			assert(0);		// need to provide access to this somehow
+			#if 0
+				if (_sceneSets[setIdx]->_addendums[lightIdx]._driver)
+					if (auto* res = _sceneSets[setIdx]->_addendums[lightIdx]._driver->QueryInterface(interfaceTypeCode))
+						return res;
+				return _sceneSets[setIdx]->_projections[lightIdx]->QueryInterface(interfaceTypeCode);
+			#endif
+			break;
 		}
-		return nullptr;
 	}
 
 	auto PriorityShadowProjectionScheduler::GetAllPreparedShadows() -> std::vector<PreparedShadow>
@@ -244,11 +315,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	}
 	PriorityShadowProjectionScheduler::~PriorityShadowProjectionScheduler() {}
 
-	// constexpr auto s_positionalLightSourceInterface = TypeHashCode<IPositionalLightSource>;
-	constexpr auto s_orthoShadowProjectionsInterface = TypeHashCode<IOrthoShadowProjections>;
-	constexpr auto s_arbitraryShadowProjectionsInterface = TypeHashCode<IArbitraryShadowProjections>;
-	// constexpr auto s_finiteLightSourceInterface = TypeHashCode<IFiniteLightSource>;
-
 	static SequenceParseId SetupShadowParse(
 		SequenceIterator& iterator,
 		Sequence& sequence,
@@ -265,7 +331,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (addendums._driver) {
 			// Note the TryGetLightSourceInterface is expensive particular, and scales poorly with the number of
 			// lights in the scene
-			auto* orthoShadowProjections = (IOrthoShadowProjections*)proj.QueryInterface(s_orthoShadowProjectionsInterface);
+			auto* orthoShadowProjections = (IOrthoShadowProjections*)proj.QueryInterface(TypeHashCode<IOrthoShadowProjections>);
 			assert(orthoShadowProjections);
 			volumeTester = ((Internal::IShadowProjectionDriver*)addendums._driver->QueryInterface(TypeHashCode<Internal::IShadowProjectionDriver>))->UpdateProjections(
 				*iterator._parsingContext, localToWorld, *orthoShadowProjections);
@@ -273,7 +339,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			// we'll attempt to attach the projections to the list
 			// todo -- only implemented for specific case of sphere light & cubemap shadows
 			assert(shadowProjectionMode == ShadowProjectionMode::ArbitraryCubeMap);
-			auto* shadowProjections = (IArbitraryShadowProjections*)proj.QueryInterface(s_arbitraryShadowProjectionsInterface);
+			auto* shadowProjections = (IArbitraryShadowProjections*)proj.QueryInterface(TypeHashCode<IArbitraryShadowProjections>);
 			assert(shadowProjections);
 			Float4x4 worldToCamera[6];
 			Float4x4 cameraToProjection[6];
@@ -284,7 +350,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				worldToCamera[c] = InvertOrthonormalTransform(projDesc._cameraToWorld);
 				cameraToProjection[c] = projDesc._cameraToProjection;
 			}
-			shadowProjections->SetArbitrarySubProjections(worldToCamera, cameraToProjection);
+			shadowProjections->SetArbitrarySubProjections(worldToCamera, cameraToProjection, nullptr);
 		}
 
 		// todo - cull out any offscreen projections
@@ -503,7 +569,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		{
 			auto& entry = _probes[(size_t)sys];
 			entry._probeDesc._farRadius = cutoff;
-			if (_finiteChain) _finiteChain->SetCutoffRange(cutoff);
+			if (_finiteChain) _finiteChain->SetCutoffRange(cutoff, sys);
 		}
 		float GetCutoffRange(const void* sys) const override
 		{

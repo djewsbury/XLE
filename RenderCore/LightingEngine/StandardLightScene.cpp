@@ -45,38 +45,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		LightSet(LightOperatorId operatorId) : _operatorId(operatorId) {}
 	};
 
-#if 0
-	void* StandardPositionalLight::QueryInterface(uint64_t interfaceTypeCode)
-	{
-		switch(interfaceTypeCode) {
-		case TypeHashCode<IPositionalLightSource>:
-			return (IPositionalLightSource*)this;
-		case TypeHashCode<IUniformEmittance>:
-			return (IUniformEmittance*)this;
-		case TypeHashCode<StandardPositionalLight>:
-			return this;
-		}
-		return nullptr;
-	}
-
-	void* StandardPositionalLight::QueryInterface(uint64_t interfaceTypeCode, StandardPositionLightFlags::BitField flags)
-	{
-		switch (interfaceTypeCode) {
-		case TypeHashCode<IPositionalLightSource>:
-			return (IPositionalLightSource*)this;
-		case TypeHashCode<IUniformEmittance>:
-			return (IUniformEmittance*)this;
-		case TypeHashCode<IFiniteLightSource>:
-			if (flags & StandardPositionLightFlags::SupportFiniteRange)
-				return (IFiniteLightSource*)this;
-			return nullptr;
-		case TypeHashCode<StandardPositionalLight>:
-			return this;
-		}
-		return nullptr;
-	}
-#endif
-
 	auto StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) -> LightInterface
 	{
 		auto i = LowerBound(_lookupTable, sourceId);

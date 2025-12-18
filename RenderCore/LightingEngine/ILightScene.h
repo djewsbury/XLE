@@ -50,27 +50,27 @@ namespace RenderCore { namespace LightingEngine
 	class IPositionalLightSource
 	{
 	public:
-		virtual void SetLocalToWorld(const Float4x4&, const void* system=nullptr) = 0;
-		virtual Float4x4 GetLocalToWorld(const void* system=nullptr) const = 0;
+		virtual void SetLocalToWorld(const Float4x4&, const void* system) = 0;
+		virtual Float4x4 GetLocalToWorld(const void* system) const = 0;
 		virtual ~IPositionalLightSource();
 	};
 
 	class IUniformEmittance
 	{
 	public:
-		virtual void SetBrightness(Float3 rgb, const void* system=nullptr) = 0;
-		virtual Float3 GetBrightness(const void* system=nullptr) const = 0;
-		virtual void SetDiffuseWideningFactors(Float2, const void* system=nullptr) = 0;
-		virtual Float2 GetDiffuseWideningFactors(const void* system=nullptr) const = 0;
+		virtual void SetBrightness(Float3 rgb, const void* system) = 0;
+		virtual Float3 GetBrightness(const void* system) const = 0;
+		virtual void SetDiffuseWideningFactors(Float2, const void* system) = 0;
+		virtual Float2 GetDiffuseWideningFactors(const void* system) const = 0;
 		virtual ~IUniformEmittance();
 	};
 
 	class IFiniteLightSource
 	{
 	public:
-		virtual void SetCutoffBrightness(float brightness, const void* system=nullptr) = 0;
-		virtual void SetCutoffRange(float cutoff, const void* system=nullptr) = 0;
-		virtual float GetCutoffRange(const void* system=nullptr) const = 0;
+		virtual void SetCutoffBrightness(float brightness, const void* system) = 0;
+		virtual void SetCutoffRange(float cutoff, const void* system) = 0;
+		virtual float GetCutoffRange(const void* system) const = 0;
 		virtual ~IFiniteLightSource();
 	};
 
@@ -86,8 +86,8 @@ namespace RenderCore { namespace LightingEngine
 			float       _minBlurSearch = 0.f, _maxBlurSearch = 0.f;
 			float		_casterDistanceExtraBias = 0.f;
 		};
-		virtual void SetDesc(const Desc&) = 0;
-		virtual Desc GetDesc() const = 0;
+		virtual void SetDesc(const Desc&, const void* system) = 0;
+		virtual Desc GetDesc(const void* system) const = 0;
 		virtual ~IDepthTextureResolve();
 	};
 	
@@ -96,7 +96,8 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		virtual void SetArbitrarySubProjections(
 			IteratorRange<const Float4x4*> worldToCamera,
-			IteratorRange<const Float4x4*> cameraToProjection) = 0;
+			IteratorRange<const Float4x4*> cameraToProjection,
+			const void* system) = 0;
 		virtual ~IArbitraryShadowProjections();
 	};
 
@@ -108,17 +109,17 @@ namespace RenderCore { namespace LightingEngine
 			Float3      _leftTopFront = Zero<Float3>();
 			Float3      _rightBottomBack = Zero<Float3>();
 		};
-		virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) = 0;
-		virtual void SetOrthoSubProjections(IteratorRange<const OrthoSubProjection*>) = 0;
-		virtual Float4x4 GetWorldToOrthoView() const = 0;
-		virtual std::vector<OrthoSubProjection> GetOrthoSubProjections() const = 0;
+		virtual void SetWorldToOrthoView(const Float4x4& worldToCamera, const void* system) = 0;
+		virtual void SetOrthoSubProjections(IteratorRange<const OrthoSubProjection*>, const void* system) = 0;
+		virtual Float4x4 GetWorldToOrthoView(const void* system) const = 0;
+		virtual std::vector<OrthoSubProjection> GetOrthoSubProjections(const void* system) const = 0;
 		virtual ~IOrthoShadowProjections();
 	};
 
 	class INearShadowProjection
 	{
 	public:
-		virtual void SetProjection(const Float4x4&) = 0;
+		virtual void SetProjection(const Float4x4&, const void* system) = 0;
 		virtual ~INearShadowProjection();
 	};
 }}
