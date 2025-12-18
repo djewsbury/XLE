@@ -124,7 +124,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void AssociateFlag(LightOperatorId, StandardPositionLightFlags::BitField);
 
 		virtual LightSourceId CreateLightSource(LightOperatorId operatorId) override;
-		virtual LightInterface TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
+		virtual void* TryGetLightSourceInterface(LightSourceId, uint64_t interfaceTypeCode) override;
 		virtual void DestroyLightSource(LightSourceId) override;
 		virtual void Clear() override;
 		virtual void* QueryInterface(uint64_t) override;

@@ -16,19 +16,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<std::shared_ptr<ILightSceneComponent>> _boundComponents;
 		StandardPositionLightFlags::BitField _flags = 0;
 
-		/*virtual void SetLocalToWorld(const Float4x4& localToWorld, const void* sys) override { _baseData.GetObject((size_t)sys).SetLocalToWorld(localToWorld); }
-		virtual Float4x4 GetLocalToWorld(const void* sys) const override { return _baseData.GetObject((size_t)sys).GetLocalToWorld(); }
-
-		virtual void SetCutoffRange(float cutoff, const void* sys) override { _baseData.GetObject((size_t)sys).SetCutoffRange(cutoff); }
-		virtual float GetCutoffRange(const void* sys) const override { return _baseData.GetObject((size_t)sys).GetCutoffRange(); }
-		virtual void SetCutoffBrightness(float cutoffBrightness, const void* sys) override { _baseData.GetObject((size_t)sys).SetCutoffBrightness(cutoffBrightness); }
-
-		virtual void SetBrightness(Float3 rgb, const void* sys) override { _baseData.GetObject((size_t)sys).SetBrightness(rgb); }
-		virtual Float3 GetBrightness(const void* sys) const override { return _baseData.GetObject((size_t)sys).GetBrightness(); }
-
-		virtual void SetDiffuseWideningFactors(Float2 minAndMax, const void* sys) override { _baseData.GetObject((size_t)sys).SetDiffuseWideningFactors(minAndMax); }
-		virtual Float2 GetDiffuseWideningFactors(const void* sys) const override { return _baseData.GetObject((size_t)sys).GetDiffuseWideningFactors(); }*/
-
 		void* QueryInterface(unsigned lightIdx, uint64_t interfaceTypeCode)
 		{
 			switch (interfaceTypeCode) {
@@ -45,21 +32,21 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		LightSet(LightOperatorId operatorId) : _operatorId(operatorId) {}
 	};
 
-	auto StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) -> LightInterface
+	auto StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) -> void*
 	{
 		auto i = LowerBound(_lookupTable, sourceId);
-		if (i == _lookupTable.end() || i->first != sourceId) return {};		// not found
+		if (i == _lookupTable.end() || i->first != sourceId) return nullptr;		// not found
 
 		auto& set = *_lightSets[i->second._lightSet];
 		assert(set._baseData._allocationFlags.IsAllocated(i->second._lightIndex));
 
 		// test components first
 		for (auto& comp:set._boundComponents)
-			if (void* interf = comp->QueryInterface(i->second._lightSet, interfaceTypeCode))
-				return { interf, (const void*)(size_t)i->second._lightIndex };
+			if (void* interf = comp->QueryInterface(i->second._lightSet, i->second._lightIndex, interfaceTypeCode))
+				return interf;
 
 		// fallback to the ILightBase
-		return { set.QueryInterface(interfaceTypeCode), (const void*)(size_t)i->second._lightIndex };
+		return set.QueryInterface(i->second._lightIndex, interfaceTypeCode);
 	}
 
 	auto StandardLightScene::CreateLightSource(LightOperatorId operatorId) -> LightSourceId
