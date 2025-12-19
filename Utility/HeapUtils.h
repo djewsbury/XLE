@@ -1207,8 +1207,9 @@ namespace Utility
 		//		-> we must move the last element of the page out and try to fit it in a subsequent
 		//			page. This can result in a recursive walk down the list of pages, doing one swap
 		//			per page
-		assert(before._pageIterator);
-		if (!before._pageIterator->full()) {
+		if (!before._pageIterator) {
+			return emplace_back(std::move(p)...); // triggered when placing off the end of the current heap
+		} else if (!before._pageIterator->full()) {
 			before._pageIterator->emplace(before._idxWithinPage, std::forward<Params>(p)...);
 			unsigned c=before._pageIdx+1;
 			for (; c<_indexLookups.size(); ++c) ++_indexLookups[c];
