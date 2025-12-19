@@ -67,3 +67,6 @@
 [submodule "Foreign/FastLZ"]
 	path = Foreign/FastLZ
 	url = git@github.com:ariya/FastLZ.git
+[submodule "Foreign/pdqsort"]
+	path = Foreign/pdqsort
+	url = git@github.com:orlp/pdqsort
