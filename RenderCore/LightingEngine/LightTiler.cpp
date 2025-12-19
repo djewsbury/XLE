@@ -23,6 +23,7 @@
 #include "../../Math/ProjectionMath.h"
 #include "../../Math/Transformations.h"
 #include "../../Utility/BitUtils.h"
+#include "../../Foreign/pdqsort/pdqsort.h"
 #include "../../xleres/FileList.h"
 
 using namespace Utility::Literals;
@@ -61,83 +62,125 @@ namespace RenderCore { namespace LightingEngine
 		return z2/CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 	}
 
-	struct IntermediateLight { Float3 _position; float _cutoffRadius; float _linearizedDepthMin, _linearizedDepthMax; unsigned _srcIdx; unsigned _dummy; };
+	// struct IntermediateLight { Float3 _position; float _cutoffRadius; float _linearizedDepthMin, _linearizedDepthMax; unsigned _srcIdx; unsigned _dummy; };
 
 	void RasterizationLightTileOperator::Execute(SequenceIterator& iterator)
 	{
 		GPUProfilerBlock profileBlock(*iterator._threadContext, "RasterizationLightTileOperator");
 
 		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
-		_pingPongCounter = (_pingPongCounter+1)%dimof(_tileableLightBuffer);
+		++_frameCounter;
+		auto pingPongCounter = _frameCounter%dimof(_tileableLightBuffer);
 
 		auto& projDesc = iterator._parsingContext->GetProjectionDesc();
 		auto clipSpaceType = Techniques::GetDefaultClipSpaceType();
 		AccurateFrustumTester frustumTester(projDesc._worldToProjection, clipSpaceType);
 
 		{
-			VLA_UNSAFE_FORCE(IntermediateLight, intermediateLights, _config._maxLightsPerView);
-			IntermediateLight* intLight = intermediateLights, *intLightEnd = &intermediateLights[_config._maxLightsPerView];
 			auto worldToCamera = InvertOrthonormalTransform(projDesc._cameraToWorld);
 			auto zRow = Float4{worldToCamera(2,0), worldToCamera(2,1), worldToCamera(2,2), worldToCamera(2,3)};
 			float zRowMag = Magnitude(Truncate(zRow));
 			float farClip = CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 
-			unsigned lightSetIdx = 0;
-			for (auto& lightSet:_lightScene->_lightSets) {
+			// Note -- we reuse last frame's results, which will often be in almost-sorted order (particularly for the active lights)
+			// is it worth considering parallelizing some of the this work? We can theoretically start it as soon as we know the complete light list, and the camera position
 
-				if (lightSet._flags & Internal::StandardPositionLightFlags::LightTiler) {
-					unsigned idxOffset = 0;
-					for (auto i=lightSet._baseData.begin(); i!=lightSet._baseData.end(); ++i) {
-						auto& lightDesc = *i;
-						if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) continue;
-						
-						float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
-						// take the negative for convenience --> convert to -Z forward into +Z forward
-						zMin = -zMin;
-						float zMax = zMin + lightDesc._cutoffRange * zRowMag;
-						zMin -= lightDesc._cutoffRange * zRowMag;
-
-						if (intLight < intLightEnd) {
-							*intLight++ = IntermediateLight {
-								lightDesc._position, lightDesc._cutoffRange,
-								zMin/farClip, zMax/farClip,
-								(lightSetIdx << 16) | i.GetIndex() };
-						}
-					}
+			_activeLights[1].clear(); _inactiveLights[1].clear();
+			for (auto& lightDesc:_activeLights[0]) {
+				if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) {
+					_inactiveLights[1].emplace_back(InactiveLight{lightDesc._position, lightDesc._cutoffRange, lightDesc._srcId});
+					continue;
 				}
 
-				++lightSetIdx;
+				float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
+				// take the negative for convenience --> convert to -Z forward into +Z forward
+				zMin = -zMin;
+				float zMax = zMin + lightDesc._cutoffRange * zRowMag;
+				zMin -= lightDesc._cutoffRange * zRowMag;
+
+				_activeLights[1].emplace_back(
+					IntermediateLight {
+						lightDesc._position, lightDesc._cutoffRange,
+						zMin/farClip, zMax/farClip, lightDesc._srcId });
 			}
 
-			assert((intLight-intermediateLights) < (1u<<16u));
-			_outputs._lightCount = unsigned(intLight-intermediateLights);
+			// As an optimization, we'll check only some of the inactive lights. It may take a few frames before they become active after appearing in the frustum
+			{
+				unsigned scatter = _frameCounter;
+				for (auto& lightDesc:_inactiveLights[0]) {
+					if (scatter++&3) {
+						_inactiveLights[1].emplace_back(lightDesc);
+						continue;
+					}
 
-			// sort by distance to camera of closest point to camera
-			std::sort(intermediateLights, intLight, [](const IntermediateLight& lhs, IntermediateLight& rhs) { return lhs._linearizedDepthMin < rhs._linearizedDepthMin; });
+					if (frustumTester.TestSphere(lightDesc._position, lightDesc._cutoffRange) == CullTestResult::Culled) {
+						_inactiveLights[1].emplace_back(lightDesc);
+						continue;
+					}
+
+					float zMin = Dot(Float4{lightDesc._position, 1}, zRow);
+					// take the negative for convenience --> convert to -Z forward into +Z forward
+					zMin = -zMin;
+					float zMax = zMin + lightDesc._cutoffRange * zRowMag;
+					zMin -= lightDesc._cutoffRange * zRowMag;
+
+					_activeLights[1].emplace_back(
+						IntermediateLight {
+							lightDesc._position, lightDesc._cutoffRange,
+							zMin/farClip, zMax/farClip, lightDesc._srcId });
+				}
+			}
+
+			if (expect_evaluation(_activeLights[1].size() > _config._maxLightsPerView, false)) {
+				// we'll remove the last entries in _activeLights, which will be lights added this frame
+				while (_activeLights[1].size() > _config._maxLightsPerView) {
+					auto& back = _activeLights[1].back();
+					_inactiveLights[1].emplace_back(InactiveLight{back._position, back._cutoffRange, back._srcId});
+					_activeLights[1].pop_back();
+				}
+			}
+
+			_outputs._lightCount = unsigned(_activeLights[1].size());
+			assert(_outputs._lightCount < (1u<<16u));
+
+			// sort by distance to camera of closest point to camera. We're expecting an almost-sorted input, so we should use an algorthm
+			// optimized for this... MSVC std::sort switches to insertion sort for short ranges, so might actually be fine here.
+			// But let's try out pdqsort. Another option is a branchless sorting network when for the full up light list
+			pdqsort(_activeLights[1].begin(), _activeLights[1].end(), [](const IntermediateLight& lhs, IntermediateLight& rhs) { return lhs._linearizedDepthMin < rhs._linearizedDepthMin; });
 
 			// split up depth space in our linear depth coordinates
 			// there might be some waste here, because we're including the space between the camera and the near clip plane
-			auto* i = intermediateLights;
+			auto i = _activeLights[1].begin();
 			for (unsigned c=0; c<_config._depthLookupGradiations; ++c) {
 				float min = LinearInterpolate(0.f, 1.f, c/float(_config._depthLookupGradiations));
 				float max = LinearInterpolate(0.f, 1.f, (c+1)/float(_config._depthLookupGradiations));
-				while (i != intLight && i->_linearizedDepthMax < min) ++i;
+				while (i != _activeLights[1].end() && i->_linearizedDepthMax < min) ++i;
 				auto endi = i;
-				while (endi != intLight && endi->_linearizedDepthMin < max) ++endi;
-				_outputs._lightDepthTable[c] = (unsigned(endi-intermediateLights) << 16u) | unsigned(i-intermediateLights);
+				while (endi != _activeLights[1].end() && endi->_linearizedDepthMin < max) ++endi;
+				_outputs._lightDepthTable[c] = (unsigned(endi-_activeLights[1].begin()) << 16u) | unsigned(i-_activeLights[1].begin());
 			}
 
 			// Record the ordering of the lists
 			for (unsigned c=0; c<_outputs._lightCount; ++c)
-				_outputs._lightOrdering[c] = intermediateLights[c]._srcIdx;
+				_outputs._lightOrdering[c] = _activeLights[1][c]._srcId;
 
 			if (_outputs._lightCount) {
 				Metal::ResourceMap map{
-					metalContext, *_tileableLightBuffer[_pingPongCounter], Metal::ResourceMap::Mode::WriteDiscardPrevious,
+					metalContext, *_tileableLightBuffer[pingPongCounter], Metal::ResourceMap::Mode::WriteDiscardPrevious,
 					0, sizeof(IntermediateLight)*_outputs._lightCount};
-				std::memcpy(map.GetData().begin(), intermediateLights, sizeof(IntermediateLight)*_outputs._lightCount);
+				std::memcpy(map.GetData().begin(), _activeLights[1].data(), sizeof(IntermediateLight)*_outputs._lightCount);
 				map.FlushCache();
 			}
+
+			// context-synchronous copy into a gpu buffer
+			if (_outputs._lightCount && _unmapTileableLightBuffer)
+				metalContext.BeginBlitEncoder().Copy(
+					*_unmapTileableLightBuffer,
+					RenderCore::CopyPartial_Src{*_tileableLightBuffer[pingPongCounter], 0, unsigned(sizeof(IntermediateLight)*_outputs._lightCount)});
+
+			// finally swap our buffers
+			std::swap(_activeLights[0], _activeLights[1]);
+			std::swap(_inactiveLights[0], _inactiveLights[1]);
 		}
 
 		if (_outputs._lightCount) {
@@ -147,7 +190,7 @@ namespace RenderCore { namespace LightingEngine
 			encoder.Bind(MakeIteratorRange(&viewport, &viewport+1), MakeIteratorRange(&scissorRect, &scissorRect+1));
 
 			UniformsStream us;
-			const IResourceView* resView[] { iterator._rpi.GetNonFrameBufferAttachmentView(0).get(), _tileableLightBufferUAV[_pingPongCounter].get(), iterator._rpi.GetNonFrameBufferAttachmentView(1).get() };
+			const IResourceView* resView[] { iterator._rpi.GetNonFrameBufferAttachmentView(0).get(), _tileableLightBufferUAV[pingPongCounter].get(), iterator._rpi.GetNonFrameBufferAttachmentView(1).get() };
 			us._resourceViews = MakeIteratorRange(resView);
 
 			struct Params
@@ -159,7 +202,7 @@ namespace RenderCore { namespace LightingEngine
 			UniformsStream::ImmediateData immData[] { MakeOpaqueIteratorRange(globalUniforms), MakeOpaqueIteratorRange(params) };
 			us._immediateData = MakeIteratorRange(immData);
 
-			_prepareBitFieldBoundUniforms.ApplyLooseUniforms(metalContext, encoder, us);
+			_prepareBitFieldBoundUniforms->ApplyLooseUniforms(metalContext, encoder, us);
 
 			VertexBufferView vbvs[] = {
 				VertexBufferView { _stencilingGeo._lowDetailHemiSphereVB.get() }
@@ -247,9 +290,38 @@ namespace RenderCore { namespace LightingEngine
 		_stencilingGeo.CompleteInitialization(threadContext);
 	}
 
-	void RasterizationLightTileOperator::SetLightScene(Internal::StandardLightScene& lightScene)
+	void RasterizationLightTileOperator::AddLight(Float3 position, float cutoffRange, unsigned srcId)
 	{
-		_lightScene = &lightScene;
+		assert(std::find_if(b2e(_activeLights[0]), [srcId](const auto& q) { return q._srcId == srcId; }) == _activeLights[0].end());
+		assert(std::find_if(b2e(_inactiveLights[0]), [srcId](const auto& q) { return q._srcId == srcId; }) == _inactiveLights[0].end());
+		_inactiveLights->emplace_back(InactiveLight{position, cutoffRange, srcId});
+	}
+
+	void RasterizationLightTileOperator::UpdateLight(Float3 position, float cutoffRange, unsigned srcId)
+	{
+		// brute force lookup, unfortunately
+		if (auto i = std::find_if(b2e(_activeLights[0]), [srcId](const auto& q) { return q._srcId == srcId; }); i != _activeLights[0].end()) {
+			i->_position = position; i->_cutoffRange = cutoffRange;
+			return;
+		}
+
+		if (auto i = std::find_if(b2e(_inactiveLights[0]), [srcId](const auto& q) { return q._srcId == srcId; }); i != _inactiveLights[0].end()) {
+			i->_position = position; i->_cutoffRange = cutoffRange;
+			return;
+		}
+	}
+
+	void RasterizationLightTileOperator::RemoveLight(unsigned srcId)
+	{
+		if (auto i = std::find_if(b2e(_activeLights[0]), [srcId](const auto& q) { return q._srcId == srcId; }); i != _activeLights[0].end()) {
+			_activeLights[0].erase(i);
+			return;
+		}
+
+		if (auto i = std::find_if(b2e(_inactiveLights[0]), [srcId](const auto& q) { return q._srcId == srcId; }); i != _inactiveLights[0].end()) {
+			_inactiveLights[0].erase(i);
+			return;
+		}
 	}
 
 	RasterizationLightTileOperator::RasterizationLightTileOperator(
@@ -272,15 +344,23 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindResourceView(2, "DownsampleDepths"_h);
 		usi.BindImmediateData(0, "GlobalTransform"_h);
 		usi.BindImmediateData(1, "ControlParams"_h);
-		_prepareBitFieldBoundUniforms = Metal::BoundUniforms(*_prepareBitFieldPipeline, usi);
+		_prepareBitFieldBoundUniforms = std::make_unique<Metal::BoundUniforms>(*_prepareBitFieldPipeline, usi);
 
-		auto tileableLightBufferDesc = CreateDesc(
-			BindFlag::UnorderedAccess, AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped,
-			LinearBufferDesc::Create(sizeof(IntermediateLight)*_config._maxLightsPerView));
-		for (unsigned c=0; c<dimof(_tileableLightBuffer); ++c) {
+		auto tileableLightBufferDesc = CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(IntermediateLight)*_config._maxLightsPerView));
+		if (_config._copyOutOfSharedMemory)
+			_unmapTileableLightBuffer = _pipelinePool->GetDevice()->CreateResource(tileableLightBufferDesc, "tileable-lights");
+
+		tileableLightBufferDesc._allocationRules = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
+		for (unsigned c=0; c<dimof(_tileableLightBuffer); ++c)
 			_tileableLightBuffer[c] = _pipelinePool->GetDevice()->CreateResource(tileableLightBufferDesc, "tileable-lights");
-			_tileableLightBufferUAV[c] = _tileableLightBuffer[c]->CreateBufferView(BindFlag::UnorderedAccess);
-		}
+
+		if (_unmapTileableLightBuffer) {
+			_tileableLightBufferUAV[0] = _unmapTileableLightBuffer->CreateBufferView(BindFlag::UnorderedAccess);
+			for (unsigned c=1; c<dimof(_tileableLightBuffer); ++c)
+				_tileableLightBufferUAV[c] = _tileableLightBufferUAV[0];
+		} else
+			for (unsigned c=0; c<dimof(_tileableLightBuffer); ++c)
+				_tileableLightBufferUAV[c] = _tileableLightBuffer[c]->CreateBufferView(BindFlag::UnorderedAccess);
 
 		auto metricsBufferDesc = CreateDesc(
 			BindFlag::UnorderedAccess|BindFlag::ShaderResource,
@@ -349,7 +429,7 @@ namespace RenderCore { namespace LightingEngine
 	uint64_t RasterizationLightTileOperatorDesc::GetHash(uint64_t seed) const
 	{
 		return HashCombine(
-			(uint64_t(_maxLightsPerView) << 32ull) | uint64_t(_depthLookupGradiations),
+			(uint64_t(_copyOutOfSharedMemory) << 63ull) | (uint64_t(_maxLightsPerView) << 32ull) | uint64_t(_depthLookupGradiations),
 			seed);
 	}
 

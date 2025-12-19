@@ -3,33 +3,34 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 
 	add_library(
 		RenderCoreLightingEngine-${metal_name} STATIC 
-		LightingEngine.cpp
-		LightUniforms.cpp
-		RenderStepFragments.cpp
-		ShadowPreparer.cpp
-		ShadowUniforms.cpp
-		LightingEngineApparatus.cpp
-		ForwardLightingDelegate.cpp
+		AAOperators.cpp
+		BlueNoiseGenerator.cpp
 		DeferredLightingDelegate.cpp
 		DeferredLightingResolve.cpp
-		StandardLightScene.cpp
-		SunSourceConfiguration.cpp
-		SSAOOperator.cpp
-		SHCoefficients.cpp
-		HierarchicalDepths.cpp
-		ScreenSpaceReflections.cpp
-		BlueNoiseGenerator.cpp
-		LightTiler.cpp
-		SkyOperator.cpp
-		ShadowProbes.cpp
-		LightingDelegateUtil.cpp
+		ForwardLightingDelegate.cpp
 		ForwardPlusLightScene.cpp
-		ToneMapOperator.cpp
-		TextureCompilerUtil.cpp
 		GBufferOperator.cpp
-		UtilityLightingDelegate.cpp
-		AAOperators.cpp
+		HierarchicalDepths.cpp
+		LightingDelegateUtil.cpp
+		LightingEngine.cpp
+		LightingEngineApparatus.cpp
+		LightTiler.cpp
+		LightUniforms.cpp
 		PostProcessOperators.cpp
+		RenderStepFragments.cpp
+		ScreenSpaceReflections.cpp
+		ShadowPreparer.cpp
+		ShadowProbes.cpp
+		ShadowUniforms.cpp
+		SHCoefficients.cpp
+		SkyOperator.cpp
+		SSAOOperator.cpp
+		StandardLightScene.cpp
+		StencilingGeometry.cpp
+		SunSourceConfiguration.cpp
+		TextureCompilerUtil.cpp
+		ToneMapOperator.cpp
+		UtilityLightingDelegate.cpp
 		)
 
 	xle_configure_library(RenderCoreLightingEngine-${metal_name})

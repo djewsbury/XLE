@@ -4,9 +4,8 @@
 
 #pragma once
 
-#include "DeferredLightingResolve.h"		// for LightStencilingGeometry
+#include "StencilingGeometry.h"
 #include "../Metal/Forward.h"
-#include "../Metal/InputLayout.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Math/Vector.h"
 #include <memory>
@@ -22,6 +21,7 @@ namespace RenderCore
 
 namespace RenderCore { namespace Techniques { class FragmentStitchingContext; class IComputeShaderOperator; class PipelineCollection; class ParsingContext; }}
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
+namespace std { template<typename T> class promise; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -32,6 +32,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		unsigned _maxLightsPerView = 256u;
 		unsigned _depthLookupGradiations = 1024u;
+		bool _copyOutOfSharedMemory = true;			// adds an additional copy for the light table from CPU accessible memory to GPU only memory
 		uint64_t GetHash(uint64_t = DefaultSeed64) const;
 	};
 
@@ -40,8 +41,23 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		void Execute(SequenceIterator& iterator);
 
-		void SetLightScene(Internal::StandardLightScene& lightScene);
-		Internal::StandardLightScene& GetLightScene() { return *_lightScene; }
+		struct InactiveLight
+		{
+			Float3 _position; float _cutoffRange;
+			unsigned _srcId;
+		};
+		struct IntermediateLight
+		{
+			Float3 _position; float _cutoffRange;
+			float _linearizedDepthMin, _linearizedDepthMax; 
+			unsigned _srcId; unsigned _dummy;
+		};
+		std::vector<IntermediateLight> _activeLights[2];
+		std::vector<InactiveLight> _inactiveLights[2];
+
+		void AddLight(Float3 position, float cutoffRange, unsigned srcId);
+		void UpdateLight(Float3 position, float cutoffRange, unsigned srcId);
+		void RemoveLight(unsigned srcId);
 
 		struct Outputs
 		{
@@ -88,14 +104,14 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<ICompiledPipelineLayout> _prepareBitFieldLayout;
 
 		std::shared_ptr<RenderCore::IResource> _tileableLightBuffer[3];
+		std::shared_ptr<RenderCore::IResource> _unmapTileableLightBuffer;
 		std::shared_ptr<RenderCore::IResourceView> _tileableLightBufferUAV[dimof(_tileableLightBuffer)];
-		unsigned _pingPongCounter = 0u;
+		unsigned _frameCounter = 0u;
 
-		Metal::BoundUniforms _prepareBitFieldBoundUniforms;
+		std::unique_ptr<Metal::BoundUniforms> _prepareBitFieldBoundUniforms;
 
 		LightStencilingGeometry _stencilingGeo;
 
-		Internal::StandardLightScene* _lightScene;
 		RasterizationLightTileOperatorDesc _config;
 		UInt2 _lightTileBufferSize = UInt2{0,0};
 		::Assets::DependencyValidation _depVal;
