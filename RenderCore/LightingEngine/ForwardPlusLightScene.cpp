@@ -50,7 +50,6 @@ namespace RenderCore { namespace LightingEngine
 		// construct uniform buffers, etc
 		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
 		auto& device = *_pipelineAccelerators->GetDevice();
-		auto tilerConfig = _lightTiler->GetConfiguration();
 		for (unsigned c=0; c<dimof(_uniforms); c++)
 			_uniforms[c]._propertyCB = device.CreateResource(
 				CreateDesc(BindFlag::ConstantBuffer, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps))), "env-props");
@@ -212,10 +211,15 @@ namespace RenderCore { namespace LightingEngine
 		{
 			if (bindingFlags & 7) {
 				assert((bindingFlags & 7) == 7);
-				assert(_lightScene->_tiledLightScheduler);
-				dst[0] = &_lightScene->_tiledLightScheduler->GetLightDepthTableUAV();
-				dst[1] = &_lightScene->_tiledLightScheduler->GetLightListUAV();
-				dst[2] = _lightScene->_lightTiler->_outputs._tiledLightBitFieldSRV.get();
+				if (_lightScene->_tiledLightScheduler) {
+					dst[0] = &_lightScene->_tiledLightScheduler->GetLightDepthTableUAV();
+					dst[1] = &_lightScene->_tiledLightScheduler->GetLightListUAV();
+					dst[2] = _lightScene->_lightTiler->_outputs._tiledLightBitFieldSRV.get();
+				} else {
+					dst[0] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
+					dst[1] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
+					dst[2] = context.GetTechniqueContext()._commonResources->_black2DSRV.get();
+				}
 			}
 
 			auto& uniforms = _lightScene->_uniforms[_lightScene->_pingPongCounter%dimof(_lightScene->_uniforms)];
@@ -258,11 +262,9 @@ namespace RenderCore { namespace LightingEngine
 		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
 		{
 			_lightScene = &lightScene;
-			if (_lightScene->_lightTiler) {
-				BindResourceView(0, "LightDepthTable"_h);
-				BindResourceView(1, "LightList"_h);
-				BindResourceView(2, "TiledLightBitField"_h);
-			}
+			BindResourceView(0, "LightDepthTable"_h);
+			BindResourceView(1, "LightList"_h);
+			BindResourceView(2, "TiledLightBitField"_h);
 			BindResourceView(3, "EnvironmentProps"_h);
 			BindResourceView(4, "StaticShadowProbeDatabase"_h);
 			BindResourceView(5, "StaticShadowProbeProperties"_h);
@@ -368,7 +370,7 @@ namespace RenderCore { namespace LightingEngine
 			{
 				std::shared_ptr<IResourceView> glossLut;
 				BufferUploads::CommandListID glossLutCompletion = 0;
-				::Assets::DependencyValidationMarker depVals[2];
+				::Assets::DependencyValidationMarker depVals[2] { ::Assets::DependencyValidationMarker_Invalid, ::Assets::DependencyValidationMarker_Invalid };
 				if (helper->_glossLUTFuture.valid()) {
 					auto defRes = helper->_glossLUTFuture.get();
 					glossLut = defRes->GetShaderResource();

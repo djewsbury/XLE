@@ -22,7 +22,7 @@ namespace RenderCore { namespace LightingEngine
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
 	public:
-		RasterizationLightTileOperator& GetLightTiler() { return *_lightTiler; }
+		RasterizationLightTileOperator* GetLightTiler() { return _lightTiler.get(); }
 		ShadowProbes& GetShadowProbes() { return *_shadowProbes; }
 		const IPreparedShadowResult* GetDominantPreparedShadow();
 

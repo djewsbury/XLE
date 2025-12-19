@@ -534,7 +534,7 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice()) };
 		PreregisterAttachments(stitchingContext, fbProps);
 		_hierarchicalDepthsOperator->PreregisterAttachments(stitchingContext, fbProps);
-		_lightScene->GetLightTiler().PreregisterAttachments(stitchingContext, fbProps);
+		if (_lightScene->GetLightTiler()) _lightScene->GetLightTiler()->PreregisterAttachments(stitchingContext, fbProps);
 		if (_acesOperator) _acesOperator->PreregisterAttachments(stitchingContext, fbProps);
 		if (_copyToneMapOperator) _copyToneMapOperator->PreregisterAttachments(stitchingContext, fbProps);
 		if (_ssrOperator) _ssrOperator->PreregisterAttachments(stitchingContext, fbProps);
@@ -546,7 +546,8 @@ namespace RenderCore { namespace LightingEngine
 		mainSequence.CreateStep_CallFunction(
 			[captures=shared_from_this()](SequenceIterator& iterator) {
 				captures->SetupCameraJitter(*iterator._parsingContext, iterator.GetFrameToFrameProperties());
-				captures->_lightScene->GetLightTiler().UpdatePreFragmentUniforms(iterator);
+				if (captures->_lightScene->GetLightTiler())
+					captures->_lightScene->GetLightTiler()->UpdatePreFragmentUniforms(iterator);
 			});
 
 		mainSequence.CreateStep_VertexIABarrier();
@@ -564,8 +565,10 @@ namespace RenderCore { namespace LightingEngine
 		auto hierarchicalDepthsReg = mainSequence.CreateStep_RunFragments(_hierarchicalDepthsOperator->CreateFragment(fbProps));
 
 		// Light tiling & configure lighting descriptors
-		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateInitFragment(fbProps));
-		mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler().CreateFragment(fbProps));
+		if (_lightScene->GetLightTiler()) {
+			mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler()->CreateInitFragment(fbProps));
+			mainSequence.CreateStep_RunFragments(_lightScene->GetLightTiler()->CreateFragment(fbProps));
+		}
 		mainSequence.ResolvePendingCreateFragmentSteps();
 
 		// Calculate SSR & SSAO
@@ -578,7 +581,8 @@ namespace RenderCore { namespace LightingEngine
 		mainSequence.CreateStep_CallFunction(
 			[captures=shared_from_this()](SequenceIterator& iterator) {
 				captures->ConfigureParsingContext(*iterator._parsingContext);
-				captures->_lightScene->GetLightTiler().BarrierToReadingLayout(*iterator._threadContext);
+				if (captures->_lightScene->GetLightTiler())
+					captures->_lightScene->GetLightTiler()->BarrierToReadingLayout(*iterator._threadContext);
 			});
 
 		// Draw main scene
