@@ -9,6 +9,7 @@
 #include "ShadowPreparer.h"
 #include "ShadowProbes.h"
 #include "ShadowProjectionDriver.h"
+#include "LightTiler.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/DeferredShaderResource.h"
@@ -43,69 +44,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		unsigned _preparerId = ~0u;
 		ShadowProjectionMode _projectionMode = ShadowProjectionMode::Arbitrary;
 		QueryInterfaceFunction _qi;
-
-		// awkward that we have to redirect each interface function
-		/*void SetDesc(const Desc& newValue, const void* system) override
-		{
-			auto idx = (size_t)system;
-			assert(idx < _projections.size());
-			if (auto* interf=(IDepthTextureResolve*)_projections[idx]->QueryInterface(TypeHashCode<IDepthTextureResolve>))
-				interf->SetDesc(newValue, nullptr);
-		}
-		Desc GetDesc(const void* system) const override
-		{
-			auto idx = (size_t)system;
-			assert(idx < _projections.size());
-			if (auto* interf=(IDepthTextureResolve*)_projections[idx]->QueryInterface(TypeHashCode<IDepthTextureResolve>))
-				interf->GetDesc(nullptr);
-		}
-		void SetArbitrarySubProjections(
-			IteratorRange<const Float4x4*> worldToCamera,
-			IteratorRange<const Float4x4*> cameraToProjection,
-			const void* system) override
-		{
-			auto idx = (size_t)system;
-			assert(idx < _projections.size());
-			if (auto* interf=(IArbitraryShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IArbitraryShadowProjections>))
-				interf->SetArbitrarySubProjections(worldToCamera, cameraToProjection, nullptr);
-		}
-		void SetWorldToOrthoView(const Float4x4& worldToCamera, const void* system) override
-		{
-			auto idx = (size_t)system;
-			assert(idx < _projections.size());
-			if (auto* interf=(IOrthoShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IOrthoShadowProjections>))
-				interf->SetWorldToOrthoView(worldToCamera, nullptr);
-		}
-		void SetOrthoSubProjections(IteratorRange<const OrthoSubProjection*> proj, const void* system) override
-		{
-			auto idx = (size_t)system;
-			assert(idx < _projections.size());
-			if (auto* interf=(IOrthoShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IOrthoShadowProjections>))
-				interf->SetOrthoSubProjections(proj, nullptr);
-		}
-		Float4x4 GetWorldToOrthoView(const void* system) const override
-		{
-			auto idx = (size_t)system;
-			assert(idx < _projections.size());
-			if (auto* interf=(IOrthoShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IOrthoShadowProjections>))
-				return interf->GetWorldToOrthoView(nullptr);
-			return Identity<Float4x4>();
-		}
-		std::vector<OrthoSubProjection> GetOrthoSubProjections(const void* system) const override
-		{
-			auto idx = (size_t)system;
-			assert(idx < _projections.size());
-			if (auto* interf=(IOrthoShadowProjections*)_projections[idx]->QueryInterface(TypeHashCode<IOrthoShadowProjections>))
-				return interf->GetOrthoSubProjections(nullptr);
-			return {};
-		}
-		void SetProjection(const Float4x4& proj, const void* system) override
-		{
-			auto idx = (size_t)system;
-			assert(idx < _projections.size());
-			if (auto* interf=(INearShadowProjection*)_projections[idx]->QueryInterface(TypeHashCode<INearShadowProjection>))
-				return interf->SetProjection(proj, nullptr);
-		}*/
 
 		void RegisterLight(unsigned index);
 		void DeregisterLight(unsigned index);
@@ -269,20 +207,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) return nullptr;
 
 		switch (interfaceTypeCode) {
-		/*case TypeHashCode<IAttachDriver>:
-			return (IAttachDriver*)_sceneSets[setIdx].get();
-		case TypeHashCode<IDepthTextureResolve>:
-			return (IDepthTextureResolve*)_sceneSets[setIdx].get();
-		case TypeHashCode<IArbitraryShadowProjections>:
-			return (IArbitraryShadowProjections*)_sceneSets[setIdx].get();
-		case TypeHashCode<IOrthoShadowProjections>:
-			return (IOrthoShadowProjections*)_sceneSets[setIdx].get();
-		case TypeHashCode<INearShadowProjection>:
-			return (INearShadowProjection*)_sceneSets[setIdx].get();*/
-
 		case TypeHashCode<IAttachDriver>:
 			return (IAttachDriver*)&_sceneSets[setIdx]->_addendums[lightIdx];
-
 		default:
 			if (_sceneSets[setIdx]->_addendums[lightIdx]._driver)
 				if (auto* res = _sceneSets[setIdx]->_addendums[lightIdx]._driver->QueryInterface(interfaceTypeCode))
@@ -501,6 +427,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////
 
+	struct AttachedShadowProbes
+	{
+		unsigned _staticProbeDatabaseEntry = 0;
+		unsigned _dynamicCubeDatabaseEntry = 0;
+		int _probeFading = 0;
+	};
+
 	struct SharedProbeSceneSet
 	{
 		// we just maintain a parallel list of the light probes we're interested in
@@ -512,6 +445,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			IPositionalLightSource* _positionalChain = nullptr;
 			IFiniteLightSource* _finiteChain = nullptr;
 			IUniformEmittance* _uniformEmittanceChain = nullptr;
+			AttachedShadowProbes* _attachedShadowProbe = nullptr;
 
 			void SetLocalToWorld(const Float4x4& newLocalToWorld) override
 			{
@@ -547,7 +481,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				return _probeDesc._farRadius;
 			}
 		};
-		std::vector<ProbeEntry> _probes;
+		std::deque<ProbeEntry> _probes;
 		BitHeap _activeProbes;
 		ILightSceneComponent::QueryInterfaceFunction _qi;
 
@@ -569,6 +503,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			if ((newProbe._finiteChain = (IFiniteLightSource*)_qi(index, TypeHashCode<IFiniteLightSource>)))
 				newProbe._probeDesc._farRadius = newProbe._finiteChain->GetCutoffRange();
 			newProbe._uniformEmittanceChain = (IUniformEmittance*)_qi(index, TypeHashCode<IUniformEmittance>);
+			newProbe._attachedShadowProbe = (AttachedShadowProbes*)_qi(index, TypeHashCode<AttachedShadowProbes>);
 
 			_probes[index] = std::move(newProbe);
 			_activeProbes.Allocate(index);
@@ -583,10 +518,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void SetQI(ILightSceneComponent::QueryInterfaceFunction&& qi)
 		{
 			_qi = std::move(qi);
+			unsigned idx = 0;
 			for (auto& probe:_probes) {
-				probe._positionalChain = (IPositionalLightSource*)_qi(&probe-_probes.data(), TypeHashCode<IPositionalLightSource>);
-				probe._finiteChain = (IFiniteLightSource*)_qi(&probe-_probes.data(), TypeHashCode<IFiniteLightSource>);
-				probe._uniformEmittanceChain = (IUniformEmittance*)_qi(&probe-_probes.data(), TypeHashCode<IUniformEmittance>);
+				probe._positionalChain = (IPositionalLightSource*)_qi(idx, TypeHashCode<IPositionalLightSource>);
+				probe._finiteChain = (IFiniteLightSource*)_qi(idx, TypeHashCode<IFiniteLightSource>);
+				probe._uniformEmittanceChain = (IUniformEmittance*)_qi(idx, TypeHashCode<IUniformEmittance>);
+				probe._attachedShadowProbe = (AttachedShadowProbes*)_qi(idx, TypeHashCode<AttachedShadowProbes>);
+				++idx;
 			}
 		}
 
@@ -873,13 +811,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 	}
 
-	auto SemiStaticShadowProbeScheduler::GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx) -> AllocatedDatabaseEntry
-	{
-		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) return {};
-		assert(_sceneSets[setIdx]->_activeProbes.IsAllocated(lightIdx));
-		auto& p = _sceneSets[setIdx]->_probes[lightIdx];
-		return { p._attachedProbeTableIndex, p._fading };
-	}
+	// auto SemiStaticShadowProbeScheduler::GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx) -> AllocatedDatabaseEntry
+	// {
+	// 	if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) return {};
+	// 	assert(_sceneSets[setIdx]->_activeProbes.IsAllocated(lightIdx));
+	// 	auto& p = _sceneSets[setIdx]->_probes[lightIdx];
+	// 	return { p._attachedProbeTableIndex, p._fading };
+	// }
 
 	SemiStaticShadowProbeScheduler::SemiStaticShadowProbeScheduler(std::shared_ptr<ShadowProbes> shadowProbes, const std::vector<bool>& maskedLightOperators)
 	: _shadowProbes(std::move(shadowProbes)), _maskedLightOperators(maskedLightOperators)
@@ -1272,13 +1210,13 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 	}
 
-	auto DynamicShadowProbeScheduler::GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx) -> AllocatedDatabaseEntry
-	{
-		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) return {};
-		assert(_sceneSets[setIdx]->_activeProbes.IsAllocated(lightIdx));
-		auto& p = _sceneSets[setIdx]->_probes[lightIdx];
-		return { p._attachedProbeTableIndex, p._fading };
-	}
+	// auto DynamicShadowProbeScheduler::GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx) -> AllocatedDatabaseEntry
+	// {
+	// 	if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) return {};
+	// 	assert(_sceneSets[setIdx]->_activeProbes.IsAllocated(lightIdx));
+	// 	auto& p = _sceneSets[setIdx]->_probes[lightIdx];
+	// 	return { p._attachedProbeTableIndex, p._fading };
+	// }
 
 	DynamicShadowProbeScheduler::DynamicShadowProbeScheduler(
 		std::shared_ptr<DynamicShadowProbes> shadowProbes,
@@ -1372,6 +1310,132 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		return nullptr;
 	}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	struct TiledLightScheduler::SceneSet
+	{
+		struct LightEntry : public IPositionalLightSource, public IFiniteLightSource, public AttachedShadowProbes
+		{
+			IPositionalLightSource* _positionalChain = nullptr;
+			IFiniteLightSource* _finiteChain = nullptr;
+			unsigned _idForTiler = 0;
+			Float3 _position { 0.f, 0.f, 0.f };
+			float _cutoffRange = 1.f;
+			SceneSet* _parent = nullptr;
+		
+			void SetLocalToWorld(const Float4x4& newLocalToWorld) override
+			{
+				_position = ExtractTranslation(newLocalToWorld);
+				_parent->_tiler->UpdateLight(_position, _cutoffRange, _idForTiler);
+				if (_positionalChain) _positionalChain->SetLocalToWorld(newLocalToWorld);
+			}
+			Float4x4 GetLocalToWorld() const override { assert(_positionalChain); return _positionalChain->GetLocalToWorld(); }
+
+			void SetCutoffBrightness(float cutoffBrightness) override
+			{
+				assert(0);		// not supported / implemented
+			}
+			void SetCutoffRange(float cutoff) override
+			{
+				_cutoffRange = cutoff;
+				if (_finiteChain) _finiteChain->SetCutoffRange(cutoff);
+			}
+			float GetCutoffRange() const override { assert(_finiteChain); return _finiteChain->GetCutoffRange(); }
+		};
+		std::deque<LightEntry> _lights;
+		std::shared_ptr<RasterizationLightTileOperator> _tiler;
+		ILightSceneComponent::QueryInterfaceFunction _qi;
+		unsigned _setIdForTiler = 0;
+
+		void RegisterLight(unsigned index)
+		{
+			if (_lights.size() <= index)
+				_lights.resize(index+1);
+
+			LightEntry newLight;
+			newLight._idForTiler = _setIdForTiler|index;
+			newLight._parent = this;
+			if ((newLight._positionalChain = (IPositionalLightSource*)_qi(index, TypeHashCode<IPositionalLightSource>))) {
+				auto localToWorld = newLight._positionalChain->GetLocalToWorld();
+				newLight._position = ExtractTranslation(localToWorld);
+			}
+			if ((newLight._finiteChain = (IFiniteLightSource*)_qi(index, TypeHashCode<IFiniteLightSource>)))
+				newLight._cutoffRange = newLight._finiteChain->GetCutoffRange();
+
+			_lights[index] = std::move(newLight);
+		}
+
+		void DeregisterLight(unsigned index)
+		{
+			_tiler->RemoveLight(_lights[index]._idForTiler);
+			_lights[index] = {};
+		}
+
+		void SetQI(ILightSceneComponent::QueryInterfaceFunction&& qi)
+		{
+			_qi = std::move(qi);
+			unsigned idx = 0;
+			for (auto& light:_lights) {
+				light._positionalChain = (IPositionalLightSource*)_qi(idx, TypeHashCode<IPositionalLightSource>);
+				light._finiteChain = (IFiniteLightSource*)_qi(idx, TypeHashCode<IFiniteLightSource>);
+				++idx;
+			}
+		}
+	};
+
+	void TiledLightScheduler::DoPrepareUniforms()
+	{
+		assert(0);		// todo -- prepare
+	}
+
+	void TiledLightScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx)
+	{
+		_sceneSets[setIdx]->RegisterLight(lightIdx);
+	}
+
+	void TiledLightScheduler::DeregisterLight(unsigned setIdx, unsigned lightIdx)
+	{
+		_sceneSets[setIdx]->DeregisterLight(lightIdx);
+	}
+
+	bool TiledLightScheduler::BindToSet(ILightScene::LightOperatorId op, unsigned setIdx, QueryInterfaceFunction&& qi)
+	{
+		if (op >= _operatorInfos.size() || !_operatorInfos[op]._tileable) return false;
+		if (_sceneSets.size() <= setIdx)
+			_sceneSets.resize(setIdx+1);
+		if (!_sceneSets[setIdx]) _sceneSets[setIdx] = std::make_unique<SceneSet>();
+		_sceneSets[setIdx]->_setIdForTiler = setIdx << 24u;
+		_sceneSets[setIdx]->SetQI(std::move(qi));
+		return true;
+	}
+
+	void* TiledLightScheduler::QueryInterface(unsigned setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode)
+	{
+		if (!_sceneSets[setIdx]) return nullptr;
+		switch(interfaceTypeCode) {
+		case TypeHashCode<IPositionalLightSource>:
+			return (IPositionalLightSource*)&_sceneSets[setIdx]->_lights[lightIdx];
+		case TypeHashCode<IFiniteLightSource>:
+			return (IFiniteLightSource*)&_sceneSets[setIdx]->_lights[lightIdx];
+		case TypeHashCode<AttachedShadowProbes>:
+			return (AttachedShadowProbes*)&_sceneSets[setIdx]->_lights[lightIdx];
+		default:
+			return nullptr;
+		}
+	}
+
+	TiledLightScheduler::TiledLightScheduler(
+		std::shared_ptr<RasterizationLightTileOperator> lightTiler,
+		IteratorRange<const LightOperatorInfo*> operatorInfo)
+	: _lightTiler(std::move(lightTiler))
+	, _operatorInfos(operatorInfo.begin(), operatorInfo.end())
+	{}
+
+	TiledLightScheduler::~TiledLightScheduler() {}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*> preregs)
 	{

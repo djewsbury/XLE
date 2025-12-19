@@ -31,6 +31,7 @@ namespace RenderCore { namespace LightingEngine
 	class SequenceIterator;
 	class Sequence;
 	class IProbeRenderingInstance;
+	class RasterizationLightTileOperator;
 }}
 namespace RenderCore { class IThreadContext; class IDevice; class IResourceView; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
@@ -61,12 +62,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext, unsigned maxProbeCount) override;
 		void EndPrepare(IThreadContext& threadContext) override;
 
-		struct AllocatedDatabaseEntry
-		{
-			unsigned _databaseIndex = ~0u;
-			int _fading = 0;
-		};
-		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
+		// struct AllocatedDatabaseEntry
+		// {
+		// 	unsigned _databaseIndex = ~0u;
+		// 	int _fading = 0;
+		// };
+		// AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
 		bool DoneInitialBackgroundPrepare() const { return _doneInitialBackgroundPrepare; }		// when this is false, the shadow probes image is probably still in an undefined layout
 
@@ -89,6 +90,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		bool _doneInitialBackgroundPrepare = false;
 		void CommitBackgroundChangesAlreadyLocked();
 
+		struct AllocatedDatabaseEntry { unsigned _databaseIndex = ~0u; int _fading = 0; };
 		std::vector<std::pair<LightIndex, AllocatedDatabaseEntry>> _allocatedDatabaseEntries;
 
 		std::shared_ptr<ShadowProbes> _shadowProbes;
@@ -149,12 +151,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			Sequence& sequence);
 		void ClearPreparedShadows();
 
-		struct AllocatedDatabaseEntry
-		{
-			unsigned _databaseIndex = ~0u;
-			int _fading = 0;
-		};
-		AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
+		// struct AllocatedDatabaseEntry
+		// {
+		// 	unsigned _databaseIndex = ~0u;
+		// 	int _fading = 0;
+		// };
+		// AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
 		Metrics GetMetrics() const override;
 		std::shared_ptr<IResourceView> GetCubeMapSRV(unsigned activeLightIdx) override;
@@ -268,6 +270,37 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
 		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, QueryInterfaceFunction&&) override;
 		void* QueryInterface(unsigned setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
+	};
+
+	// Acts as a bridge between the ILightScene infrastructure and the light tiler algorithm
+	// Prepares per-frame uniforms used by the lighting shaders
+	class TiledLightScheduler : public ILightSceneComponent
+	{
+	public:
+		void DoPrepareUniforms();
+
+		struct LightOperatorInfo
+		{
+			bool _tileable = false;
+			unsigned _uniformShapeCode = 0;
+		};
+
+		TiledLightScheduler(
+			std::shared_ptr<RasterizationLightTileOperator> lightTiler,
+			IteratorRange<const LightOperatorInfo*> operatorInfo);
+		~TiledLightScheduler();
+	private:
+		// ILightSceneComponent
+		void RegisterLight(unsigned setIdx, unsigned lightIdx) override;
+		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, QueryInterfaceFunction&&) override;
+		void* QueryInterface(unsigned setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
+
+		struct SceneSet;
+		std::vector<std::unique_ptr<SceneSet>> _sceneSets;
+
+		std::vector<LightOperatorInfo> _operatorInfos;
+		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
 	};
 
 	class ShaderResourceSplitter : public RenderCore::Techniques::IShaderResourceDelegate
