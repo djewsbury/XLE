@@ -277,7 +277,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class TiledLightScheduler : public ILightSceneComponent
 	{
 	public:
-		void DoPrepareUniforms();
+		void DoPrepareUniforms(Techniques::ParsingContext& parsingContext);
 
 		struct LightOperatorInfo
 		{
@@ -301,6 +301,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		std::vector<LightOperatorInfo> _operatorInfos;
 		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
+
+		struct SceneLightUniforms
+		{
+			std::shared_ptr<IResource> _lightList;
+			std::shared_ptr<IResourceView> _lightListUAV;
+			std::shared_ptr<IResource> _lightDepthTable;
+			std::shared_ptr<IResourceView> _lightDepthTableUAV;
+		};
+		SceneLightUniforms _uniforms[3];
+		std::shared_ptr<RenderCore::IResource> _unmapLightList;
+		std::shared_ptr<RenderCore::IResource> _unmapDepthTable;
+		unsigned _pingPongCounter = 0;
 	};
 
 	class ShaderResourceSplitter : public RenderCore::Techniques::IShaderResourceDelegate

@@ -324,6 +324,8 @@ namespace RenderCore { namespace LightingEngine
 		}
 	}
 
+	const std::shared_ptr<IDevice>& RasterizationLightTileOperator::GetDevice() const { return _pipelinePool->GetDevice(); }
+
 	RasterizationLightTileOperator::RasterizationLightTileOperator(
 		std::shared_ptr<Techniques::PipelineCollection> pipelinePool,
 		std::shared_ptr<Metal::GraphicsPipeline> prepareBitFieldPipeline,

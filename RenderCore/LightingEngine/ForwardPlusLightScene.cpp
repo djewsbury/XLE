@@ -10,7 +10,7 @@
 #include "LightTiler.h"
 #include "ShadowPreparer.h"
 #include "ShadowProbes.h"
-#include "LightUniforms.h"
+// #include "LightUniforms.h"
 #include "LightingDelegateUtil.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
@@ -48,14 +48,6 @@ namespace RenderCore { namespace LightingEngine
 			_uniforms[c]._propertyCB = device.CreateResource(
 				CreateDesc(BindFlag::ConstantBuffer, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps))), "env-props");
 			_uniforms[c]._propertyCBView = _uniforms[c]._propertyCB->CreateBufferView(BindFlag::ConstantBuffer);
-
-			_uniforms[c]._lightList = device.CreateResource(
-				CreateDesc(BindFlag::UnorderedAccess, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(Internal::CB_Light)*tilerConfig._maxLightsPerView, sizeof(Internal::CB_Light))), "light-list");
-			_uniforms[c]._lightListUAV = _uniforms[c]._lightList->CreateBufferView(BindFlag::UnorderedAccess);
-
-			_uniforms[c]._lightDepthTable = device.CreateResource(
-				CreateDesc(BindFlag::UnorderedAccess, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(unsigned)*tilerConfig._depthLookupGradiations, sizeof(unsigned))), "light-depth-table");
-			_uniforms[c]._lightDepthTableUAV = _uniforms[c]._lightDepthTable->CreateBufferView(BindFlag::UnorderedAccess);
 		}
 		_pingPongCounter = 0;
 
@@ -153,56 +145,7 @@ namespace RenderCore { namespace LightingEngine
 		/////////////////
 		++_pingPongCounter;
 
-		auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
-		auto& tilerOutputs = _lightTiler->_outputs;
-		auto& device = *_pipelineAccelerators->GetDevice();
-		{
-			Metal::ResourceMap map{
-				device, *uniforms._lightDepthTable,
-				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
-				0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size()};
-			std::memcpy(map.GetData().begin(), tilerOutputs._lightDepthTable.data(), sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
-			map.FlushCache();
-		}
-		if (tilerOutputs._lightCount) {
-			Metal::ResourceMap map{
-				device, *uniforms._lightList,
-				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
-				0, sizeof(Internal::CB_Light)*tilerOutputs._lightCount};
-			auto* i = (Internal::CB_Light*)map.GetData().begin();
-			auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
-			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
-				auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
-				auto op = _lightSets[setIdx]._operatorId;
-				assert(_lightSets[setIdx]._operatorId != _lightOperatorsMapping._dominantLightOperator);
-				auto& lightDesc = _lightSets[setIdx]._baseData.GetObject(lightIdx);
-				*i = MakeLightUniforms(lightDesc, _lightOperatorsMapping._positionalLightOperators[op]._uniformShapeCode);
-			}
-
-			if (_staticProbeScheduler) {
-				i = (Internal::CB_Light*)map.GetData().begin();
-				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
-					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
-					assert(_lightSets[setIdx]._operatorId != _lightOperatorsMapping._dominantLightOperator);
-					auto probe = _staticProbeScheduler->GetAllocatedDatabaseEntry(setIdx, lightIdx);
-					i->_staticProbeDatabaseEntry = probe._databaseIndex;
-					++i->_staticProbeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinel
-				}
-			}
-
-			if (_dynamicProbeScheduler) {
-				i = (Internal::CB_Light*)map.GetData().begin();
-				for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
-					auto setIdx = *idx >> 16, lightIdx = (*idx)&0xffff;
-					assert(_lightSets[setIdx]._operatorId != _lightOperatorsMapping._dominantLightOperator);
-					auto probe = _dynamicProbeScheduler->GetAllocatedDatabaseEntry(setIdx, lightIdx);
-					i->_dynamicCubeDatabaseEntry = probe._databaseIndex;
-					++i->_dynamicCubeDatabaseEntry;		// ~0u becomes zero, or add one --> because we want zero to be the sentinel
-				}
-			}
-
-			map.FlushCache();
-		}
+		
 
 		{
 			Metal::ResourceMap map{
@@ -352,8 +295,6 @@ namespace RenderCore { namespace LightingEngine
 		lightScene->_depVal = std::move(depVal);
 
 		lightScene->_lightTiler = lightTiler;
-		lightTiler->SetLightScene(*lightScene);
-
 		lightScene->_glossLut = glossLut ? std::move(glossLut) : Techniques::Services::GetCommonResources()->_black2DSRV;
 		lightScene->_distantSpecularIBLAndGlossLutCompletion = glossLutCompletion;
 		lightScene->_distantSpecularIBL = Techniques::Services::GetCommonResources()->_blackCubeSRV;

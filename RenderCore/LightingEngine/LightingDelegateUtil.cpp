@@ -10,6 +10,7 @@
 #include "ShadowProbes.h"
 #include "ShadowProjectionDriver.h"
 #include "LightTiler.h"
+#include "LightUniforms.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/DeferredShaderResource.h"
@@ -17,6 +18,8 @@
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/TechniqueUtils.h"
+#include "../Metal/Resource.h"
+#include "../Metal/DeviceContext.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
@@ -384,7 +387,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class DefaultSequencerResourcesDelegate : public Techniques::IShaderResourceDelegate
 	{
 	public:
-        virtual void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst)
+		virtual void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst)
 		{
 			dst[0] = _normalsFitting.get();
 			dst[1] = _ggxTable.get();
@@ -1317,6 +1320,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		struct LightEntry : public IPositionalLightSource, public IFiniteLightSource, public AttachedShadowProbes
 		{
+			StandardPositionalLight* _standardLight = nullptr;
 			IPositionalLightSource* _positionalChain = nullptr;
 			IFiniteLightSource* _finiteChain = nullptr;
 			unsigned _idForTiler = 0;
@@ -1346,6 +1350,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::deque<LightEntry> _lights;
 		std::shared_ptr<RasterizationLightTileOperator> _tiler;
 		ILightSceneComponent::QueryInterfaceFunction _qi;
+		LightOperatorInfo _operatorInfo;
 		unsigned _setIdForTiler = 0;
 
 		void RegisterLight(unsigned index)
@@ -1362,6 +1367,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			}
 			if ((newLight._finiteChain = (IFiniteLightSource*)_qi(index, TypeHashCode<IFiniteLightSource>)))
 				newLight._cutoffRange = newLight._finiteChain->GetCutoffRange();
+			newLight._standardLight = (StandardPositionalLight*)_qi(index, TypeHashCode<StandardPositionalLight>);
 
 			_lights[index] = std::move(newLight);
 		}
@@ -1379,14 +1385,67 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			for (auto& light:_lights) {
 				light._positionalChain = (IPositionalLightSource*)_qi(idx, TypeHashCode<IPositionalLightSource>);
 				light._finiteChain = (IFiniteLightSource*)_qi(idx, TypeHashCode<IFiniteLightSource>);
+				light._standardLight = (StandardPositionalLight*)_qi(idx, TypeHashCode<StandardPositionalLight>);
 				++idx;
 			}
 		}
 	};
 
-	void TiledLightScheduler::DoPrepareUniforms()
+	static CB_Light MakeLightUniforms(const StandardPositionalLight& light, const AttachedShadowProbes& shadowProbes, unsigned shapeCode)
 	{
-		assert(0);		// todo -- prepare
+		return CB_Light 
+			{
+				(shapeCode == 0) ? light._unitLengthPosition : light._position, light._cutoffRange,
+				light._brightness, light._radii[0],
+				ExtractRight(light._orientation), light._radii[1],
+				ExtractForward(light._orientation), shapeCode,
+				ExtractUp(light._orientation), 0,
+				shadowProbes._staticProbeDatabaseEntry,shadowProbes._dynamicCubeDatabaseEntry,{0,0}
+			};
+	}
+
+	void TiledLightScheduler::DoPrepareUniforms(Techniques::ParsingContext& parsingContext)
+	{
+		++_pingPongCounter;
+
+		auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
+		auto& tilerOutputs = _lightTiler->_outputs;
+		auto& device = *parsingContext.GetThreadContext().GetDevice();
+		{
+			Metal::ResourceMap map{
+				device, *uniforms._lightDepthTable,
+				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
+				0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size()};
+			std::memcpy(map.GetData().begin(), tilerOutputs._lightDepthTable.data(), sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
+			map.FlushCache();
+		}
+		if (tilerOutputs._lightCount) {
+			Metal::ResourceMap map{
+				device, *uniforms._lightList,
+				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
+				0, sizeof(Internal::CB_Light)*tilerOutputs._lightCount};
+			auto* i = (Internal::CB_Light*)map.GetData().begin();
+			auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
+			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
+				auto setIdx = *idx >> 24, lightIdx = (*idx)&0xffffff;
+				auto& lightDesc = _sceneSets[setIdx]->_lights[lightIdx];	// expensive array lookup
+				*i = MakeLightUniforms(*lightDesc._standardLight, lightDesc, _sceneSets[setIdx]->_operatorInfo._uniformShapeCode);
+			}
+
+			map.FlushCache();
+		}
+
+		// additional copy from our shared memory mapping into gpu-only memory
+		if (tilerOutputs._lightCount && _unmapLightList) {
+			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
+			auto bltEncoder = metalContext.BeginBlitEncoder();
+			bltEncoder.Copy(
+				*_unmapLightList,
+				RenderCore::CopyPartial_Src{*uniforms._lightList, 0, unsigned(sizeof(Internal::CB_Light)*tilerOutputs._lightCount)});
+			bltEncoder.Copy(
+				*_unmapDepthTable,
+				RenderCore::CopyPartial_Src{*uniforms._lightDepthTable, 0, unsigned(sizeof(unsigned)*tilerOutputs._lightDepthTable.size())});
+		}
 	}
 
 	void TiledLightScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx)
@@ -1407,6 +1466,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (!_sceneSets[setIdx]) _sceneSets[setIdx] = std::make_unique<SceneSet>();
 		_sceneSets[setIdx]->_setIdForTiler = setIdx << 24u;
 		_sceneSets[setIdx]->SetQI(std::move(qi));
+		_sceneSets[setIdx]->_operatorInfo = _operatorInfos[op];
 		return true;
 	}
 
@@ -1430,7 +1490,39 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		IteratorRange<const LightOperatorInfo*> operatorInfo)
 	: _lightTiler(std::move(lightTiler))
 	, _operatorInfos(operatorInfo.begin(), operatorInfo.end())
-	{}
+	{
+		auto& device = *_lightTiler->GetDevice();
+		auto tilerConfig = _lightTiler->GetConfiguration();
+		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
+
+		auto lightListDesc = CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(Internal::CB_Light)*tilerConfig._maxLightsPerView, sizeof(Internal::CB_Light)));
+		auto lightDepthTableDesc = CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(unsigned)*tilerConfig._depthLookupGradiations, sizeof(unsigned)));
+
+		if (tilerConfig._copyOutOfSharedMemory) {
+			_unmapLightList = device.CreateResource(lightListDesc, "light-list");
+			_unmapDepthTable = device.CreateResource(lightDepthTableDesc, "light-depth-table");
+		}
+
+		lightListDesc._allocationRules = lightDepthTableDesc._allocationRules = allocationRulesForDynamicCBs;
+		for (unsigned c=0; c<dimof(_uniforms); c++) {
+			_uniforms[c]._lightList = device.CreateResource(lightListDesc, "light-list");
+			_uniforms[c]._lightDepthTable = device.CreateResource(lightDepthTableDesc, "light-depth-table");
+		}
+
+		if (_unmapLightList) {
+			_uniforms[0]._lightListUAV = _unmapLightList->CreateBufferView(BindFlag::UnorderedAccess);
+			_uniforms[0]._lightDepthTableUAV = _unmapDepthTable->CreateBufferView(BindFlag::UnorderedAccess);
+			for (unsigned c=1; c<dimof(_uniforms); c++) {
+				_uniforms[c]._lightListUAV = _uniforms[0]._lightListUAV;
+				_uniforms[c]._lightDepthTableUAV = _uniforms[0]._lightDepthTableUAV;
+			}
+		} else {
+			for (unsigned c=0; c<dimof(_uniforms); c++) {
+				_uniforms[c]._lightListUAV = _uniforms[c]._lightList->CreateBufferView(BindFlag::UnorderedAccess);
+				_uniforms[c]._lightDepthTableUAV = _uniforms[c]._lightDepthTable->CreateBufferView(BindFlag::UnorderedAccess);
+			}
+		}
+	}
 
 	TiledLightScheduler::~TiledLightScheduler() {}
 

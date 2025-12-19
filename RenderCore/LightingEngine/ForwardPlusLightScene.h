@@ -43,12 +43,6 @@ namespace RenderCore { namespace LightingEngine
 
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
-		struct LightOperatorInfo
-		{
-			Internal::StandardPositionLightFlags::BitField _standardLightFlags = 0;
-			unsigned _uniformShapeCode = 0;
-		};
-
 		struct LightOperatorsMapping
 		{
 			std::vector<unsigned> _operatorToPositionalLightOperator;
@@ -120,10 +114,6 @@ namespace RenderCore { namespace LightingEngine
 		{
 			std::shared_ptr<IResource> _propertyCB;
 			std::shared_ptr<IResourceView> _propertyCBView;
-			std::shared_ptr<IResource> _lightList;
-			std::shared_ptr<IResourceView> _lightListUAV;
-			std::shared_ptr<IResource> _lightDepthTable;
-			std::shared_ptr<IResourceView> _lightDepthTableUAV;
 		};
 		SceneLightUniforms _uniforms[3];
 		unsigned _pingPongCounter = 0;

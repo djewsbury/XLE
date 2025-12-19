@@ -115,7 +115,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<ICompiledPipelineLayout> CreatePipelineLayout(
 			const PipelineLayoutInitializer& desc, StringSection<> name);
 
-		const std::shared_ptr<IDevice>& GetDevice() { return _device; }
+		const std::shared_ptr<IDevice>& GetDevice() const { return _device; }
 		uint64_t GetGUID() const { return _guid; }
 
 		struct Metrics
