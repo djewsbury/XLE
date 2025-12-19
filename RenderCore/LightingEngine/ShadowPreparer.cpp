@@ -152,7 +152,7 @@ namespace RenderCore { namespace LightingEngine
 
 			bool 			_multiViewInstancingPath = false;
 
-			virtual void SetDesc(const Desc& newDesc, const void* =nullptr) override
+			virtual void SetDesc(const Desc& newDesc) override
 			{
 				_worldSpaceResolveBias = newDesc._worldSpaceResolveBias;
 				_tanBlurAngle = newDesc._tanBlurAngle;
@@ -160,15 +160,14 @@ namespace RenderCore { namespace LightingEngine
 				_maxBlurSearchPixels = newDesc._maxBlurSearch;
 				_casterDistanceExtraBias = newDesc._casterDistanceExtraBias;
 			}
-			virtual Desc GetDesc(const void* =nullptr) const override
+			virtual Desc GetDesc() const override
 			{
 				return Desc { _worldSpaceResolveBias, _tanBlurAngle, _minBlurSearchPixels, _maxBlurSearchPixels, _casterDistanceExtraBias };
 			}
 
 			virtual void SetArbitrarySubProjections(
 				IteratorRange<const Float4x4*> worldToCamera,
-				IteratorRange<const Float4x4*> cameraToProjection,
-				const void* =nullptr) override
+				IteratorRange<const Float4x4*> cameraToProjection) override
 			{
 				assert(_projections._mode == ShadowProjectionMode::Arbitrary || _projections._mode == ShadowProjectionMode::ArbitraryCubeMap);
 				assert(worldToCamera.size() <= Internal::MaxShadowTexturesPerLight);
@@ -183,14 +182,14 @@ namespace RenderCore { namespace LightingEngine
 				_projections._normalProjCount = (unsigned)projCount;
 			}
 
-			virtual void SetWorldToOrthoView(const Float4x4& worldToCamera, const void* =nullptr) override
+			virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) override
 			{
 				assert(_projections._mode == ShadowProjectionMode::Ortho);
 				assert(IsOrthonormal(Truncate3x3(worldToCamera)));
 				_projections._definitionViewMatrix = worldToCamera;
 			}
 
-			virtual void SetOrthoSubProjections(IteratorRange<const OrthoSubProjection*> projections, const void* =nullptr) override
+			virtual void SetOrthoSubProjections(IteratorRange<const OrthoSubProjection*> projections) override
 			{
 				assert(_projections._mode == ShadowProjectionMode::Ortho);
 				assert(projections.size() < Internal::MaxShadowTexturesPerLight);
@@ -212,13 +211,13 @@ namespace RenderCore { namespace LightingEngine
 				_projections._normalProjCount = (unsigned)projCount;
 			}
 
-			virtual Float4x4 GetWorldToOrthoView(const void* =nullptr) const override
+			virtual Float4x4 GetWorldToOrthoView() const override
 			{
 				assert(_projections._mode == ShadowProjectionMode::Ortho);
 				return _projections._definitionViewMatrix;
 			}
 
-			virtual std::vector<OrthoSubProjection> GetOrthoSubProjections(const void* =nullptr) const override
+			virtual std::vector<OrthoSubProjection> GetOrthoSubProjections() const override
 			{
 				assert(_projections._mode == ShadowProjectionMode::Ortho);
 				std::vector<OrthoSubProjection> result;
@@ -228,7 +227,7 @@ namespace RenderCore { namespace LightingEngine
 				return result;
 			}
 
-			virtual void SetProjection(const Float4x4& nearWorldToProjection, const void* =nullptr) override
+			virtual void SetProjection(const Float4x4& nearWorldToProjection) override
 			{
 				assert(_projections._useNearProj);
 				_projections._specialNearProjection = nearWorldToProjection;

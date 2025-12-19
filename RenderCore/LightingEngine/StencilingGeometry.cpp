@@ -1,4 +1,4 @@
-#include "LightStencilingGeometry.h"
+#include "StencilingGeometry.h"
 #include "../Metal/DeviceContext.h"
 #include "../../Tools/ToolsRig/VisualisationGeo.h"
 

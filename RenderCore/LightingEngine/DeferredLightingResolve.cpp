@@ -38,6 +38,33 @@ using namespace Utility::Literals;
 
 static Int2 GetCursorPos();
 
+namespace RenderCore { namespace LightingEngine { namespace Internal
+{
+	// HACK -- duplicating StandardLightScene.cpp
+	struct StandardLightScene::LightSet
+	{
+		LightOperatorId _operatorId = ~0u;
+		PageHeap<StandardPositionalLight> _baseData;
+		std::vector<std::shared_ptr<ILightSceneComponent>> _boundComponents;
+		StandardPositionLightFlags::BitField _flags = 0;
+
+		void* QueryInterface(unsigned lightIdx, uint64_t interfaceTypeCode)
+		{
+			switch (interfaceTypeCode) {
+			case TypeHashCode<IPositionalLightSource>: return (IPositionalLightSource*)&_baseData.GetObject(lightIdx);
+			case TypeHashCode<IUniformEmittance>: return (IUniformEmittance*)&_baseData.GetObject(lightIdx);
+			case TypeHashCode<IFiniteLightSource>:
+				if (_flags & StandardPositionLightFlags::SupportFiniteRange)
+					return (IFiniteLightSource*)&_baseData.GetObject(lightIdx);
+				break;
+			}
+			return nullptr;
+		}
+
+		LightSet(LightOperatorId operatorId) : _operatorId(operatorId) {}
+	};
+}}}
+
 namespace RenderCore { namespace LightingEngine
 {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -448,7 +475,7 @@ namespace RenderCore { namespace LightingEngine
 		assert(Equivalent(MagnitudeSquared(cameraForward), 1.0f, 1e-3f));
 
 		for (unsigned setIdx=0; setIdx<lightScene._lightSets.size(); ++setIdx) {
-			auto& set = lightScene._lightSets[setIdx];
+			auto& set = *lightScene._lightSets[setIdx];
 			if (set._operatorId == lightResolveOperators._operatorDescs.size())
 				continue;	// this is the ambient light
 
@@ -476,7 +503,6 @@ namespace RenderCore { namespace LightingEngine
 
 			unsigned lightIdx = 0;
 			for (auto lightIterator=set._baseData.begin(); lightIterator!=set._baseData.end(); ++lightIterator, ++lightIdx) {
-				assert(lightIterator->QueryInterface(TypeHashCode<Internal::StandardPositionalLight>) == &lightIterator.get());
 				auto& standardLightDesc = *lightIterator;
 
 				if (lightShape == LightSourceShape::Sphere) {
@@ -488,8 +514,9 @@ namespace RenderCore { namespace LightingEngine
 				}
 
 				auto lightUniforms = Internal::MakeLightUniforms(standardLightDesc, Internal::AsUniformShapeCode(lightResolveOperators._operatorDescs[set._operatorId]._shape));
-				if (shadowProbeScheduler)		// this can be done more efficiently, since we're effectively just iterating through a parrallel array
-					lightUniforms._staticProbeDatabaseEntry = 1+shadowProbeScheduler->GetAllocatedDatabaseEntry(setIdx, lightIdx)._databaseIndex;
+				// NOTE -- shadow probe scheduler integration broken while refactoring "scheduler" types in TechniqueDelegateUtil.h
+				// if (shadowProbeScheduler)		// this can be done more efficiently, since we're effectively just iterating through a parrallel array
+				// 	lightUniforms._staticProbeDatabaseEntry = 1+shadowProbeScheduler->GetAllocatedDatabaseEntry(setIdx, lightIdx)._databaseIndex;
 				cbvs[CB::LightBuffer] = MakeOpaqueIteratorRange(lightUniforms);
 				float debuggingDummy[4] = {};
 				cbvs[CB::Debugging] = MakeIteratorRange(debuggingDummy);

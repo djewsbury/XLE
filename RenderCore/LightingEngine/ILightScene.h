@@ -35,7 +35,7 @@ namespace RenderCore { namespace LightingEngine
 			Type* TryGetLightSourceInterface(LightSourceId sourceId)
 			{
 				constexpr auto interfaceCode = TypeHashCode<Type>;
-				return TryGetLightSourceInterface(sourceId, interfaceCode).template As<Type>();
+				return (Type*)TryGetLightSourceInterface(sourceId, interfaceCode);
 			}
 	};
 
@@ -104,8 +104,8 @@ namespace RenderCore { namespace LightingEngine
 		};
 		virtual void SetWorldToOrthoView(const Float4x4& worldToCamera) = 0;
 		virtual void SetOrthoSubProjections(IteratorRange<const OrthoSubProjection*>) = 0;
-		virtual Float4x4 GetWorldToOrthoView(const void* system) const = 0;
-		virtual std::vector<OrthoSubProjection> GetOrthoSubProjections(const void* system) const = 0;
+		virtual Float4x4 GetWorldToOrthoView() const = 0;
+		virtual std::vector<OrthoSubProjection> GetOrthoSubProjections() const = 0;
 		virtual ~IOrthoShadowProjections();
 	};
 

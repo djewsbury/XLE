@@ -5,6 +5,7 @@
 #include "SunSourceConfiguration.h"
 #include "ShadowPreparer.h"
 #include "ShadowProjectionDriver.h"
+#include "StandardLightScene.h"             // for ILightBase
 #include "../Techniques/TechniqueUtils.h"
 #include "../Techniques/ParsingContext.h"
 #include "../Format.h"
