@@ -432,8 +432,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	struct AttachedShadowProbes
 	{
-		unsigned _staticProbeDatabaseEntry = 0;
-		unsigned _dynamicCubeDatabaseEntry = 0;
+		unsigned _staticProbeDatabaseEntry = ~0u;
+		unsigned _dynamicCubeDatabaseEntry = ~0u;
 		int _probeFading = 0;
 	};
 
@@ -1373,6 +1373,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				if (_finiteChain) {
 					_finiteChain->SetCutoffBrightness(cutoffBrightness);
 					_cutoffRange = _finiteChain->GetCutoffRange();
+					_parent->_tiler->UpdateLight(_position, _cutoffRange, _idForTiler);
 				} else
 					assert(0);		// not going to do much without a _finiteChain
 			}
@@ -1380,6 +1381,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			{
 				_cutoffRange = cutoff;
 				if (_finiteChain) _finiteChain->SetCutoffRange(cutoff);
+				_parent->_tiler->UpdateLight(_position, _cutoffRange, _idForTiler);
 			}
 			float GetCutoffRange() const override { return _cutoffRange; }
 		};
@@ -1438,7 +1440,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				ExtractRight(light._orientation), light._radii[1],
 				ExtractForward(light._orientation), shapeCode,
 				ExtractUp(light._orientation), 0,
-				shadowProbes._staticProbeDatabaseEntry,shadowProbes._dynamicCubeDatabaseEntry,{0,0}
+				shadowProbes._staticProbeDatabaseEntry+1, shadowProbes._dynamicCubeDatabaseEntry+1,			// add 1 for shader indexing (note that ~0u will become 0, meaning no probe database entry)
+				{0,0}
 			};
 	}
 

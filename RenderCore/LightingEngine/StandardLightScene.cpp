@@ -42,8 +42,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		assert(set._baseData._allocationFlags.IsAllocated(i->second._lightIndex));
 
 		// test components first
-		for (auto& comp:set._boundComponents)
-			if (void* interf = comp->QueryInterface(i->second._lightSet, i->second._lightIndex, interfaceTypeCode))
+		for (auto comp=set._boundComponents.rbegin(); comp!=set._boundComponents.rend(); ++comp)
+			if (void* interf = (*comp)->QueryInterface(i->second._lightSet, i->second._lightIndex, interfaceTypeCode))
 				return interf;
 
 		// fallback to the ILightBase
@@ -77,8 +77,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		auto& set = *_lightSets[i->second._lightSet];
 
-		for (const auto& comp:set._boundComponents)
-			comp->DeregisterLight(i->second._lightSet, i->second._lightIndex);
+		for (auto comp=set._boundComponents.rbegin(); comp!=set._boundComponents.rend(); ++comp)
+			(*comp)->DeregisterLight(i->second._lightSet, i->second._lightIndex);
 		set._baseData.Deallocate(i->second._lightIndex);
 
 		_lookupTable.erase(i);
@@ -93,8 +93,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		assert(dstSetIdx != i->second._lightSet);
 
 		auto l = std::move(srcSet._baseData.GetObject(i->second._lightIndex));
-		for (const auto& comp:srcSet._boundComponents)
-			comp->DeregisterLight(i->second._lightSet, i->second._lightIndex);
+		for (auto comp=srcSet._boundComponents.rbegin(); comp!=srcSet._boundComponents.rend(); ++comp)
+			(*comp)->DeregisterLight(i->second._lightSet, i->second._lightIndex);
 		srcSet._baseData.Deallocate(i->second._lightIndex);
 
 		auto newLight = dstSet._baseData.Allocate();
@@ -216,6 +216,20 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		for (auto& set:_lightSets)
 			for (auto i=set->_boundComponents.begin(); i!=set->_boundComponents.end(); ++i) {
 				if (i->get() == &comp) set->_boundComponents.erase(i);
+
+				// rebind all other components, so they can update their chain pointers
+				auto setIdx = &set-_lightSets.data();
+				for (unsigned c=0; c<set->_boundComponents.size(); ++c) {
+					auto qi = [set=set.get(), setIdx, cCount=c](ILightScene::LightSourceId lightIdx, uint64_t code) -> void* {
+						for (unsigned c=0; c<cCount; ++c)
+							if (auto res = set->_boundComponents[cCount-1-c]->QueryInterface(setIdx, lightIdx, code))
+								return res;
+						return set->QueryInterface(lightIdx, code);
+					};
+
+					set->_boundComponents[c]->BindToSet(set->_operatorId, setIdx, std::move(qi));
+				}
+
 				break;
 			}
 
