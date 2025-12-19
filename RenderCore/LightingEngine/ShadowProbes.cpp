@@ -401,6 +401,7 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::MarkerPtr<Techniques::SequencerConfig> _futureProbePrepareCfg;
 		bool _pendingClearOfProbeUniforms = true;
 		bool _pendingStaticTableInit = true;
+		ViewportDesc _savedViewport;
 		DEBUG_ONLY(Techniques::ParsingContext* _boundParsingContext = nullptr);
 	};
 
@@ -408,6 +409,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		assert(_pimpl->_boundParsingContext == nullptr);
 		DEBUG_ONLY(_pimpl->_boundParsingContext = &parsingContext);
+		_pimpl->_savedViewport = parsingContext.GetViewport();
 		parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_pimpl->_multiViewUniformsDelegate);
 		parsingContext.GetUniformDelegateManager()->InvalidateUniforms();
 		parsingContext.GetAttachmentReservation().Bind(s_semanticProbePrepare, _pimpl->_staticTable, BindFlag::ShaderResource);
@@ -429,7 +431,7 @@ namespace RenderCore { namespace LightingEngine
 		assert(updatedUniformState.size() <= 6*_pimpl->_config._maxProbes);
 		WriteStaticShadowProbeTable(parsingContext.GetThreadContext(), *_pimpl->_probeUniforms, updatedUniformState);
 
-		parsingContext.GetViewport() = {};		// reset viewport because we changed it in DynamicShadowProbes::Begin
+		parsingContext.GetViewport() = _pimpl->_savedViewport;		// reset viewport because we changed it in DynamicShadowProbes::Begin
 	}
 
 	Techniques::RenderPassInstance DynamicShadowProbes::Begin(

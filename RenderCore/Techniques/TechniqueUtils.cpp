@@ -212,6 +212,7 @@ namespace RenderCore { namespace Techniques
 
     ViewportConstants BuildViewportConstants(const ViewportDesc& viewport)
     {
+        assert(viewport._height != 0);		// lookout for infinites
         return ViewportConstants { 
             Float2{1.f/float(viewport._width), 1.f/float(viewport._height)}, 
             Float2{viewport._x, viewport._y},

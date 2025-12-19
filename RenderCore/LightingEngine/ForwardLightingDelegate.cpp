@@ -709,7 +709,11 @@ namespace RenderCore { namespace LightingEngine
 
 					ToneMapIntegrationParams toneMapIntegrationParams;
 					toneMapIntegrationParams._inputAttachment = digest._taa.has_value() ? "AAOutput"_h : Techniques::AttachmentSemantics::ColorHDR;
-					toneMapIntegrationParams._outputAttachment = digest._postProcess.has_value() ? "PostProcessInput"_h : Techniques::AttachmentSemantics::ColorLDR;
+					toneMapIntegrationParams._outputAttachment = Techniques::AttachmentSemantics::ColorLDR;
+					if (digest._postProcess.has_value()) {
+						toneMapIntegrationParams._outputAttachment = "PostProcessInput"_h;
+						toneMapIntegrationParams._outputState = BindFlag::UnorderedAccess;
+					}
 					toneMapIntegrationParams._preferPixelShaderPath = !digest._taa.has_value() && !digest._postProcess.has_value();
 					if (digest._tonemapAces) {
 						captures->_acesOperator = std::make_shared<ToneMapAcesOperator>(pipelinePool, *digest._tonemapAces, toneMapIntegrationParams);

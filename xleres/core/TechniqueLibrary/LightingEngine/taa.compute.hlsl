@@ -70,8 +70,8 @@ int2 SampleMotion(in int2 baseCoord, out bool is_sky_pixel)
     #if PLAYDEAD_NEIGHBOURHOOD_SEARCH
         return GetClosestMotion(baseCoord, is_sky_pixel);
     #else
-        return GBufferMotion.Load(uint3(baseCoord, 0)).xy;
         is_sky_pixel = Depth.Load(uint3(baseCoord, 0)) > 0;
+        return GBufferMotion.Load(uint3(baseCoord, 0)).xy;
     #endif
 }
 
