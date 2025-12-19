@@ -102,7 +102,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	struct StandardPositionLightFlags
 	{
-		enum Enum { SupportFiniteRange = 1<<0, LightTiler = 1<<1 };
+		enum Enum { SupportFiniteRange = 1<<0 };
 		using BitField = unsigned;
 	};
 

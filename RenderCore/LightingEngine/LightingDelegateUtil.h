@@ -11,7 +11,7 @@
 #include "Sequence.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Types.h"
-#include "../ResourceUtils.h"		// for ViewPool
+#include "../ResourceUtils.h"						// for ViewPool
 #include "../Techniques/PipelineCollection.h"		// for FrameBufferTarget
 #include "../../Assets/Marker.h"
 #include <memory>
@@ -40,6 +40,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 {
 	class ILightBase;
 	class PriorityShadowSchedulerUtil;
+	struct CB_EnvironmentProps;
 
 	std::future<std::shared_ptr<Techniques::IShaderResourceDelegate>> CreateDefaultSequencerResourceDelegate();
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*>);
@@ -258,11 +259,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	class DominantLightSet : public ILightSceneComponent
 	{
 	public:
+		void WriteEnvProps(CB_EnvironmentProps&);
+
 		unsigned _setIdx = ~0u;
 		bool _hasLight = false;
-		ILightScene::LightOperatorId _lightOpId;
 
-		DominantLightSet(ILightScene::LightOperatorId lightOpId);
+		DominantLightSet(ILightScene::LightOperatorId lightOpId, unsigned uniformShapeCode);
 		~DominantLightSet();
 	private:
 		// ILightSceneComponent
@@ -270,6 +272,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
 		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, QueryInterfaceFunction&&) override;
 		void* QueryInterface(unsigned setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
+
+		ILightScene::LightOperatorId _lightOpId;
+		unsigned _uniformShapeCode = 0;
+		StandardPositionalLight* _standardPositionalLight = nullptr;
+		QueryInterfaceFunction _qi;
 	};
 
 	// Acts as a bridge between the ILightScene infrastructure and the light tiler algorithm
@@ -278,6 +285,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 	public:
 		void DoPrepareUniforms(Techniques::ParsingContext& parsingContext);
+		void WriteEnvProps(CB_EnvironmentProps&);
+
+		IResourceView& GetLightListUAV() { return *_uniforms[_pingPongCounter%dimof(_uniforms)]._lightListUAV; }
+		IResourceView& GetLightDepthTableUAV() { return *_uniforms[_pingPongCounter%dimof(_uniforms)]._lightDepthTableUAV; }
 
 		struct LightOperatorInfo
 		{

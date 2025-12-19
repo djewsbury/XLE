@@ -1279,8 +1279,16 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	DominantLightSet::DominantLightSet(ILightScene::LightOperatorId lightOpId)
-	: _lightOpId(lightOpId)
+	void DominantLightSet::WriteEnvProps(CB_EnvironmentProps& dst)
+	{
+		if (_hasLight) {
+			assert(_standardPositionalLight);
+			dst._dominantLight = Internal::MakeLightUniforms(*_standardPositionalLight, _uniformShapeCode);
+		}
+	}
+
+	DominantLightSet::DominantLightSet(ILightScene::LightOperatorId lightOpId, unsigned uniformShapeCode)
+	: _lightOpId(lightOpId), _uniformShapeCode(uniformShapeCode)
 	{}
 	DominantLightSet::~DominantLightSet() {}
 
@@ -1290,6 +1298,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		if (_hasLight) Throw(std::runtime_error("Attempting to add multiple dominant lights. Only one is supported."));
 		assert(lightIdx == 0);
 		_hasLight = true;
+		_standardPositionalLight = (StandardPositionalLight*)_qi(lightIdx, TypeHashCode<StandardPositionalLight>);
 	}
 
 	void DominantLightSet::DeregisterLight(unsigned setIdx, unsigned lightIdx)
@@ -1306,6 +1315,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			return false;
 		assert(_setIdx == ~0u);
 		_setIdx = setIdx;
+		_qi = std::move(qi);
+		if (_hasLight)
+			_standardPositionalLight = (StandardPositionalLight*)_qi(0, TypeHashCode<StandardPositionalLight>);
 		return true;
 	}
 
@@ -1446,6 +1458,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				*_unmapDepthTable,
 				RenderCore::CopyPartial_Src{*uniforms._lightDepthTable, 0, unsigned(sizeof(unsigned)*tilerOutputs._lightDepthTable.size())});
 		}
+	}
+
+	void TiledLightScheduler::WriteEnvProps(CB_EnvironmentProps& dst)
+	{
+		dst._lightCount = _lightTiler->_outputs._lightCount;
 	}
 
 	void TiledLightScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx)

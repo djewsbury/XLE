@@ -5,9 +5,8 @@
 #pragma once
 
 #include "StandardLightScene.h"
-#include "LightTiler.h"
-#include "ShadowProbes.h"
-#include "SHCoefficients.h"
+#include "ShadowProbes.h"		// for ShadowProbes::Configuration
+#include "ShadowPreparer.h"		// for ShadowOperatorDesc
 
 namespace RenderCore { namespace Techniques { class ITechniqueDelegate; class DeferredShaderResource; class IShaderResourceDelegate; } }
 
@@ -15,8 +14,10 @@ namespace RenderCore { namespace LightingEngine
 {
 	class ScreenSpaceReflectionsOperator;
 	class HierarchicalDepthsOperator;
+	class RasterizationLightTileOperator;
+	struct RasterizationLightTileOperatorDesc;
 	class SHCoefficients;
-	namespace Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProbeScheduler; class PriorityShadowProjectionScheduler; class DominantLightSet; class PriorityShadowSchedulerUtil; }
+	namespace Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProbeScheduler; class PriorityShadowProjectionScheduler; class DominantLightSet; class PriorityShadowSchedulerUtil; class TiledLightScheduler; }
 
 	class ForwardPlusLightScene : public Internal::StandardLightScene, public std::enable_shared_from_this<ForwardPlusLightScene>
 	{
@@ -43,12 +44,17 @@ namespace RenderCore { namespace LightingEngine
 
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
 
+		struct OperatorInfo
+		{
+			bool _tileable = false;
+			unsigned _uniformShapeCode = 0;
+			unsigned _shadowPreparerId = ~0u;
+		};
+
 		struct LightOperatorsMapping
 		{
-			std::vector<unsigned> _operatorToPositionalLightOperator;
-			std::vector<LightOperatorInfo> _positionalLightOperators;
+			std::vector<OperatorInfo> _operatorInfos;
 
-			std::vector<unsigned> _operatorToPriorityShadowPreparerId;
 			std::vector<ShadowOperatorDesc> _priorityShadowPreparers;
 
 			std::vector<bool> _staticShadowProbeMask;
@@ -88,6 +94,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Internal::DynamicShadowProbeScheduler> _dynamicProbeScheduler;
 		std::shared_ptr<Internal::PriorityShadowProjectionScheduler> _priorityShadowScheduler;
 		std::shared_ptr<Internal::DominantLightSet> _dominantLightSet;
+		std::shared_ptr<Internal::TiledLightScheduler> _tiledLightScheduler;
 
 		std::function<void*(uint64_t)> _queryInterfaceHelper;
 
@@ -115,6 +122,7 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<IResource> _propertyCB;
 			std::shared_ptr<IResourceView> _propertyCBView;
 		};
+		std::shared_ptr<IResource> _unmapPropertyCB;
 		SceneLightUniforms _uniforms[3];
 		unsigned _pingPongCounter = 0;
 

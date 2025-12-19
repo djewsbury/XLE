@@ -19,6 +19,8 @@
 #include "LightUniforms.h"
 #include "GBufferOperator.h"
 #include "PostProcessOperators.h"
+#include "StandardLightOperators.h"
+#include "LightTiler.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineOperators.h"
 #include "../Techniques/CommonBindings.h"
@@ -255,12 +257,10 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
 		const ForwardPlusLightScene::LightOperatorsMapping& lightOperatorMapping)
 	{
-		std::optional<ForwardPlusLightScene::LightOperatorInfo> dominantLightOperator; std::optional<ShadowOperatorDesc> dominantShadowOperator;
-		if (lightOperatorMapping._dominantLightOperator != ~0u) {
-			dominantLightOperator = lightOperatorMapping._positionalLightOperators[lightOperatorMapping._operatorToPositionalLightOperator[lightOperatorMapping._dominantLightOperator]];
-			if (lightOperatorMapping._dominantLightOperator < lightOperatorMapping._operatorToPriorityShadowPreparerId.size() && lightOperatorMapping._operatorToPriorityShadowPreparerId[lightOperatorMapping._dominantLightOperator] != ~0u)
-				dominantShadowOperator = lightOperatorMapping._priorityShadowPreparers[lightOperatorMapping._operatorToPriorityShadowPreparerId[lightOperatorMapping._dominantLightOperator]];
-		}
+		std::optional<ShadowOperatorDesc> dominantShadowOperator;
+		if (lightOperatorMapping._dominantLightOperator != ~0u)
+			if (lightOperatorMapping._dominantLightOperator < lightOperatorMapping._operatorInfos.size() && lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._shadowPreparerId != ~0u)
+				dominantShadowOperator = lightOperatorMapping._priorityShadowPreparers[lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._shadowPreparerId];
 
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).NoInitialState();
@@ -295,13 +295,14 @@ namespace RenderCore { namespace LightingEngine
 		mainSubpass.SetName("MainForward");
 
 		ParameterBox box;
-		if (dominantLightOperator) {
+		if (lightOperatorMapping._dominantLightOperator != ~0u) {
+			auto uniformShapeCode = lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._uniformShapeCode;
 			if (dominantShadowOperator) {
 				// assume the shadow operator that will be associated is index 0
 				Internal::MakeShadowResolveParam(dominantShadowOperator.value()).WriteShaderSelectors(box);
-				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOperator.value()._uniformShapeCode | 0x20u);
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)uniformShapeCode | 0x20u);
 			} else {
-				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)dominantLightOperator.value()._uniformShapeCode);
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)uniformShapeCode);
 			}
 			if (lightOperatorMapping._staticShadowProbesCfg) box.SetParameter("SHADOW_PROBE", 1);
 			if (lightOperatorMapping._dynamicShadowProbesCfg) box.SetParameter("DYNAMIC_SHADOW_PROBE", 1);
@@ -337,15 +338,15 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
-	static ForwardPlusLightScene::LightOperatorInfo AsLightOperatorInfo(const PositionalLightOperatorDesc& desc)
+	static ForwardPlusLightScene::OperatorInfo AsOperatorInfo(const PositionalLightOperatorDesc& desc)
 	{
-		unsigned flags = (desc._flags & PositionalLightOperatorDesc::Flags::DominantLight) ? 0 : Internal::StandardPositionLightFlags::SupportFiniteRange|Internal::StandardPositionLightFlags::LightTiler;
-		return {flags, Internal::AsUniformShapeCode(desc._shape)};
+		bool tilable = !(desc._flags & PositionalLightOperatorDesc::Flags::DominantLight);
+		return {tilable, Internal::AsUniformShapeCode(desc._shape)};
 	}
 
-	static bool operator==(const ForwardPlusLightScene::LightOperatorInfo& lhs, const ForwardPlusLightScene::LightOperatorInfo& rhs)
+	static bool operator==(const ForwardPlusLightScene::OperatorInfo& lhs, const ForwardPlusLightScene::OperatorInfo& rhs)
 	{
-		return lhs._standardLightFlags == rhs._standardLightFlags && lhs._uniformShapeCode == rhs._uniformShapeCode;
+		return lhs._tileable == rhs._tileable && lhs._uniformShapeCode == rhs._uniformShapeCode && lhs._shadowPreparerId == rhs._shadowPreparerId;
 	}
 
 	struct OperatorDigest

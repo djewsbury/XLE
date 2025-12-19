@@ -10,7 +10,7 @@
 #include "LightTiler.h"
 #include "ShadowPreparer.h"
 #include "ShadowProbes.h"
-// #include "LightUniforms.h"
+#include "LightUniforms.h"
 #include "LightingDelegateUtil.h"
 #include "RenderStepFragments.h"
 #include "LightingEngineApparatus.h"
@@ -24,6 +24,7 @@
 #include "../Techniques/Services.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Metal/Resource.h"
+#include "../Metal/DeviceContext.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/ContinuationUtil.h"
@@ -44,22 +45,29 @@ namespace RenderCore { namespace LightingEngine
 		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
 		auto& device = *_pipelineAccelerators->GetDevice();
 		auto tilerConfig = _lightTiler->GetConfiguration();
-		for (unsigned c=0; c<dimof(_uniforms); c++) {
+		for (unsigned c=0; c<dimof(_uniforms); c++)
 			_uniforms[c]._propertyCB = device.CreateResource(
 				CreateDesc(BindFlag::ConstantBuffer, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps))), "env-props");
-			_uniforms[c]._propertyCBView = _uniforms[c]._propertyCB->CreateBufferView(BindFlag::ConstantBuffer);
-		}
+		_unmapPropertyCB = device.CreateResource(CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps))), "env-props");
+		if (_unmapPropertyCB) {
+			_uniforms[0]._propertyCBView = _unmapPropertyCB->CreateBufferView(BindFlag::ConstantBuffer);
+			for (unsigned c=0; c<dimof(_uniforms); c++) _uniforms[c]._propertyCBView = _uniforms[0]._propertyCBView;
+		} else
+			for (unsigned c=0; c<dimof(_uniforms); c++)
+				_uniforms[c]._propertyCBView = _uniforms[c]._propertyCB->CreateBufferView(BindFlag::ConstantBuffer);
 		_pingPongCounter = 0;
 
 		// Default to using the first light operator & first shadow operator for the dominant light
 		if (_lightOperatorsMapping._dominantLightOperator != ~0u) {
-			_dominantLightSet = std::make_shared<Internal::DominantLightSet>(_lightOperatorsMapping._dominantLightOperator);
+			_dominantLightSet = std::make_shared<Internal::DominantLightSet>(_lightOperatorsMapping._dominantLightOperator, _lightOperatorsMapping._operatorInfos[_lightOperatorsMapping._dominantLightOperator]._uniformShapeCode);
 			RegisterComponent(_dominantLightSet);
 		}
 
-		for (unsigned op=0; op<_lightOperatorsMapping._positionalLightOperators.size(); ++op)
-			if (_lightOperatorsMapping._positionalLightOperators[op]._standardLightFlags)
-				AssociateFlag(op, _lightOperatorsMapping._positionalLightOperators[op]._standardLightFlags);
+		if (_lightTiler) {
+			std::vector<Internal::TiledLightScheduler::LightOperatorInfo> infosForTiledScheduler; infosForTiledScheduler.reserve(_lightOperatorsMapping._operatorInfos.size());
+			for (auto& i:_lightOperatorsMapping._operatorInfos) infosForTiledScheduler.push_back({i._tileable, i._uniformShapeCode});
+			_tiledLightScheduler = std::make_shared<Internal::TiledLightScheduler>(_lightTiler, infosForTiledScheduler);
+		}
 
 		if (_lightOperatorsMapping._staticShadowProbesCfg) {
 			_shadowProbes = std::make_shared<ShadowProbes>(_pipelineAccelerators, *_techDelBox, *_lightOperatorsMapping._staticShadowProbesCfg);
@@ -74,7 +82,9 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		if (_shadowPreparers) {
-			_priorityShadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(_shadowPreparers, _lightOperatorsMapping._operatorToPriorityShadowPreparerId);
+			std::vector<unsigned> operatorToPriorityShadowPreparer; operatorToPriorityShadowPreparer.reserve(_lightOperatorsMapping._operatorInfos.size());
+			for (auto& i:_lightOperatorsMapping._operatorInfos) operatorToPriorityShadowPreparer.push_back(i._shadowPreparerId);
+			_priorityShadowScheduler = std::make_shared<Internal::PriorityShadowProjectionScheduler>(_shadowPreparers, operatorToPriorityShadowPreparer);
 			_priorityShadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
 			RegisterComponent(_priorityShadowScheduler);
 		}
@@ -145,8 +155,8 @@ namespace RenderCore { namespace LightingEngine
 		/////////////////
 		++_pingPongCounter;
 
-		
-
+		auto& device = *parsingContext.GetThreadContext().GetDevice();
+		auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
 		{
 			Metal::ResourceMap map{
 				device, *uniforms._propertyCB,
@@ -154,17 +164,19 @@ namespace RenderCore { namespace LightingEngine
 			auto* i = (Internal::CB_EnvironmentProps*)map.GetData().begin();
 			i->_dominantLight = {};
 
-			if (_dominantLightSet && _dominantLightSet->_hasLight) {
-				i->_dominantLight = Internal::MakeLightUniforms(
-					_lightSets[_dominantLightSet->_setIdx]._baseData.GetObject(0),
-					_lightOperatorsMapping._positionalLightOperators[_dominantLightSet->_lightOpId]._uniformShapeCode);
-			}
+			if (_dominantLightSet)
+				_dominantLightSet->WriteEnvProps(*i);
 
-			i->_lightCount = tilerOutputs._lightCount;
+			if (_tiledLightScheduler)
+				_tiledLightScheduler->WriteEnvProps(*i);
+			
 			i->_enableSSR = enableSSR;
 			std::memcpy(i->_diffuseSHCoefficients, _diffuseSHCoefficients, sizeof(_diffuseSHCoefficients));
 			map.FlushCache();
 		}
+
+		if (_unmapPropertyCB)
+			Metal::DeviceContext::Get(parsingContext.GetThreadContext())->BeginBlitEncoder().Copy(*_unmapPropertyCB, *uniforms._propertyCB);
 
 		if (_completionCommandListID)
 			parsingContext.RequireCommandList(_completionCommandListID);
@@ -172,7 +184,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void ForwardPlusLightScene::Prerender(IThreadContext& threadContext)
 	{
-		_lightTiler->CompleteInitialization(threadContext);
+		if (_lightTiler) _lightTiler->CompleteInitialization(threadContext);
 		if (_shadowProbes) _shadowProbes->CompleteInitialization(threadContext);
 		if (_dynamicShadowProbes) _dynamicShadowProbes->CompleteInitialization(threadContext);
 	}
@@ -188,14 +200,15 @@ namespace RenderCore { namespace LightingEngine
 	public:
 		void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
 		{
-			auto& uniforms = _lightScene->_uniforms[_lightScene->_pingPongCounter%dimof(_lightScene->_uniforms)];
 			if (bindingFlags & 7) {
 				assert((bindingFlags & 7) == 7);
-				dst[0] = uniforms._lightDepthTableUAV.get();
-				dst[1] = uniforms._lightListUAV.get();
+				assert(_lightScene->_tiledLightScheduler);
+				dst[0] = &_lightScene->_tiledLightScheduler->GetLightDepthTableUAV();
+				dst[1] = &_lightScene->_tiledLightScheduler->GetLightListUAV();
 				dst[2] = _lightScene->_lightTiler->_outputs._tiledLightBitFieldSRV.get();
 			}
 
+			auto& uniforms = _lightScene->_uniforms[_lightScene->_pingPongCounter%dimof(_lightScene->_uniforms)];
 			if (bindingFlags & (1ull<<3ull))
 				dst[3] = uniforms._propertyCBView.get();
 
@@ -235,9 +248,11 @@ namespace RenderCore { namespace LightingEngine
 		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
 		{
 			_lightScene = &lightScene;
-			BindResourceView(0, "LightDepthTable"_h);
-			BindResourceView(1, "LightList"_h);
-			BindResourceView(2, "TiledLightBitField"_h);
+			if (_lightScene->_lightTiler) {
+				BindResourceView(0, "LightDepthTable"_h);
+				BindResourceView(1, "LightList"_h);
+				BindResourceView(2, "TiledLightBitField"_h);
+			}
 			BindResourceView(3, "EnvironmentProps"_h);
 			BindResourceView(4, "StaticShadowProbeDatabase"_h);
 			BindResourceView(5, "StaticShadowProbeProperties"_h);
@@ -323,7 +338,10 @@ namespace RenderCore { namespace LightingEngine
 				lightOperatorsMapping._priorityShadowPreparers,
 				constructionServices._pipelineAccelerators, constructionServices._techDelBox);
 
-		helper->_lightTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
+		bool atLeastOneTilable = false;
+		for (auto& info:lightOperatorsMapping._operatorInfos) atLeastOneTilable |= info._tileable;
+		if (atLeastOneTilable) helper->_lightTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
+
 		helper->_glossLUTFuture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(GLOSS_LUT_TEXTURE);
 
 		using namespace std::placeholders;
@@ -347,8 +365,11 @@ namespace RenderCore { namespace LightingEngine
 					glossLutCompletion = defRes->GetCompletionCommandList();
 					depVals[0] = defRes->GetDependencyValidation();
 				}
-				auto lightTiler = helper->_lightTilerFuture.get();
-				depVals[1] = lightTiler->GetDependencyValidation();
+				std::shared_ptr<RasterizationLightTileOperator> lightTiler;
+				if (helper->_lightTilerFuture.valid()) {
+					lightTiler = helper->_lightTilerFuture.get();
+					depVals[1] = lightTiler->GetDependencyValidation();
+				}
 				auto depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 				std::shared_ptr<Internal::PriorityShadowSchedulerUtil> priorityPreparers;
 				if (helper->_shadowPreparationOperatorsFuture.valid()) priorityPreparers = helper->_shadowPreparationOperatorsFuture.get();
