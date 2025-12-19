@@ -39,6 +39,7 @@ namespace RenderCore { namespace LightingEngine
 	class RasterizationLightTileOperator : public std::enable_shared_from_this<RasterizationLightTileOperator>
 	{
 	public:
+		void UpdatePreFragmentUniforms(SequenceIterator& iterator);
 		void Execute(SequenceIterator& iterator);
 
 		struct InactiveLight

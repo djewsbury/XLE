@@ -42,6 +42,12 @@ namespace RenderCore { namespace LightingEngine
 
 	void ForwardPlusLightScene::FinalizeConfiguration()
 	{
+		// ensure FiniteRange flag is set for tilable lights
+		for (auto& op:_lightOperatorsMapping._operatorInfos)
+			if (op._tileable)
+				AssociateFlag(&op-_lightOperatorsMapping._operatorInfos.data(), Internal::StandardPositionLightFlags::SupportFiniteRange);
+
+		// construct uniform buffers, etc
 		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
 		auto& device = *_pipelineAccelerators->GetDevice();
 		auto tilerConfig = _lightTiler->GetConfiguration();
@@ -67,6 +73,7 @@ namespace RenderCore { namespace LightingEngine
 			std::vector<Internal::TiledLightScheduler::LightOperatorInfo> infosForTiledScheduler; infosForTiledScheduler.reserve(_lightOperatorsMapping._operatorInfos.size());
 			for (auto& i:_lightOperatorsMapping._operatorInfos) infosForTiledScheduler.push_back({i._tileable, i._uniformShapeCode});
 			_tiledLightScheduler = std::make_shared<Internal::TiledLightScheduler>(_lightTiler, infosForTiledScheduler);
+			RegisterComponent(_tiledLightScheduler);
 		}
 
 		if (_lightOperatorsMapping._staticShadowProbesCfg) {
@@ -177,6 +184,9 @@ namespace RenderCore { namespace LightingEngine
 
 		if (_unmapPropertyCB)
 			Metal::DeviceContext::Get(parsingContext.GetThreadContext())->BeginBlitEncoder().Copy(*_unmapPropertyCB, *uniforms._propertyCB);
+
+		if (_tiledLightScheduler)
+			_tiledLightScheduler->DoPrepareUniforms(parsingContext);		// should be called after the RasterizationLightTileOperator has been updated
 
 		if (_completionCommandListID)
 			parsingContext.RequireCommandList(_completionCommandListID);

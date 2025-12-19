@@ -1355,7 +1355,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			StandardPositionalLight* _standardLight = nullptr;
 			IPositionalLightSource* _positionalChain = nullptr;
 			IFiniteLightSource* _finiteChain = nullptr;
-			unsigned _idForTiler = 0;
+			unsigned _idForTiler = ~0u;
 			Float3 _position { 0.f, 0.f, 0.f };
 			float _cutoffRange = 1.f;
 			SceneSet* _parent = nullptr;
@@ -1370,14 +1370,18 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 			void SetCutoffBrightness(float cutoffBrightness) override
 			{
-				assert(0);		// not supported / implemented
+				if (_finiteChain) {
+					_finiteChain->SetCutoffBrightness(cutoffBrightness);
+					_cutoffRange = _finiteChain->GetCutoffRange();
+				} else
+					assert(0);		// not going to do much without a _finiteChain
 			}
 			void SetCutoffRange(float cutoff) override
 			{
 				_cutoffRange = cutoff;
 				if (_finiteChain) _finiteChain->SetCutoffRange(cutoff);
 			}
-			float GetCutoffRange() const override { assert(_finiteChain); return _finiteChain->GetCutoffRange(); }
+			float GetCutoffRange() const override { return _cutoffRange; }
 		};
 		std::deque<LightEntry> _lights;
 		std::shared_ptr<RasterizationLightTileOperator> _tiler;
@@ -1401,6 +1405,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				newLight._cutoffRange = newLight._finiteChain->GetCutoffRange();
 			newLight._standardLight = (StandardPositionalLight*)_qi(index, TypeHashCode<StandardPositionalLight>);
 
+			assert(_lights[index]._idForTiler == ~0u);		// if you hit this, it means we're about the register the same light multiple times with the tiler
+			_tiler->AddLight(newLight._position, newLight._cutoffRange, newLight._idForTiler);
 			_lights[index] = std::move(newLight);
 		}
 
@@ -1502,6 +1508,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			_sceneSets.resize(setIdx+1);
 		if (!_sceneSets[setIdx]) _sceneSets[setIdx] = std::make_unique<SceneSet>();
 		_sceneSets[setIdx]->_setIdForTiler = setIdx << 24u;
+		_sceneSets[setIdx]->_tiler = _lightTiler;
 		_sceneSets[setIdx]->SetQI(std::move(qi));
 		_sceneSets[setIdx]->_operatorInfo = _operatorInfos[op];
 		return true;

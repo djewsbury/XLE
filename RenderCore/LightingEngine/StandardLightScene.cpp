@@ -25,6 +25,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				if (_flags & StandardPositionLightFlags::SupportFiniteRange)
 					return (IFiniteLightSource*)&_baseData.GetObject(lightIdx);
 				break;
+			case TypeHashCode<StandardPositionalLight>: return (StandardPositionalLight*)&_baseData.GetObject(lightIdx);
 			}
 			return nullptr;
 		}

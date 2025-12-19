@@ -546,6 +546,7 @@ namespace RenderCore { namespace LightingEngine
 		mainSequence.CreateStep_CallFunction(
 			[captures=shared_from_this()](SequenceIterator& iterator) {
 				captures->SetupCameraJitter(*iterator._parsingContext, iterator.GetFrameToFrameProperties());
+				captures->_lightScene->GetLightTiler().UpdatePreFragmentUniforms(iterator);
 			});
 
 		mainSequence.CreateStep_VertexIABarrier();

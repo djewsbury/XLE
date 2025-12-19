@@ -62,13 +62,9 @@ namespace RenderCore { namespace LightingEngine
 		return z2/CalculateNearAndFarPlane(ExtractMinimalProjection(projDesc._cameraToProjection), Techniques::GetDefaultClipSpaceType()).second;
 	}
 
-	// struct IntermediateLight { Float3 _position; float _cutoffRadius; float _linearizedDepthMin, _linearizedDepthMax; unsigned _srcIdx; unsigned _dummy; };
-
-	void RasterizationLightTileOperator::Execute(SequenceIterator& iterator)
+	void RasterizationLightTileOperator::UpdatePreFragmentUniforms(SequenceIterator& iterator)
 	{
-		GPUProfilerBlock profileBlock(*iterator._threadContext, "RasterizationLightTileOperator");
-
-		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
+		// We do a blt here, so this must be executed outside of the main render pass
 		++_frameCounter;
 		auto pingPongCounter = _frameCounter%dimof(_tileableLightBuffer);
 
@@ -164,6 +160,7 @@ namespace RenderCore { namespace LightingEngine
 			for (unsigned c=0; c<_outputs._lightCount; ++c)
 				_outputs._lightOrdering[c] = _activeLights[1][c]._srcId;
 
+			auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
 			if (_outputs._lightCount) {
 				Metal::ResourceMap map{
 					metalContext, *_tileableLightBuffer[pingPongCounter], Metal::ResourceMap::Mode::WriteDiscardPrevious,
@@ -182,7 +179,14 @@ namespace RenderCore { namespace LightingEngine
 			std::swap(_activeLights[0], _activeLights[1]);
 			std::swap(_inactiveLights[0], _inactiveLights[1]);
 		}
+	}
 
+	void RasterizationLightTileOperator::Execute(SequenceIterator& iterator)
+	{
+		GPUProfilerBlock profileBlock(*iterator._threadContext, "RasterizationLightTileOperator");
+
+		auto& metalContext = *Metal::DeviceContext::Get(*iterator._threadContext);
+		auto pingPongCounter = _frameCounter%dimof(_tileableLightBuffer);
 		if (_outputs._lightCount) {
 			auto encoder = metalContext.BeginGraphicsEncoder(*_prepareBitFieldLayout);
 			ViewportDesc viewport { 0, 0, (float)_lightTileBufferSize[0], (float)_lightTileBufferSize[1] };
@@ -221,6 +225,7 @@ namespace RenderCore { namespace LightingEngine
 
 	void RasterizationLightTileOperator::BarrierToReadingLayout(IThreadContext& threadContext)
 	{
+		assert(_outputs._tiledLightBitFieldSRV);		// if you hit this, it means RasterizationLightTileOperator::Execute hasn't completed successfully
 		auto* tiledLightsOutput = _outputs._tiledLightBitFieldSRV->GetResource().get();
 		assert(tiledLightsOutput);
 		Metal::BarrierHelper{threadContext}.Add(*tiledLightsOutput, {BindFlag::UnorderedAccess, ShaderStage::Pixel}, {BindFlag::ShaderResource, ShaderStage::Pixel});
