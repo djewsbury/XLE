@@ -135,7 +135,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		SequenceIterator& iterator,
 		Sequence& sequence)
 	{
-		sequence.Reset();
 		if (_shadowPreparers->_preparers.empty()) return;
 
 		for (auto& comp:_sceneSets) {
@@ -1122,8 +1121,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		SequenceIterator& iterator,
 		Sequence& sequence)
 	{
-		sequence.Reset();
-
 		auto viewPosition = ExtractTranslation(iterator._parsingContext->GetProjectionDesc()._cameraToWorld);
 		auto farClip = iterator._parsingContext->GetProjectionDesc()._farClip;
 		UpdateActiveLights(viewPosition, farClip, iterator._parsingContext->GetProjectionDesc()._worldToProjection);

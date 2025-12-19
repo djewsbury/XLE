@@ -35,8 +35,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	auto StandardLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode) -> void*
 	{
-		auto i = LowerBound(_lookupTable, sourceId);
-		if (i == _lookupTable.end() || i->first != sourceId) return nullptr;		// not found
+		auto i = LowerBound(_lookupTable, sourceId);  assert(i!=_lookupTable.end());
+		if (i->first != sourceId) return nullptr;		// not found
 
 		auto& set = *_lightSets[i->second._lightSet];
 		assert(set._baseData._allocationFlags.IsAllocated(i->second._lightIndex));
@@ -69,8 +69,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void StandardLightScene::DestroyLightSource(LightSourceId sourceId)
 	{
-		auto i = LowerBound(_lookupTable, sourceId);
-		if (i == _lookupTable.end() || i->first != sourceId) {
+		auto i = LowerBound(_lookupTable, sourceId); assert(i!=_lookupTable.end());
+		if (i->first != sourceId) {
 			assert(0);
 			return;		// not found
 		}
@@ -81,6 +81,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			(*comp)->DeregisterLight(i->second._lightSet, i->second._lightIndex);
 		set._baseData.Deallocate(i->second._lightIndex);
 
+		assert(i->first != ~0u);
 		_lookupTable.erase(i);
 	}
 
@@ -108,9 +109,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void StandardLightScene::AddToLookupTable(LightSourceId lightId, LightSetAndIndex setAndIndex)
 	{
-		auto i = LowerBound(_lookupTable, lightId);
-		assert(i == _lookupTable.end() || i->first != lightId);
-		if (i == _lookupTable.end() || i->first != lightId) {
+		auto i = LowerBound(_lookupTable, lightId); assert(i!=_lookupTable.end());
+		assert(i->first != lightId);
+		if (i->first != lightId) {
 			_lookupTable.insert(i, std::make_pair(lightId, setAndIndex));
 		} else {
 			i->second = setAndIndex;
@@ -121,8 +122,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		// we could potentially do some optimizations here by sorting "lights" or by handling lights on a set by set basis
 		for (auto lightId:lights) {
-			auto i = LowerBound(_lookupTable, lightId);
-			if (i == _lookupTable.end() || i->first != lightId) {
+			auto i = LowerBound(_lookupTable, lightId); assert(i!=_lookupTable.end());
+			if (i->first != lightId) {
 				assert(0);
 				continue;
 			}
@@ -254,7 +255,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	::Assets::DependencyValidation StandardLightScene::GetDependencyValidation() const { return {}; }
 
 	StandardLightScene::StandardLightScene()
-	{}
+	{
+		_lookupTable.emplace_back(~0u, LightSetAndIndex{0,0});   // sentinel
+	}
 	StandardLightScene::~StandardLightScene()
 	{}
 

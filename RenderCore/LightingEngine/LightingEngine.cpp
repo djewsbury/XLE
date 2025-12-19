@@ -451,6 +451,7 @@ namespace RenderCore { namespace LightingEngine
 		if (_dynamicFn) {
 			Reset();
 			_dynamicFn(iterator, *this);
+			assert(_pendingCreateFragmentSteps.empty());
 		}
 	}
 
