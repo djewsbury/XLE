@@ -344,11 +344,6 @@ namespace RenderCore { namespace LightingEngine
 		return {tilable, Internal::AsUniformShapeCode(desc._shape)};
 	}
 
-	static bool operator==(const ForwardPlusLightScene::OperatorInfo& lhs, const ForwardPlusLightScene::OperatorInfo& rhs)
-	{
-		return lhs._tileable == rhs._tileable && lhs._uniformShapeCode == rhs._uniformShapeCode && lhs._shadowPreparerId == rhs._shadowPreparerId;
-	}
-
 	struct OperatorDigest
 	{
 		std::optional<ScreenSpaceReflectionsOperatorDesc> _ssr;
@@ -437,14 +432,10 @@ namespace RenderCore { namespace LightingEngine
 				case TypeHashCode<LightOperatorAssignment<PositionalLightOperatorDesc>>:
 					{
 						auto& op = Internal::ChainedOperatorCast<LightOperatorAssignment<PositionalLightOperatorDesc>>(*chain);
-						auto info = AsLightOperatorInfo(op._desc);
-						auto i = std::find(b2e(_lightOperatorsMapping._positionalLightOperators), info);
-						if (i == _lightOperatorsMapping._positionalLightOperators.end())
-							i = _lightOperatorsMapping._positionalLightOperators.insert(i, info);
 
-						if (_lightOperatorsMapping._operatorToPositionalLightOperator.size() <= op._lightOperatorId)
-							_lightOperatorsMapping._operatorToPositionalLightOperator.resize(op._lightOperatorId+1, ~0u);
-						_lightOperatorsMapping._operatorToPositionalLightOperator[op._lightOperatorId] = unsigned(i-_lightOperatorsMapping._positionalLightOperators.begin());
+						if (_lightOperatorsMapping._operatorInfos.size() <= op._lightOperatorId)
+							_lightOperatorsMapping._operatorInfos.resize(op._lightOperatorId+1);
+						_lightOperatorsMapping._operatorInfos[op._lightOperatorId] = AsOperatorInfo(op._desc);;
 
 						if (op._desc._flags & PositionalLightOperatorDesc::Flags::DominantLight) {
 							if (_lightOperatorsMapping._dominantLightOperator != ~0u)
@@ -496,9 +487,9 @@ namespace RenderCore { namespace LightingEngine
 								_lightOperatorsMapping._priorityShadowPreparers.push_back(op._desc);
 							}
 
-							if (_lightOperatorsMapping._operatorToPriorityShadowPreparerId.size() <= op._lightOperatorId)
-								_lightOperatorsMapping._operatorToPriorityShadowPreparerId.resize(op._lightOperatorId+1, ~0u);
-							_lightOperatorsMapping._operatorToPriorityShadowPreparerId[op._lightOperatorId] = unsigned(i-hashedShadowPreparers.begin());
+							if (_lightOperatorsMapping._operatorInfos.size() <= op._lightOperatorId)
+								_lightOperatorsMapping._operatorInfos.resize(op._lightOperatorId+1);
+							_lightOperatorsMapping._operatorInfos[op._lightOperatorId]._shadowPreparerId = unsigned(i-hashedShadowPreparers.begin());
 						}
 						maxLightOperatorId = std::max(maxLightOperatorId, int(op._lightOperatorId));
 					}
@@ -508,7 +499,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			if (maxLightOperatorId >= 0) {
-				_lightOperatorsMapping._operatorToPriorityShadowPreparerId.resize(maxLightOperatorId+1, ~0u);
+				_lightOperatorsMapping._operatorInfos.resize(maxLightOperatorId+1);
 				_lightOperatorsMapping._staticShadowProbeMask.resize(maxLightOperatorId+1, false);
 				_lightOperatorsMapping._dynamicShadowProbeMask.resize(maxLightOperatorId+1, false);
 			}

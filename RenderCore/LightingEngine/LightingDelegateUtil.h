@@ -63,13 +63,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext, unsigned maxProbeCount) override;
 		void EndPrepare(IThreadContext& threadContext) override;
 
-		// struct AllocatedDatabaseEntry
-		// {
-		// 	unsigned _databaseIndex = ~0u;
-		// 	int _fading = 0;
-		// };
-		// AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
-
 		bool DoneInitialBackgroundPrepare() const { return _doneInitialBackgroundPrepare; }		// when this is false, the shadow probes image is probably still in an undefined layout
 
 		SemiStaticShadowProbeScheduler(
@@ -151,13 +144,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			SequenceIterator& iterator,
 			Sequence& sequence);
 		void ClearPreparedShadows();
-
-		// struct AllocatedDatabaseEntry
-		// {
-		// 	unsigned _databaseIndex = ~0u;
-		// 	int _fading = 0;
-		// };
-		// AllocatedDatabaseEntry GetAllocatedDatabaseEntry(unsigned setIdx, unsigned lightIdx);
 
 		Metrics GetMetrics() const override;
 		std::shared_ptr<IResourceView> GetCubeMapSRV(unsigned activeLightIdx) override;
