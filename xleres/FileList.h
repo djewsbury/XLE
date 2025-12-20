@@ -60,7 +60,6 @@ using namespace Assets::Literals;
 #define NORMALS_FITTING_TEXTURE "xleres/DefaultResources/normalsfitting.dds:LT"_initializer
 #define GGX_TABLE_TEXTURE "xleres/DefaultResources/GGXTable.dds:LT"_initializer
 #define DISTINCT_COLORS_TEXTURE "xleres/DefaultResources/distinctcolors.dds:T"_initializer
-#define BALANCED_NOISE_TEXTURE "xleres/DefaultResources/balanced_noise.dds:LT"_initializer
 
 #define SSR_CLASSIFY_TILES_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-classify-tiles.compute.hlsl"
 #define SSR_INTERSECT_HLSL "xleres/TechniqueLibrary/LightingEngine/ssr-intersect.compute.hlsl"

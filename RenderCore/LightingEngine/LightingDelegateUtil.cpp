@@ -18,6 +18,7 @@
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/TechniqueUtils.h"
+#include "../Assets/TextureCompiler.h"
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
 #include "../../Assets/Assets.h"
@@ -416,7 +417,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		auto normalsFittingTexture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(NORMALS_FITTING_TEXTURE);
 		auto ggxTableTexture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(GGX_TABLE_TEXTURE);
-		auto balancedNoise = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
+		auto compileRequest = Assets::MakeTextureCompilationRequest(Assets::TextureCompiler_BalancedNoise(256, 256), Format::R8_UNORM);
+		auto balancedNoise = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(compileRequest);
 		std::promise<std::shared_ptr<Techniques::IShaderResourceDelegate>> promise;
 		auto result = promise.get_future();
 		::Assets::WhenAll(std::move(normalsFittingTexture), std::move(ggxTableTexture), std::move(balancedNoise)).ThenConstructToPromise(

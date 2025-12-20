@@ -18,6 +18,7 @@
 #include "../Techniques/PipelineCollection.h"
 #include "../Techniques/DeferredShaderResource.h"
 #include "../Techniques/TechniqueDelegates.h"
+#include "../Assets/TextureCompiler.h"
 #include "../Metal/DeviceContext.h"
 #include "../Metal/ObjectFactory.h"
 #include "../Metal/InputLayout.h"
@@ -184,7 +185,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<IDevice> device,
 		const DescriptorSetSignature& descSetLayout)
 	{
-		auto balancedNoiseFuture = ::Assets::GetAssetFuturePtr<RenderCore::Techniques::DeferredShaderResource>(BALANCED_NOISE_TEXTURE);
+		auto compileRequest = Assets::MakeTextureCompilationRequest(Assets::TextureCompiler_BalancedNoise(256, 256), Format::R8_UNORM);
+		auto balancedNoiseFuture = ::Assets::GetAssetFuturePtr<RenderCore::Techniques::DeferredShaderResource>(compileRequest);
 
 		std::promise<DescSetAndCmdListId> promise;
 		auto future = promise.get_future();
