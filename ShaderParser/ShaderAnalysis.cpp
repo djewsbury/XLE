@@ -365,7 +365,7 @@ namespace ShaderSourceParser
 	ParameterBox FilterSelectors(
 		IteratorRange<const ParameterBox* const*> selectors,
 		const std::unordered_map<std::string, std::string>& manualRevelanceMap,
-		IteratorRange<const SelectorFilteringRules**> automaticFiltering)
+		IteratorRange<const SelectorFilteringRules*const*> automaticFiltering)
 	{
 		assert(!selectors.empty());
 		ParameterBox filteredBox = **selectors.begin();

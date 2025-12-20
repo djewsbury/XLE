@@ -63,16 +63,8 @@ namespace RenderCore { namespace Techniques { namespace Internal
 
 		static void SetFilteringForStage(GraphicsPipelineDescWithFilteringRules& rules, unsigned shaderStage, std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> filtering)
 		{
-			if (rules._pipelineDesc->_additionalSelectorFiltering[shaderStage]) {
-				if (filtering) {
-					rules._automaticFiltering[shaderStage] = std::make_shared<ShaderSourceParser::SelectorFilteringRules>(*filtering);
-					rules._automaticFiltering[shaderStage]->MergeIn(*rules._pipelineDesc->_additionalSelectorFiltering[shaderStage]);
-				} else {
-					rules._automaticFiltering[shaderStage] = rules._pipelineDesc->_additionalSelectorFiltering[shaderStage];
-				}
-			} else {
-				rules._automaticFiltering[shaderStage] = std::move(filtering);
-			}
+			assert(!rules._automaticFiltering[shaderStage]);
+			rules._automaticFiltering[shaderStage] = std::move(filtering);
 		}
 
 		static void InitializePromise(
@@ -907,7 +899,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 		UniqueShaderVariationSet::FilteredSelectorSet FilterSelectorsAlreadyLocked(
 			ShaderStage shaderStage,
 			IteratorRange<const ParameterBox*const*> selectors,
-			const ShaderSourceParser::SelectorFilteringRules* automaticFiltering,
+			IteratorRange<const ShaderSourceParser::SelectorFilteringRules*const*> automaticFiltering,
 			const ShaderSourceParser::ManualSelectorFiltering& manualFiltering,
 			const ShaderSourceParser::SelectorPreconfiguration* preconfiguration,
 			const Internal::ShaderVariant& shaderVariant)		// (ShaderVariant required for compiledShaderPatchCollection)
@@ -916,11 +908,15 @@ namespace RenderCore { namespace Techniques { namespace Internal
 				auto& res = std::get<ShaderCompilePatchResource>(shaderVariant);
 				auto patchExpansions = MakeIteratorRange(res._patchCollectionExpansions);
 
-				VLA(const ShaderSourceParser::SelectorFilteringRules*, autoFiltering, 1+patchExpansions.size());
-				VLA(unsigned, filteringRulesPulledIn, 1+patchExpansions.size());
+				VLA(const ShaderSourceParser::SelectorFilteringRules*, autoFiltering, automaticFiltering.size()+patchExpansions.size());
+				VLA(unsigned, filteringRulesPulledIn, automaticFiltering.size()+patchExpansions.size());
 				unsigned autoFilteringCount = 0;
-				if (automaticFiltering) autoFiltering[autoFilteringCount++] = automaticFiltering;
-				filteringRulesPulledIn[0] = ~0u;
+				for (auto filtering:automaticFiltering)
+					if (filtering) {
+						autoFiltering[autoFilteringCount] = filtering;
+						filteringRulesPulledIn[autoFilteringCount] = ~0u;
+						++autoFilteringCount;
+					}
 
 				// Figure out which filtering rules we need from the compiled patch collection, and include them
 				// This is important because the filtering rules for different shader stages might be vastly different
@@ -944,13 +940,7 @@ namespace RenderCore { namespace Techniques { namespace Internal
 					MakeIteratorRange(autoFiltering, &autoFiltering[autoFilteringCount]), 
 					preconfiguration);
 			} else {
-				assert(automaticFiltering);
-				const ShaderSourceParser::SelectorFilteringRules* autoFilteringArray[] { automaticFiltering };
-				return _selectorVariationsSet.FilterSelectors(
-					selectors,
-					manualFiltering,
-					MakeIteratorRange(autoFilteringArray),
-					preconfiguration);
+				return _selectorVariationsSet.FilterSelectors(selectors, manualFiltering, automaticFiltering, preconfiguration);
 			}
 		}
 

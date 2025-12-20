@@ -43,7 +43,7 @@ namespace RenderCore { namespace Techniques
 		const FilteredSelectorSet& FilterSelectors(
 			IteratorRange<const ParameterBox* const*> selectors,
 			const ShaderSourceParser::ManualSelectorFiltering& techniqueFiltering,
-			IteratorRange<const ShaderSourceParser::SelectorFilteringRules**> automaticFiltering,
+			IteratorRange<const ShaderSourceParser::SelectorFilteringRules*const*> automaticFiltering,
 			const ShaderSourceParser::SelectorPreconfiguration* preconfiguration);
 
 		UniqueShaderVariationSet();

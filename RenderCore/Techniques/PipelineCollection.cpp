@@ -42,9 +42,10 @@ namespace RenderCore { namespace Techniques
 						VLA(const ParameterBox*, selectorsList, selectorsCopy._selectors.size());
 						for (unsigned c=0; c<selectorsCopy._selectors.size(); ++c)
 							selectorsList[c] = &selectorsCopy._selectors[c];
+						ShaderSourceParser::SelectorFilteringRules* autoFiltering[] { automaticFiltering.get() };
 						ScopedLock(sharedPools->_lock);
 						auto filteredSelectors = sharedPools->FilterSelectorsAlreadyLocked(
-							ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), automaticFiltering.get(), 
+							ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), autoFiltering,
 							{}, nullptr, shaderCopy);
 						auto chainedFuture = sharedPools->CreateComputePipelineAlreadyLocked(shaderCopy, std::move(pipelineLayout), filteredSelectors);
 						::Assets::WhenAll(chainedFuture).CheckImmediately().ThenConstructToPromise(std::move(promise));
@@ -61,7 +62,7 @@ namespace RenderCore { namespace Techniques
 							selectorsList[c] = &selectorsCopy._selectors[c];
 						ScopedLock(sharedPools->_lock);
 						auto filteredSelectors = sharedPools->FilterSelectorsAlreadyLocked(
-							ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), nullptr,
+							ShaderStage::Compute, MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]), {},
 							{}, nullptr, shaderCopy);
 						auto chainedFuture = sharedPools->CreateComputePipelineAlreadyLocked(shaderCopy, std::move(pipelineLayout), filteredSelectors);
 						::Assets::WhenAll(chainedFuture).CheckImmediately().ThenConstructToPromise(std::move(promise));
@@ -122,14 +123,16 @@ namespace RenderCore { namespace Techniques
 				UniqueShaderVariationSet::FilteredSelectorSet filteredSelectors[dimof(GraphicsPipelineDesc::_shaders)];
 				auto* pipelineDesc = immediatePipelineDesc->_pipelineDesc.get();
 				for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-					if (!std::holds_alternative<std::monostate>(pipelineDesc->_shaders[c]))
+					if (!std::holds_alternative<std::monostate>(pipelineDesc->_shaders[c])) {
+						ShaderSourceParser::SelectorFilteringRules* autoFiltering[] { immediatePipelineDesc->_pipelineDesc->_additionalSelectorFiltering[c].get(), immediatePipelineDesc->_automaticFiltering[c].get() };
 						filteredSelectors[c] = _sharedPools->FilterSelectorsAlreadyLocked(
 							(ShaderStage)c,
 							selectors,
-							immediatePipelineDesc->_automaticFiltering[c].get(),
+							autoFiltering,
 							pipelineDesc->_manualSelectorFiltering,
 							immediatePipelineDesc->_preconfiguration.get(),
 							pipelineDesc->_shaders[c]);
+					}
 
 				auto chainFuture = _sharedPools->CreateGraphicsPipelineAlreadyLocked(
 					inputStates, immediatePipelineDesc,
@@ -162,14 +165,16 @@ namespace RenderCore { namespace Techniques
 
 						auto* pipelineDesc = pipelineDescWithFiltering->_pipelineDesc.get();
 						for (unsigned c=0; c<dimof(GraphicsPipelineDesc::_shaders); ++c)
-							if (!std::holds_alternative<std::monostate>(pipelineDesc->_shaders[c]))
+							if (!std::holds_alternative<std::monostate>(pipelineDesc->_shaders[c])) {
+								ShaderSourceParser::SelectorFilteringRules* autoFiltering[] { pipelineDescWithFiltering->_pipelineDesc->_additionalSelectorFiltering[c].get(), pipelineDescWithFiltering->_automaticFiltering[c].get() };
 								filteredSelectors[c] = sharedPools->FilterSelectorsAlreadyLocked(
 									(ShaderStage)c,
 									MakeIteratorRange(selectorsList, &selectorsList[selectorsCopy._selectors.size()]),
-									pipelineDescWithFiltering->_automaticFiltering[c].get(),
+									autoFiltering,
 									pipelineDesc->_manualSelectorFiltering,
 									pipelineDescWithFiltering->_preconfiguration.get(),
 									pipelineDesc->_shaders[c]);
+							}
 
 						auto chainFuture = sharedPools->CreateGraphicsPipelineAlreadyLocked(
 							VertexInputStates{inputAssembly, miniInputAssembly, topology}, pipelineDescWithFiltering,
