@@ -108,7 +108,8 @@ namespace RenderCore { namespace LightingEngine
 			unsigned firstFaceIndex);		// firstFaceIndex is the index into our table where we're going to write to
 
 		void Bind(Techniques::ParsingContext& parsingContext);
-		void UnbindAndBarrier(Techniques::ParsingContext& parsingContext, IteratorRange<const ShadowProbes::Probe*> updatedUniformState);
+		void Unbind(Techniques::ParsingContext& parsingContext, IteratorRange<const ShadowProbes::Probe*> updatedUniformState);
+		void BarrierToReadingLayout(Techniques::ParsingContext&);
 
 		IResourceView& GetDynamicProbeTable() const;
 		IResourceView& GetDynamicProbeUniforms() const;

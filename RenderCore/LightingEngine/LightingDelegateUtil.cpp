@@ -283,7 +283,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			float lightFarRadius = addendums._finiteChain ? addendums._finiteChain->GetCutoffRange() : 8.f;
 			Techniques::CameraDesc cameraDesc;
 			cameraDesc._cameraToWorld = MakeCameraToWorld(Normalize(lightForward), Float3{0,0,1}, lightPosition);
-			cameraDesc._verticalFieldOfView = std::min(gPI/2.0f, addendums._coneChain->GetConeAngle());
+			cameraDesc._verticalFieldOfView = std::min(gPI, 2.f * addendums._coneChain->GetConeAngle());
+			assert(lightNearRadius<lightFarRadius);
 			cameraDesc._nearClip = lightNearRadius; cameraDesc._farClip = lightFarRadius;
 			cameraDesc._projection = Techniques::CameraDesc::Projection::Perspective;
 			auto projDesc = Techniques::BuildProjectionDesc(cameraDesc, 1.f);
@@ -298,6 +299,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			Float4x4 cameraToProjection[6];
 			auto lightPosition = ExtractTranslation(localToWorld); float lightNearRadius = ExtractUniformScaleFast(AsFloat3x4(localToWorld));
 			float lightFarRadius = addendums._finiteChain ? addendums._finiteChain->GetCutoffRange() : 8.f;
+			assert(lightNearRadius<lightFarRadius);
 			for (unsigned c=0; c<6; ++c) {
 				auto projDesc = Techniques::BuildCubemapProjectionDesc(c, lightPosition, lightNearRadius, lightFarRadius);
 				worldToCamera[c] = InvertOrthonormalTransform(projDesc._cameraToWorld);
@@ -1209,7 +1211,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 		sequence.CreateStep_CallFunction(
 			[this, updatedProbesInDatabaseOrder=std::move(updatedProbesInDatabaseOrder)](SequenceIterator& iterator) {
-				this->_shadowProbes->UnbindAndBarrier(*iterator._parsingContext, updatedProbesInDatabaseOrder);
+				this->_shadowProbes->Unbind(*iterator._parsingContext, updatedProbesInDatabaseOrder);
 			});
 
 		_probeTableFaceUsed = nextProbeTableFaceIdx;
@@ -1218,6 +1220,11 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void DynamicShadowProbeScheduler::ClearPreparedShadows()
 	{
+	}
+
+	void DynamicShadowProbeScheduler::BarrierToReadingLayout(Techniques::ParsingContext& parsingContext)
+	{
+		_shadowProbes->BarrierToReadingLayout(parsingContext);
 	}
 
 	void DynamicShadowProbeScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx)

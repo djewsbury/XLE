@@ -19,7 +19,7 @@
 #include "../Techniques/Services.h"
 #include "../Metal/DeviceContext.h"
 #include "../Assets/PredefinedDescriptorSetLayout.h"
-#include "../Assets/ContinuationUtil.h"
+#include "../Assets/Continuation.h"
 #include "../IDevice.h"
 #include "../../Assets/Marker.h"
 #include <vector>
@@ -32,8 +32,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		IDescriptorSet* _descriptorSet;
-		virtual IDescriptorSet* GetDescriptorSet() const override { return _descriptorSet; }
-		virtual ~PreparedShadowResult() {}
+		IDescriptorSet* GetDescriptorSet() const override { return _descriptorSet; }
 	};
 
 	IPreparedShadowResult::~IPreparedShadowResult() {}

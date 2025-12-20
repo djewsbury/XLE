@@ -63,6 +63,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<IProbeRenderingInstance> BeginPrepare(IThreadContext& threadContext, unsigned maxProbeCount) override;
 		void EndPrepare(IThreadContext& threadContext) override;
 
+		void BarrierToReadingLayout(Techniques::ParsingContext&);
+
 		bool DoneInitialBackgroundPrepare() const { return _doneInitialBackgroundPrepare; }		// when this is false, the shadow probes image is probably still in an undefined layout
 
 		SemiStaticShadowProbeScheduler(
@@ -144,6 +146,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			SequenceIterator& iterator,
 			Sequence& sequence);
 		void ClearPreparedShadows();
+
+		void BarrierToReadingLayout(Techniques::ParsingContext&);
 
 		Metrics GetMetrics() const override;
 		std::shared_ptr<IResourceView> GetCubeMapSRV(unsigned activeLightIdx) override;

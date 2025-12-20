@@ -105,9 +105,10 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardLightingCaptures::ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
 	{
 		_lightScene->ConfigureParsingContext(parsingContext, _ssrOperator != nullptr);
-		if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
+		if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow()) {
 			// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
 			parsingContext.GetUniformDelegateManager()->BindFixedDescriptorSet(s_shadowTemplate, *dominantShadow->GetDescriptorSet());
+		}
 		assert(_forwardLightingSemiConstant);
 		parsingContext.GetUniformDelegateManager()->BindSemiConstantDescriptorSet(s_forwardLighting, _forwardLightingSemiConstant);
 	}
@@ -583,6 +584,8 @@ namespace RenderCore { namespace LightingEngine
 				captures->ConfigureParsingContext(*iterator._parsingContext);
 				if (captures->_lightScene->GetLightTiler())
 					captures->_lightScene->GetLightTiler()->BarrierToReadingLayout(*iterator._threadContext);
+				if (captures->_lightScene->_dynamicProbeScheduler)
+					captures->_lightScene->_dynamicProbeScheduler->BarrierToReadingLayout(*iterator._parsingContext);
 			});
 
 		// Draw main scene

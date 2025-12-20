@@ -41,8 +41,6 @@ Texture2D<float> GetNoiseTexture();
 #define SHADOW_FILTER_MODEL_POISSONDISC 1
 #define SHADOW_FILTER_MODEL_SMOOTH 2
 
-static const bool ShadowsPerspectiveProjection = false;
-
 cbuffer ShadowResolveParameters BIND_SHADOW_B1
 {
     float ShadowWorldSpaceResolveBias;
@@ -379,7 +377,7 @@ float CalculateFilterSize(
     ShadowResolveContext context,
     uint cascadeIndex, float2 shadowTexCoord,
     float4 miniProjection, float comparisonDistance, float searchSize, float2 filterPlane,
-    int2 randomizerValue, uint msaaSampleIndex)
+    int2 randomizerValue, uint msaaSampleIndex, bool perspectiveProjection)
 {
     float casterDistance = CalculateShadowCasterDistance(
         context,
@@ -389,7 +387,7 @@ float CalculateFilterSize(
     float projectionScale = miniProjection.x;	// (note -- projectionScale.y is ignored. We need to have uniform x/y scale to rotate the filter correctly)
 
     float filterSizeNorm;
-    if (!ShadowsPerspectiveProjection) {
+    if (!perspectiveProjection) {
 
             // For ReverseZ modes, we need to negate casterDistance for the NDCDepthDifferenceToWorldSpace_Ortho call to
             // make any sense. We've already reversed depth inside of CalculateShadowCasterDistance in order to get
@@ -415,10 +413,10 @@ float CalculateFilterSize(
 }
 
 float SampleDMShadows(	ShadowResolveContext context,
-                        uint cascadeIndex, float2 shadowTexCoord, float3 cascadeSpaceNormal,
+                        uint cascadeIndex, float2 shadowTexCoord, float3 cascadeSpaceNormal, bool cascadeSpaceNormalIsReliable,
                         float4 miniProjection, float maxBlurNorm,
                         float comparisonDistance,
-                        int2 randomizerValue, uint msaaSampleIndex,
+                        int2 randomizerValue, uint msaaSampleIndex, bool perspectiveProjection,
                         ShadowResolveConfig config)
 {
     float biasedDepth;
@@ -427,23 +425,29 @@ float SampleDMShadows(	ShadowResolveContext context,
         //	of depth ranges.
         //	With perspective projection, it is more expensive than biasing in NDC depth space.
         //	But with orthogonal shadows, it should be very similar
-    if (ShadowsPerspectiveProjection) {
+    if (perspectiveProjection) {
         float worldSpaceDepth = NDCDepthToWorldSpace_Perspective(comparisonDistance, AsMiniProjZW(miniProjection));
         biasedDepth = WorldSpaceDepthToNDC_Perspective(worldSpaceDepth - ShadowWorldSpaceResolveBias, AsMiniProjZW(miniProjection));
     } else {
         #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
             biasedDepth = comparisonDistance - WorldSpaceDepthDifferenceToNDC_Ortho(ShadowWorldSpaceResolveBias * cascadeSpaceNormal.z, AsMiniProjZW(miniProjection));
+        #else
+            biasedDepth = comparisonDistance;
         #endif
     }
 
     float2 filterPlane;
     const bool calculateFilterPlaneFromNormal = true;
     if (calculateFilterPlaneFromNormal) {
-        filterPlane = float2(-cascadeSpaceNormal.x / cascadeSpaceNormal.z, -cascadeSpaceNormal.y / cascadeSpaceNormal.z);
-        #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-            filterPlane *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[cascadeIndex].xy;
-        #endif
-        filterPlane *= 2.0f; // scale here by 2.0 to compensate for the viewport transform (ie, ndc [-1,1] -> [0, 1])
+        if (cascadeSpaceNormalIsReliable) {
+            filterPlane = float2(-cascadeSpaceNormal.x / cascadeSpaceNormal.z, -cascadeSpaceNormal.y / cascadeSpaceNormal.z);
+            #if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
+                filterPlane *= OrthoShadowCascadeScale[cascadeIndex].zz / OrthoShadowCascadeScale[cascadeIndex].xy;
+            #endif
+            filterPlane *= 2.0f; // scale here by 2.0 to compensate for the viewport transform (ie, ndc [-1,1] -> [0, 1])
+        } else {
+            filterPlane = 0.0.xx;
+        }
     } else {
         filterPlane = CalculateFilterPlane_ScreenSpaceDerivatives(comparisonDistance, shadowTexCoord);
     }
@@ -463,11 +467,11 @@ float SampleDMShadows(	ShadowResolveContext context,
         filterSize = CalculateFilterSize(
             context,
             cascadeIndex, shadowTexCoord, miniProjection, biasedDepth, 
-            searchSize, filterPlane, randomizerValue, msaaSampleIndex);
+            searchSize, filterPlane, randomizerValue, msaaSampleIndex, perspectiveProjection);
 
         // return (filterSize - MinBlurRadiusNorm) / (maxBlurNorm - MinBlurRadiusNorm);
 
-        // If the filter size is very small, let's do a cheaper single tap test (offten a pretty fair amount of samples end up here)
+        // If the filter size is very small, let's do a cheaper single tap test (often a pretty fair amount of samples end up here)
         [branch] if (filterSize <= 1/ShadowTextureSize)
             return TestShadow(context, shadowTexCoord, cascadeIndex, biasedDepth);
 
@@ -517,8 +521,10 @@ float ResolveShadows_Cascade(
 
     return SampleDMShadows(
         context,
-        cascade.cascadeIndex, texCoords, cascade.frustumSpaceNormal, cascade.miniProjection, cascade.maxBlurNorm, 
-        comparisonDistance, randomizerValue, msaaSampleIndex, config);
+        cascade.cascadeIndex, texCoords, cascade.frustumSpaceNormal, cascade.frustumSpaceNormalIsReliable,
+        cascade.miniProjection, cascade.maxBlurNorm, 
+        comparisonDistance, randomizerValue, msaaSampleIndex, cascade.perspectiveProjection,
+        config);
 }
 
 float CubeMapComparisonDistance(float3 cubeMapSampleCoord, float4 miniProjection)
