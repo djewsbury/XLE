@@ -63,6 +63,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<IShadowPreparer> _preparer;
 		IPositionalLightSource* _positionalChain = nullptr;
 		IFiniteLightSource* _finiteChain = nullptr;
+		IConeSource* _coneChain = nullptr;
 
 		void AttachDriver(std::shared_ptr<ILightBase> driver) override { _driver = std::move(driver); }
 	};
@@ -111,6 +112,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::tie(_projections[index], _addendums[index]._preparer) = _preparers->_preparers[_preparerId].CreateShadowProjection();
 		_addendums[index]._positionalChain = (IPositionalLightSource*)_qi(index, TypeHashCode<IPositionalLightSource>);
 		_addendums[index]._finiteChain = (IFiniteLightSource*)_qi(index, TypeHashCode<IFiniteLightSource>);
+		_addendums[index]._coneChain = (IConeSource*)_qi(index, TypeHashCode<IConeSource>);
 		_activeProjections.Allocate(index);
 	}
 	void PriorityShadowProjectionScheduler::SceneSet::DeregisterLight(unsigned index)
@@ -125,6 +127,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		for (auto& l:_addendums) {
 			l._positionalChain = (IPositionalLightSource*)_qi(&l-_addendums.data(), TypeHashCode<IPositionalLightSource>);
 			l._finiteChain = (IFiniteLightSource*)_qi(&l-_addendums.data(), TypeHashCode<IFiniteLightSource>);
+			l._coneChain = (IConeSource*)_qi(&l-_addendums.data(), TypeHashCode<IConeSource>);
 		}
 	}
 
@@ -269,9 +272,25 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 			assert(orthoShadowProjections);
 			volumeTester = ((Internal::IShadowProjectionDriver*)addendums._driver->QueryInterface(TypeHashCode<Internal::IShadowProjectionDriver>))->UpdateProjections(
 				*iterator._parsingContext, localToWorld, *orthoShadowProjections);
-		} else {
+		} else if (addendums._coneChain) {
 			// we'll attempt to attach the projections to the list
-			// todo -- only implemented for specific case of sphere light & cubemap shadows
+			// only implemented for specific cases of sphere light & cubemap shadows, or cone light
+			assert(shadowProjectionMode == ShadowProjectionMode::Arbitrary);
+			auto* shadowProjections = (IArbitraryShadowProjections*)proj.QueryInterface(TypeHashCode<IArbitraryShadowProjections>);
+			assert(shadowProjections);
+			auto lightPosition = ExtractTranslation(localToWorld); float lightNearRadius = ExtractUniformScaleFast(AsFloat3x4(localToWorld));
+			auto lightForward = ExtractForward(localToWorld);
+			float lightFarRadius = addendums._finiteChain ? addendums._finiteChain->GetCutoffRange() : 8.f;
+			Techniques::CameraDesc cameraDesc;
+			cameraDesc._cameraToWorld = MakeCameraToWorld(Normalize(lightForward), Float3{0,0,1}, lightPosition);
+			cameraDesc._verticalFieldOfView = std::min(gPI/2.0f, addendums._coneChain->GetConeAngle());
+			cameraDesc._nearClip = lightNearRadius; cameraDesc._farClip = lightFarRadius;
+			cameraDesc._projection = Techniques::CameraDesc::Projection::Perspective;
+			auto projDesc = Techniques::BuildProjectionDesc(cameraDesc, 1.f);
+			auto worldToCamera = InvertOrthonormalTransform(projDesc._cameraToWorld);
+			auto cameraToProjection = projDesc._cameraToProjection;
+			shadowProjections->SetArbitrarySubProjections(MakeIteratorRange(&worldToCamera, &worldToCamera+1), MakeIteratorRange(&cameraToProjection, &cameraToProjection+1));
+		} else {
 			assert(shadowProjectionMode == ShadowProjectionMode::ArbitraryCubeMap);
 			auto* shadowProjections = (IArbitraryShadowProjections*)proj.QueryInterface(TypeHashCode<IArbitraryShadowProjections>);
 			assert(shadowProjections);
