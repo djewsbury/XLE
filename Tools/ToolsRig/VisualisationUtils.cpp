@@ -416,15 +416,15 @@ namespace ToolsRig
 								preparedScene->_scene = std::move(scene);
 
 								auto* lightScene = RenderCore::LightingEngine::TryGetLightScene(*preparedScene->_compiledLightingTechnique);
-								assert(lightScene);
-								::Assets::DependencyValidationMarker depVals[] { RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique), lightScene->GetDependencyValidation() };
+								::Assets::DependencyValidationMarker depVals[] { RenderCore::LightingEngine::GetDependencyValidation(*preparedScene->_compiledLightingTechnique), lightScene?lightScene->GetDependencyValidation(): ::Assets::DependencyValidation{} };
 								preparedScene->_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 
-								preparedScene->_envSettings->BindScene(*lightScene, loadingContext);
-
-								#if defined(_DEBUG)
-									preparedScene->_debugScreens.emplace_back("shadow-probes", PlatformRig::Overlays::CreateShadowProbesDisplay(std::move(overlayAccelerators), preparedScene->_compiledLightingTechnique));
-								#endif
+								if (lightScene) {
+									preparedScene->_envSettings->BindScene(*lightScene, loadingContext);
+									#if defined(_DEBUG)
+										preparedScene->_debugScreens.emplace_back("shadow-probes", PlatformRig::Overlays::CreateShadowProbesDisplay(std::move(overlayAccelerators), preparedScene->_compiledLightingTechnique));
+									#endif
+								}
 
 								auto threadContext = RenderCore::Techniques::GetThreadContext();
 								std::future<RenderCore::Techniques::PreparedResourcesVisibility> pendingResources;

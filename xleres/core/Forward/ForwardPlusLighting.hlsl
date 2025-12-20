@@ -122,10 +122,12 @@ float3 CalculateIllumination(
 						shadowing = ResolveShadows_Cascade(shadowResolveContext, cascade, screenDest.pixelCoords, screenDest.sampleIndex, ShadowResolveConfig_Default());
 				#endif
 
-				#if (DOMINANT_LIGHT_SHAPE & 0x7) == 0
+				#if (DOMINANT_LIGHT_SHAPE & 0x7) == LIGHT_SHAPE_DIRECTIONAL
 					result += shadowing * DirectionalLightResolve(sample, sampleExtra, DominantLight, worldPosition, directionToEye, screenDest);
-				#elif (DOMINANT_LIGHT_SHAPE & 0x7) == 1
+				#elif (DOMINANT_LIGHT_SHAPE & 0x7) == LIGHT_SHAPE_SPHERE
 					result += shadowing * SphereLightResolve(sample, sampleExtra, DominantLight, worldPosition, directionToEye, screenDest);
+				#elif (DOMINANT_LIGHT_SHAPE & 0x7) == LIGHT_SHAPE_CONE
+					result += shadowing * ConeLightResolve(sample, sampleExtra, DominantLight, worldPosition, directionToEye, screenDest);
 				#endif
 			}
 		#endif
@@ -167,10 +169,12 @@ float3 CalculateIllumination(
 								shadowing *= SampleDynamicCubeShadowDatabase(l.DynamicCubeDatabaseLightId-1, worldPosition-l.Position, screenDest);
 						#endif
 
-						if (l.Shape == 0) {
+						[branch] if (l.Shape == LIGHT_SHAPE_DIRECTIONAL) {
 							result += shadowing * DirectionalLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
-						} else if (l.Shape == 1) {
-							result += shadowing * SphereLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
+						} else if ((l.Shape|2) == LIGHT_SHAPE_CONE) {
+							float light = SphereLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
+							[branch] if (l.Shape == LIGHT_SHAPE_CONE) light *= ConeLightShapeMultipler(l, worldPosition, screenDest);
+							result += shadowing * light;
 						}
 						#if defined(_DEBUG)
 							else result += float3(1,0,0);
@@ -182,8 +186,8 @@ float3 CalculateIllumination(
 		#endif
 	}
 
-	result += LightResolve_Ambient(sample, directionToEye, sampleExtra.screenSpaceOcclusion, screenDest);
-	result += sample.emissive;
+	// result += LightResolve_Ambient(sample, directionToEye, sampleExtra.screenSpaceOcclusion, screenDest);
+	// result += sample.emissive;
 
 	return result;
 }

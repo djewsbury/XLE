@@ -25,6 +25,10 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				if (_flags & StandardPositionLightFlags::SupportFiniteRange)
 					return (IFiniteLightSource*)&_baseData.GetObject(lightIdx);
 				break;
+			case TypeHashCode<IConeSource>:
+				if (_flags & StandardPositionLightFlags::SupportConeSource)
+					return (IConeSource*)&_baseData.GetObject(lightIdx);
+				break;
 			case TypeHashCode<StandardPositionalLight>: return (StandardPositionalLight*)&_baseData.GetObject(lightIdx);
 			}
 			return nullptr;
@@ -282,6 +286,7 @@ namespace RenderCore { namespace LightingEngine
 		if (XlEqString(input, "Tube")) return LightSourceShape::Tube;
 		if (XlEqString(input, "Rectangle")) return LightSourceShape::Rectangle;
 		if (XlEqString(input, "Disc")) return LightSourceShape::Disc;
+		if (XlEqString(input, "Cone")) return LightSourceShape::Cone;
 		return {};
 	}
 	const char* AsString(LightSourceShape shape)
@@ -292,6 +297,7 @@ namespace RenderCore { namespace LightingEngine
 		case LightSourceShape::Tube: return "Tube";
 		case LightSourceShape::Rectangle: return "Rectangle";
 		case LightSourceShape::Disc: return "Disc";
+		case LightSourceShape::Cone: return "Cone";
 		default:
 			return nullptr;
 		}
@@ -316,6 +322,7 @@ namespace RenderCore { namespace LightingEngine
 	IPositionalLightSource::~IPositionalLightSource() {}
 	IUniformEmittance::~IUniformEmittance() {}
 	IFiniteLightSource::~IFiniteLightSource() {}
+	IConeSource::~IConeSource() {}
 	IDepthTextureResolve::~IDepthTextureResolve() {}
 	IArbitraryShadowProjections::~IArbitraryShadowProjections() {}
 	IOrthoShadowProjections::~IOrthoShadowProjections() {}

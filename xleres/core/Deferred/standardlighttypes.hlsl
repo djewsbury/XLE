@@ -21,12 +21,14 @@ float3 ResolveLight(
     float3 directionToEye,
     LightScreenDest screenDest)
 {
-    #if LIGHT_SHAPE == 1
+    #if LIGHT_SHAPE == LIGHT_SHAPE_SPHERE
         return SphereLightResolve(sample, sampleExtra, light, worldPosition, directionToEye, screenDest);
-    #elif LIGHT_SHAPE == 2
+    #elif LIGHT_SHAPE == LIGHT_SHAPE_TUBE
         return TubeLightResolve(sample, sampleExtra, light, worldPosition, directionToEye, screenDest);
-    #elif LIGHT_SHAPE == 3
+    #elif LIGHT_SHAPE == LIGHT_SHAPE_RECTANGLE
         return RectangleLightResolve(sample, sampleExtra, light, worldPosition, directionToEye, screenDest);
+    #elif LIGHT_SHAPE == LIGHT_SHAPE_CONE
+        return ConeLightResolve(sample, sampleExtra, light, worldPosition, directionToEye, screenDest);
     #else
         return DirectionalLightResolve(sample, sampleExtra, light, worldPosition, directionToEye, screenDest);
     #endif

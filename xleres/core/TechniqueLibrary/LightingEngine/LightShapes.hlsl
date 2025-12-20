@@ -304,4 +304,28 @@ float3 RectangleLightResolve(
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+float ConeLightShapeMultipler(LightDesc light, float3 worldPosition, LightScreenDest screenDest)
+{
+    // Light assumed to be pointing down +Y ("forward" direction in our typical object-to-world system)
+    float3 A = worldPosition - light.Position;
+    float cosTheta = dot(light.OrientationY, A) * rsqrt(dot(A, A));
+    float x = (cosTheta-light.CosConeAngle) / (1-light.CosConeAngle);
+    return pow(saturate(x), 0.125);       // simpel falloff, not based on anything physical
+}
+
+float3 ConeLightResolve(
+    GBufferValues sample,
+    LightSampleExtra sampleExtra,
+    LightDesc light,
+    float3 worldPosition,
+    float3 directionToEye,
+    LightScreenDest screenDest)
+{
+    // Cone lights treated as just a sphere light, with a cone shape shroud blocking the light
+    // A real torch should use lens and reflectors to get a little closer to a directional light, this
+    // emulates something closer to a clamp with a shroud
+    return SphereLightResolve(sample, sampleExtra, light, worldPosition, directionToEye, screenDest)
+        * ConeLightShapeMultipler(light, worldPosition, screenDest);
+}
+
 #endif

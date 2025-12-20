@@ -1438,7 +1438,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 				light._brightness, light._radii[0],
 				ExtractRight(light._orientation), light._radii[1],
 				ExtractForward(light._orientation), shapeCode,
-				ExtractUp(light._orientation), 0,
+				ExtractUp(light._orientation), light._coneCosTheta,
 				shadowProbes._staticProbeDatabaseEntry+1, shadowProbes._dynamicCubeDatabaseEntry+1,			// add 1 for shader indexing (note that ~0u will become 0, meaning no probe database entry)
 				{0,0}
 			};

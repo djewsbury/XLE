@@ -68,6 +68,14 @@ namespace RenderCore { namespace LightingEngine
 		virtual ~IFiniteLightSource();
 	};
 
+	class IConeSource
+	{
+	public:
+		virtual void SetConeAngle(float radians) = 0;
+		virtual float GetConeAngle() const = 0;
+		virtual ~IConeSource();
+	};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class IDepthTextureResolve

@@ -705,12 +705,14 @@ namespace SceneEngine
 
     constexpr auto LocalToWorld = "LocalToWorld"_h;
     constexpr auto Position = "Position"_h;
+    constexpr auto Forward = "Forward"_h;
     constexpr auto Radius = "Radius"_h;
     constexpr auto Brightness = "Brightness"_h;
     constexpr auto CutoffBrightness = "CutoffBrightness"_h;
     constexpr auto CutoffRange = "CutoffRange"_h;
     constexpr auto DiffuseWideningMin = "DiffuseWideningMin"_h;
     constexpr auto DiffuseWideningMax = "DiffuseWideningMax"_h;
+    constexpr auto ConeAngle = "ConeAngle"_h;
     constexpr auto EquirectangularSource = "EquirectangularSource"_h;
 
     void InitializeLight(
@@ -726,25 +728,27 @@ namespace SceneEngine
                 positional->SetLocalToWorld(AsFloat4x4(transformValue.value()));
             } else {
                 auto positionValue = parameters.GetParameter<Float3>(Position);
+                auto forwardValue = parameters.GetParameter<Float3>(Forward);
                 auto radiusValue = parameters.GetParameter<Float3>(Radius);
                 
-                if (positionValue || radiusValue) {
-                    ScaleTranslation st;
+                if (positionValue || radiusValue || forwardValue) {
+                    ScaleRotationTranslationM srt{Float3{1,1,1}, Identity<Float3x3>(), Float3{0,0,0}};
                     if (positionValue)
-                        st._translation = positionValue.value();
+                        srt._translation = *positionValue;
+                    if (forwardValue)
+                        srt._rotation = Truncate3x3(MakeObjectToWorld(Normalize(*forwardValue), Float3{0,0,1}, Float3{0,0,0}));
                     if (radiusValue)
-                        st._scale = radiusValue.value();
-                    st._translation += offsetLocalToWorld;
-                    positional->SetLocalToWorld(AsFloat4x4(st));
+                        srt._scale = *radiusValue;
+                    srt._translation += offsetLocalToWorld;
+                    positional->SetLocalToWorld(AsFloat4x4(srt));
                 }
             }
         }
 
         auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
         if (uniformEmittance) {
-            auto brightness = parameters.GetParameter<Float3>(Brightness);
-            if (brightness)
-                uniformEmittance->SetBrightness(brightness.value());
+            if (auto brightness = parameters.GetParameter<Float3>(Brightness))
+                uniformEmittance->SetBrightness(*brightness);
 
             auto wideningMin = parameters.GetParameter<float>(DiffuseWideningMin);
             auto wideningMax = parameters.GetParameter<float>(DiffuseWideningMax);
@@ -754,12 +758,16 @@ namespace SceneEngine
 
         auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
         if (finite) {
-            auto cutoffBrightness = parameters.GetParameter<float>(CutoffBrightness);
-            if (cutoffBrightness)
-                finite->SetCutoffBrightness(cutoffBrightness.value());
-            auto cutoffRange = parameters.GetParameter<float>(CutoffRange);
-            if (cutoffRange)
-                finite->SetCutoffRange(cutoffRange.value());
+            if (auto cutoffBrightness = parameters.GetParameter<float>(CutoffBrightness))
+                finite->SetCutoffBrightness(*cutoffBrightness);
+            if (auto cutoffRange = parameters.GetParameter<float>(CutoffRange))
+                finite->SetCutoffRange(*cutoffRange);
+        }
+
+        auto* cone = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IConeSource>(sourceId);
+        if (cone) {
+             if (auto coneAngle = parameters.GetParameter<float>(ConeAngle))
+                cone->SetConeAngle(*coneAngle);
         }
 
         auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(sourceId);
@@ -801,6 +809,16 @@ namespace SceneEngine
                     Float4x4 localToWorld = positional->GetLocalToWorld();
                     SetTranslation(localToWorld, position.value());
                     positional->SetLocalToWorld(localToWorld);
+                    return true;
+                }
+            }
+            break;
+        case Forward:
+            if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
+                if (auto forward = ConvertOrCast<Float3>(data, type)) {
+                    ScaleRotationTranslationM srt{positional->GetLocalToWorld()};
+                    srt._rotation = Truncate3x3(MakeObjectToWorld(Normalize(*forward), Float3{0,0,1}, Float3{0,0,0}));
+                    positional->SetLocalToWorld(AsFloat4x4(srt));
                     return true;
                 }
             }
@@ -851,6 +869,14 @@ namespace SceneEngine
             if (auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId)) {
                 if (auto cutoffRange = ConvertOrCast<float>(data, type)) {
                     finite->SetCutoffRange(cutoffRange.value());
+                    return true;
+                }
+            }
+            break;
+         case ConeAngle:
+            if (auto* cone = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IConeSource>(sourceId)) {
+                if (auto angle = ConvertOrCast<float>(data, type)) {
+                    cone->SetConeAngle(angle.value());
                     return true;
                 }
             }

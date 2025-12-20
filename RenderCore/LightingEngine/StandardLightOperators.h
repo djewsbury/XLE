@@ -10,7 +10,9 @@
 
 namespace RenderCore { namespace LightingEngine
 {
-	enum class LightSourceShape { Directional, Sphere, Tube, Rectangle, Disc };
+	// Note the ordering of LightSourceShape must match LightDesc.hlsl
+	// Also there's a requirement that (Sphere|2) must equal Cone
+	enum class LightSourceShape { Directional, Sphere, Tube, Cone, Rectangle, Disc };
 	enum class DiffuseModel { Lambert, Disney };
 
 	struct PositionalLightOperatorDesc

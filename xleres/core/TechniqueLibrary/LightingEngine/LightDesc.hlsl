@@ -37,9 +37,15 @@ struct LightDesc
 	float3	Brightness; 	float	SourceRadiusX;
 	float3	OrientationX; 	float	SourceRadiusY;
 	float3	OrientationY; 	uint	Shape;
-	float3	OrientationZ; 	uint 	Dummy;
+	float3	OrientationZ; 	float 	CosConeAngle;
 	uint StaticDatabaseLightId; uint DynamicCubeDatabaseLightId; uint2 	Dummy2;
 };
+
+#define LIGHT_SHAPE_DIRECTIONAL		0
+#define LIGHT_SHAPE_SPHERE			1			// (LIGHT_SHAPE_SPHERE|2) must equal LIGHT_SHAPE_CONE
+#define LIGHT_SHAPE_TUBE			2
+#define LIGHT_SHAPE_CONE			3
+#define LIGHT_SHAPE_RECTANGLE		4
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 	//   structures used by resolvers...

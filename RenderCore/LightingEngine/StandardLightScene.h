@@ -102,7 +102,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	struct StandardPositionLightFlags
 	{
-		enum Enum { SupportFiniteRange = 1<<0 };
+		enum Enum { SupportFiniteRange = 1u<<0u, SupportConeSource = 1u<<1u };
 		using BitField = unsigned;
 	};
 
@@ -151,7 +151,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::vector<std::pair<LightOperatorId, StandardPositionLightFlags::BitField>> _associatedFlags;
 	};
 
-	class StandardPositionalLight : public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource
+	class StandardPositionalLight : public IPositionalLightSource, public IUniformEmittance, public IFiniteLightSource, public IConeSource
 	{
 	public:
 		Float3x3    _orientation;
@@ -163,6 +163,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		Float3      _brightness;
 		float       _diffuseWideningMin;
 		float       _diffuseWideningMax;
+		float		_coneCosTheta;
 
  		void SetLocalToWorld(const Float4x4& localToWorld) override
 		{
@@ -210,6 +211,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		{
 			return Float2 { _diffuseWideningMin, _diffuseWideningMax };
 		}
+
+		void SetConeAngle(float radians) override { _coneCosTheta = std::cos(radians); }
+		float GetConeAngle() const override { return std::acos(_coneCosTheta); }
 	
 		StandardPositionalLight()
 		{
@@ -221,6 +225,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 			_diffuseWideningMin = 0.5f;
 			_diffuseWideningMax = 2.5f;
+			_coneCosTheta = 0.f;
 		}
 	};
 

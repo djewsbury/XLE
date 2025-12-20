@@ -43,9 +43,10 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardPlusLightScene::FinalizeConfiguration()
 	{
 		// ensure FiniteRange flag is set for tilable lights
-		for (auto& op:_lightOperatorsMapping._operatorInfos)
-			if (op._tileable)
-				AssociateFlag(&op-_lightOperatorsMapping._operatorInfos.data(), Internal::StandardPositionLightFlags::SupportFiniteRange);
+		for (auto& op:_lightOperatorsMapping._operatorInfos) {
+			if (op._tileable) AssociateFlag(&op-_lightOperatorsMapping._operatorInfos.data(), Internal::StandardPositionLightFlags::SupportFiniteRange);
+			if (op._uniformShapeCode == 3) AssociateFlag(&op-_lightOperatorsMapping._operatorInfos.data(), Internal::StandardPositionLightFlags::SupportConeSource);
+		}
 
 		// construct uniform buffers, etc
 		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
