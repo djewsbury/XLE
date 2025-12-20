@@ -13,7 +13,7 @@ namespace XLEMath
 		inline float CalculateHaltonNumber(unsigned index)
 	{
 		// See https://pbr-book.org/3ed-2018/Sampling_and_Reconstruction/The_Halton_Sampler
-		// AMD's capsaicin implementation does not seem perfect. Instead, let's take some cures from the pbr-book
+		// AMD's capsaicin implementation does not seem perfect. Instead, let's take some cues from the pbr-book
 		// Note not bothering with the reverse bit trick for base 2
 		float reciprocalBaseN = 1.0f, result = 0.0f;
 		float reciprocalBase = 1.f / float(Base);

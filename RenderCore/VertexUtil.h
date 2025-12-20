@@ -8,7 +8,6 @@
 #include "../../Foreign/half-1.9.2/include/half.hpp"
 #include "../Math/Vector.h"
 #include "../Utility/IteratorUtils.h"
-#include <utility>
 #include <vector>
 #include <assert.h>
 

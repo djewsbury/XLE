@@ -18,6 +18,7 @@
 #include "../../Utility/Streams/SerializationUtils.h"
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/StringUtils.h"
+#include "../../Math/XLEMath.h"
 #include "../../Core/Exceptions.h"
 
 #include "thousandeyes/futures/then.h"
@@ -192,66 +193,159 @@ namespace RenderCore { namespace Assets
 		size_t ddsHeaderOffset = 0;
 		auto destinationBlob = PrepareDDSBlob(dstDesc, ddsHeaderOffset);
 
-		if (input._srcDesc._format != dstDesc._format) {
-			if (input._srcTexture.format == CMP_FORMAT_Unknown)
-				Throw(std::runtime_error(Concatenate("Cannot initialize src texture for format conversion, because source format is not supported: ", AsString(input._srcDesc._format))));
-
-			CMP_CompressOptions options = {0};
-			options.dwSize       = sizeof(options);
-			options.fquality     = 0.05f;
-			// Compressonator seems to have an issue when dwnumThreads is set to 1 (other than running slow). It appears to spin up threads it can never close down
-			// let's just set it to "auto" to allow it to adapt to the processor (even if it squeezes our thread pool)
-			options.dwnumThreads = 0;
-			auto comprDstFormat = AsCompressonatorFormat(dstFmt);
-			if (comprDstFormat == CMP_FORMAT_Unknown)
-				Throw(std::runtime_error(Concatenate("Cannot write to the request texture pixel format because it is not supported by the compression library: ", AsString(dstFmt))));
-
-			// simple hack because we can't enter Compressonator while it's working
-			static Threading::Mutex s_compressonatorLock;
-			std::unique_lock l(s_compressonatorLock, std::defer_lock);
-			while (!l.try_lock())
-				YieldToPoolFor(std::chrono::milliseconds(10));
-
-			auto mipCount = dstDesc._mipCount;
-			auto arrayLayerCount = ActualArrayLayerCount(dstDesc);
-			for (unsigned a=0; a<arrayLayerCount; ++a)
-				for (unsigned m=0; m<mipCount; ++m) {
-					auto dstOffset = GetSubResourceOffset(dstDesc, m, a);
-					auto dstMipDesc = CalculateMipMapDesc(dstDesc, m);
-					auto srcMipDesc = CalculateMipMapDesc(input._srcDesc, m);
-
-					CMP_Texture destTexture = {0};
-					destTexture.dwSize     = sizeof(destTexture);
-					destTexture.dwWidth    = std::max(1u, (unsigned)srcMipDesc._width);
-					destTexture.dwHeight   = std::max(1u, (unsigned)srcMipDesc._height);
-					destTexture.dwPitch    = 0;
-					destTexture.format     = comprDstFormat;
-					destTexture.dwDataSize = (CMP_DWORD)dstOffset._size;
-					auto calcSize = CMP_CalculateBufferSize(&destTexture);
-					assert(destTexture.dwDataSize == calcSize);
-					destTexture.pData = (CMP_BYTE*)PtrAdd(destinationBlob->data(), ddsHeaderOffset + dstOffset._offset);
-					assert(PtrAdd(destTexture.pData, destTexture.dwDataSize) <= AsPointer(destinationBlob->end()));
-
-					auto srcOffset = GetSubResourceOffset(input._srcDesc, m, a);
-					auto srcTexture = input._srcTexture;
-					srcTexture.dwWidth = destTexture.dwWidth;
-					srcTexture.dwHeight = destTexture.dwHeight;
-					srcTexture.dwDataSize = (CMP_DWORD)srcOffset._size;
-					srcTexture.pData = PtrAdd(srcTexture.pData, srcOffset._offset);
-
-					CMP_ERROR cmp_status;
-					cmp_status = CMP_ConvertTexture(&srcTexture, &destTexture, &options, nullptr);
-					if (cmp_status != CMP_OK)
-						Throw(std::runtime_error("Compression library failed while processing texture compiler file"));
-				}
-
-			l.unlock();
-		} else {
-			// copy directly into the output dds
+		if (input._srcDesc._format == dstDesc._format) {
+			// no format conversion -- copy directly into the output dds
 			if (destinationBlob->size() != (ddsHeaderOffset + input._srcTexture.dwDataSize))
 				Throw(std::runtime_error("Texture conversion failed because of size mismatch"));
 			std::memcpy(PtrAdd(destinationBlob->data(), ddsHeaderOffset), input._srcTexture.pData, input._srcTexture.dwDataSize);
+			return destinationBlob;
 		}
+
+		// Compressonator doesn't like doing simple conversions (float -> unorm, etc). It'll return CMP_OK indicating success,
+		// but will have written nothing to the output. It's a bit frustrating, because there's no indications of what conversions
+		// it's going to ignore
+		if (GetCompressionType(input._srcDesc._format) == FormatCompressionType::None && GetCompressionType(dstDesc._format) == FormatCompressionType::None) {
+			if (GetComponentType(input._srcDesc._format) == FormatComponentType::Float && (GetComponentType(dstDesc._format) == FormatComponentType::UNorm || GetComponentType(dstDesc._format) == FormatComponentType::SNorm || GetComponentType(dstDesc._format) == FormatComponentType::UInt || GetComponentType(dstDesc._format) == FormatComponentType::SInt)) {
+
+				// simple but common conversion -- Float to S/UNorm or S/UInt format
+				unsigned sourceComponentCount = GetComponentCount(GetComponents(input._srcDesc._format));
+				unsigned dstComponentCount = GetComponentCount(GetComponents(dstDesc._format));
+				auto dstComponentType = GetComponentType(dstDesc._format);
+				auto dstComponentPrecision = GetComponentPrecision(dstDesc._format);
+				auto srcStride = BitsPerPixel(input._srcDesc._format)/8;
+				auto dstStride = BitsPerPixel(dstDesc._format)/8;
+				void* dstStart = PtrAdd(destinationBlob->data(), ddsHeaderOffset);
+				unsigned pixelCount = dstDesc._width*dstDesc._height;
+
+				unsigned component=0;
+				for (; component<std::min(sourceComponentCount, dstComponentCount); ++component) {
+
+					// Note UNorm/SNorm conversion rules
+					// eg: (https://docs.microsoft.com/en-us/windows/win32/direct3d10/d3d10-graphics-programming-guide-resources-data-conversion)
+					// See also VertexUtil.h
+
+					auto* src = (float*)PtrAdd(input._srcTexture.pData, sizeof(float)*component);
+					if (dstComponentType == FormatComponentType::UNorm && dstComponentPrecision == 8) {				// UNorm8
+						auto* dst = (uint8_t*)PtrAdd(dstStart, sizeof(uint8_t)*component);
+						for (unsigned c=0; c<pixelCount; ++c, src=PtrAdd(src, srcStride), dst=PtrAdd(dst, dstStride))
+							*dst = (uint8_t)Clamp<int>(0xff * *src, 0, 0xff);
+					} else if (dstComponentType == FormatComponentType::SNorm && dstComponentPrecision == 8) {		// SNorm8
+						auto* dst = (int8_t*)PtrAdd(dstStart, sizeof(int8_t)*component);
+						for (unsigned c=0; c<pixelCount; ++c, src=PtrAdd(src, srcStride), dst=PtrAdd(dst, dstStride))
+							*dst = (int8_t)Clamp<int>(0x7f * *src, -0x7f, 0x7f);
+
+					} else if (dstComponentType == FormatComponentType::UNorm && dstComponentPrecision == 16) {		// UNorm16
+						auto* dst = (uint16_t*)PtrAdd(dstStart, sizeof(uint16_t)*component);
+						for (unsigned c=0; c<pixelCount; ++c, src=PtrAdd(src, srcStride), dst=PtrAdd(dst, dstStride))
+							*dst = (uint16_t)Clamp<int>(0xffff * *src, 0, 0xffff);
+					} else if (dstComponentType == FormatComponentType::SNorm && dstComponentPrecision == 16) {		// SNorm16
+						auto* dst = (int16_t*)PtrAdd(dstStart, sizeof(int16_t)*component);
+						for (unsigned c=0; c<pixelCount; ++c, src=PtrAdd(src, srcStride), dst=PtrAdd(dst, dstStride))
+							*dst = (int16_t)Clamp<int>(0x7fff * *src, -0x7fff, 0x7fff);
+
+					} else if (dstComponentType == FormatComponentType::UInt && dstComponentPrecision == 8) {		// UInt8
+						auto* dst = (uint8_t*)PtrAdd(dstStart, sizeof(uint8_t)*component);
+						for (unsigned c=0; c<pixelCount; ++c, src=PtrAdd(src, srcStride), dst=PtrAdd(dst, dstStride))
+							*dst = (uint8_t)Clamp<int>(*src, 0, 0xff);
+					} else if (dstComponentType == FormatComponentType::UInt && dstComponentPrecision == 8) {		// SInt8
+						auto* dst = (int8_t*)PtrAdd(dstStart, sizeof(int8_t)*component);
+						for (unsigned c=0; c<pixelCount; ++c, src=PtrAdd(src, srcStride), dst=PtrAdd(dst, dstStride))
+							*dst = (int8_t)Clamp<int>(*src, -0x80, 0x7f);
+
+					} else if (dstComponentType == FormatComponentType::UInt && dstComponentPrecision == 16) {		// UInt16
+						auto* dst = (uint16_t*)PtrAdd(dstStart, sizeof(uint16_t)*component);
+						for (unsigned c=0; c<pixelCount; ++c, src=PtrAdd(src, srcStride), dst=PtrAdd(dst, dstStride))
+							*dst = (uint16_t)Clamp<int>(*src, 0, 0xffff);
+					} else if (dstComponentType == FormatComponentType::UInt && dstComponentPrecision == 16) {		// SInt16
+						auto* dst = (int16_t*)PtrAdd(dstStart, sizeof(int16_t)*component);
+						for (unsigned c=0; c<pixelCount; ++c, src=PtrAdd(src, srcStride), dst=PtrAdd(dst, dstStride))
+							*dst = (int16_t)Clamp<int>(*src, -0x8000, 0x7fff);
+					} else
+						assert(0);
+				}
+
+				for (; component<dstComponentCount; ++component) {
+					if ((dstComponentType == FormatComponentType::UNorm||dstComponentType == FormatComponentType::UInt) && dstComponentPrecision == 8) {				// UNorm8
+						auto* dst = (uint8_t*)PtrAdd(dstStart, sizeof(uint8_t)*component);
+						uint8_t fill = (component == 3)?0xff:0x0;
+						for (unsigned c=0; c<pixelCount; ++c,  dst=PtrAdd(dst, dstStride)) *dst = fill;
+					} else if ((dstComponentType == FormatComponentType::SNorm || dstComponentType == FormatComponentType::SInt) && dstComponentPrecision == 8) {		// SNorm8
+						auto* dst = (int8_t*)PtrAdd(dstStart, sizeof(int8_t)*component);
+						int8_t fill = (component == 3)?0x7f:0x0;
+						for (unsigned c=0; c<pixelCount; ++c, dst=PtrAdd(dst, dstStride)) *dst = fill;
+
+					} else if ((dstComponentType == FormatComponentType::UNorm||dstComponentType == FormatComponentType::UInt) && dstComponentPrecision == 16) {		// UNorm16
+						auto* dst = (uint16_t*)PtrAdd(dstStart, sizeof(uint16_t)*component);
+						uint16_t fill = (component == 3)?0xffff:0x0;
+						for (unsigned c=0; c<pixelCount; ++c, dst=PtrAdd(dst, dstStride)) *dst = fill;
+					} else if ((dstComponentType == FormatComponentType::SNorm || dstComponentType == FormatComponentType::SInt) && dstComponentPrecision == 16) {		// SNorm16
+						auto* dst = (int16_t*)PtrAdd(dstStart, sizeof(int16_t)*component);
+						int16_t fill = (component == 3)?0x7fff:0x0;
+						for (unsigned c=0; c<pixelCount; ++c, dst=PtrAdd(dst, dstStride)) *dst = fill;
+
+					} else
+						assert(0);
+				}
+
+				return destinationBlob;
+			}
+
+			Log(Warning) << "Using compressonator to convert between non-compressed formats (" << AsString(input._srcDesc._format) << " to " << AsString(dstDesc._format) << "). This can be unreliable and will sometimes silently fail." << std::endl;
+		}
+
+		if (input._srcTexture.format == CMP_FORMAT_Unknown)
+			Throw(std::runtime_error(Concatenate("Cannot initialize src texture for format conversion, because source format is not supported: ", AsString(input._srcDesc._format))));
+
+		CMP_CompressOptions options = {0};
+		options.dwSize       = sizeof(options);
+		options.fquality     = 0.05f;
+		// Compressonator seems to have an issue when dwnumThreads is set to 1 (other than running slow). It appears to spin up threads it can never close down
+		// let's just set it to "auto" to allow it to adapt to the processor (even if it squeezes our thread pool)
+		options.dwnumThreads = 0;
+		auto comprDstFormat = AsCompressonatorFormat(dstFmt);
+		if (comprDstFormat == CMP_FORMAT_Unknown)
+			Throw(std::runtime_error(Concatenate("Cannot write to the request texture pixel format because it is not supported by the compression library: ", AsString(dstFmt))));
+
+		// simple hack because we can't enter Compressonator while it's working
+		static Threading::Mutex s_compressonatorLock;
+		std::unique_lock l(s_compressonatorLock, std::defer_lock);
+		while (!l.try_lock())
+			YieldToPoolFor(std::chrono::milliseconds(10));
+
+		auto mipCount = dstDesc._mipCount;
+		auto arrayLayerCount = ActualArrayLayerCount(dstDesc);
+		for (unsigned a=0; a<arrayLayerCount; ++a)
+			for (unsigned m=0; m<mipCount; ++m) {
+				auto dstOffset = GetSubResourceOffset(dstDesc, m, a);
+				auto dstMipDesc = CalculateMipMapDesc(dstDesc, m);
+				auto srcMipDesc = CalculateMipMapDesc(input._srcDesc, m);
+
+				CMP_Texture destTexture = {0};
+				destTexture.dwSize     = sizeof(destTexture);
+				destTexture.dwWidth    = std::max(1u, (unsigned)srcMipDesc._width);
+				destTexture.dwHeight   = std::max(1u, (unsigned)srcMipDesc._height);
+				destTexture.dwPitch    = 0;
+				destTexture.format     = comprDstFormat;
+				destTexture.dwDataSize = (CMP_DWORD)dstOffset._size;
+				auto calcSize = CMP_CalculateBufferSize(&destTexture);
+				assert(destTexture.dwDataSize == calcSize);
+				destTexture.pData = (CMP_BYTE*)PtrAdd(destinationBlob->data(), ddsHeaderOffset + dstOffset._offset);
+				assert(PtrAdd(destTexture.pData, destTexture.dwDataSize) <= AsPointer(destinationBlob->end()));
+
+				auto srcOffset = GetSubResourceOffset(input._srcDesc, m, a);
+				auto srcTexture = input._srcTexture;
+				srcTexture.dwWidth = destTexture.dwWidth;
+				srcTexture.dwHeight = destTexture.dwHeight;
+				srcTexture.dwDataSize = (CMP_DWORD)srcOffset._size;
+				srcTexture.pData = PtrAdd(srcTexture.pData, srcOffset._offset);
+
+				CMP_ERROR cmp_status;
+				cmp_status = CMP_ConvertTexture(&srcTexture, &destTexture, &options, nullptr);
+				if (cmp_status != CMP_OK)
+					Throw(std::runtime_error("Compression library failed while processing texture compiler file"));
+			}
+
+		l.unlock();
 
 		return destinationBlob;
 	}
@@ -314,21 +408,22 @@ namespace RenderCore { namespace Assets
 			assert(subResources.size() == 1);
 			assert(subResources[0]._destination.size() == sizeof(float)*_width*_height);
 			float* dst = (float*)subResources[0]._destination.begin();
-			std::memset(dst, 0, subResources[0]._destination.size());
+			std::memset(dst, 0xff, subResources[0]._destination.size());		// intentionially writing nans
 
 			// as long as width is an integer cubed and height is an integer squared, we'll get a pattern that visits every pixel
 			unsigned subTableWidth = 3, subTableHeight = 2;
 			unsigned i = 1;
-			while (subTableWidth < _width) { ++i; subTableWidth = i*i*i; }
+			while (subTableWidth < _width) { ++i; subTableWidth = std::pow(3.f, i); }
 			i = 1;
-			while (subTableHeight < _height) { ++i; subTableHeight = i*i; }
+			while (subTableHeight < _height) { ++i; subTableHeight = std::pow(2.f, i); }
 
 			// We can do this in a smarter way by using the inverse-radical-inverse, and solving some simultaneous
 			// equations with modular arithmetic. But since we're building a lookup table anyway, that doesn't seem
 			// of any practical purpose
 			using namespace XLEMath;
 			for (unsigned sampleIdx=0; sampleIdx<subTableWidth*subTableHeight; ++sampleIdx) {
-				const bool extraScambling = true;
+				// "extraScambling" reduces the inherent pattern -- but also adds precision errors, sometimes resulting in pixels not being visited
+				const bool extraScambling = false;
 				if (extraScambling) {
 					auto x = unsigned(subTableWidth * CalculateScrambledHaltonNumber<1>(sampleIdx)), 
 						y = unsigned(subTableHeight * CalculateScrambledHaltonNumber<0>(sampleIdx));
@@ -342,12 +437,15 @@ namespace RenderCore { namespace Assets
 				}
 			}
 
+			for (unsigned c=0; c<_width*_height; ++c)
+				assert(((const unsigned*)dst)[c] != 0xffffffffu);			// Inaccuracies in the calculation can result in texels not getting touched for larger textures. Generally it's best to write to a fairly small texture 
+
 			// We can shuffle the rows to add more randomness. The end result is less uniformly distributed, but also has 
 			// fewer repeating patterns (since there is a slight pattern to the Halton sampler output)
 			// which is better may depend on the application
-			// std::mt19937_64 rng(153483181236ull);
-			// for (unsigned y=0; y<_height; ++y)
-			// 	std::shuffle(&dst[y*_width], &dst[y*_width+_width], rng);
+			std::mt19937_64 rng(153483181236ull);
+			for (unsigned y=0; y<_height; ++y)
+				std::shuffle(&dst[y*_width], &dst[y*_width+_width], rng);
 
 			std::promise<void> promise;
 			promise.set_value();

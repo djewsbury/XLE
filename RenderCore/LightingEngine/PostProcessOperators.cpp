@@ -141,7 +141,7 @@ namespace RenderCore { namespace LightingEngine
 
 		} else {
 
-			auto compileRequest = Assets::MakeTextureCompilationRequest(Assets::TextureCompiler_BalancedNoise(256, 256), Format::R8_UNORM);
+			auto compileRequest = Assets::MakeTextureCompilationRequest(Assets::TextureCompiler_BalancedNoise(256, 256), Format::R8_UNORM);		// shader expect 256x256 texture
 			auto balancedNoiseFuture = ::Assets::GetAssetFuturePtr<RenderCore::Techniques::DeferredShaderResource>(compileRequest);
 
 			::Assets::WhenAll(shader, balancedNoiseFuture).ThenConstructToPromise(
