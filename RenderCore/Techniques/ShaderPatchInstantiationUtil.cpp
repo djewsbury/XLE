@@ -11,6 +11,7 @@
 #include "../Assets/IntermediateCompilers.h"
 #include "../MinimalShaderSource.h"
 #include "../../ConsoleRig/GlobalServices.h"
+#include "../../OSServices/AttachableLibrary.h"		// for LibVersionDesc
 #include "../../ShaderParser/ShaderPatcher.h"
 #include "../../ShaderParser/ShaderAnalysis.h"
 #include "../../ShaderParser/DescriptorSetInstantiation.h"

@@ -6,6 +6,7 @@
 #include "ParsingContext.h"
 #include "TechniqueDelegateUtil.h"
 #include "../Types.h"
+#include "../Metal/Shader.h"
 #include "../../ShaderParser/AutomaticSelectorFiltering.h"
 #include "../../ShaderParser/ShaderAnalysis.h"
 #include "../../Assets/AssetsCore.h"
