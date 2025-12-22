@@ -13,7 +13,7 @@
 #include "../RenderCore/IDevice.h"
 #include "../RenderCore/Techniques/RenderPassUtils.h"
 #include "../RenderCore/Techniques/RenderPass.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../Math/Vector.h"
@@ -27,7 +27,7 @@ namespace PlatformRig
     public:
         DebugScreensOverlay(
             std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreensSystem,
-            std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
+            std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
             std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
             std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
         : _debugScreensSystem(debugScreensSystem)
@@ -91,14 +91,14 @@ namespace PlatformRig
 
     private:
         std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> _debugScreensSystem;
-        std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
+        std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> _immediateDrawables;
         std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderer;
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _sequencerConfigSet;
     };
 
     std::shared_ptr<IOverlaySystem> CreateDebugScreensOverlay(
         std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreensSystem,
-        std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
+        std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
         std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
     {

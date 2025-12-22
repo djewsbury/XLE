@@ -31,7 +31,7 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool;
 	class IDeformAcceleratorPool;
 	class ITechniqueDelegate;
-	class IImmediateDrawables;
+	class IDrawableSubmitter;
 	class TechniqueContext;
 	class IAttachmentPool;
 	class IFrameBufferPool;

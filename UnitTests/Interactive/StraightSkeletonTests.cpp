@@ -11,7 +11,7 @@
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../RenderCore/Techniques/RenderPass.h"
-#include "../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/Drawables.h"		// unfortunately required for PreparedResourcesVisibility

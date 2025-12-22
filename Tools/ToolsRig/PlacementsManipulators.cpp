@@ -1638,7 +1638,7 @@ namespace ToolsRig
         std::shared_ptr<DebugScreensSystem>             _screens;
         std::shared_ptr<PlacementsWidgets>              _placementsDispl;
         std::shared_ptr<SceneEngine::IIntersectionScene>     _intersectionTestScene;
-        std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
+        std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> _immediateDrawables;
         std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
     };
 

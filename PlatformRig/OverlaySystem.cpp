@@ -16,7 +16,7 @@
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/RenderPassUtils.h"
 #include "../RenderCore/Techniques/RenderPass.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../Assets/Assets.h"
 #include "../ConsoleRig/Console.h"
@@ -235,7 +235,7 @@ namespace PlatformRig
         void SetActivationState(bool) override;
 
         ConsoleOverlaySystem(
-            std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
+            std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
             std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
             std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer);
         ~ConsoleOverlaySystem();
@@ -244,7 +244,7 @@ namespace PlatformRig
         std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> _openWidget;
         std::shared_ptr<RenderOverlays::DebuggingDisplay::IWidget> _closedWidget;
 
-        std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
+        std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> _immediateDrawables;
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _sequencerConfigSet;
         std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderer;
 
@@ -300,7 +300,7 @@ namespace PlatformRig
     void ConsoleOverlaySystem::SetActivationState(bool) {}
 
     ConsoleOverlaySystem::ConsoleOverlaySystem(
-        std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
+        std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
         std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
     : _immediateDrawables(std::move(immediateDrawables))
@@ -317,7 +317,7 @@ namespace PlatformRig
     }
 
     std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
-        std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> immediateDrawables,
+        std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
         std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
     {

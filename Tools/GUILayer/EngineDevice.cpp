@@ -62,7 +62,7 @@ namespace GUILayer
         return _drawingApparatus->_pipelineAccelerators;
     }
 
-    const std::shared_ptr<RenderCore::Techniques::IImmediateDrawables>& NativeEngineDevice::GetImmediateDrawables()
+    const std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter>& NativeEngineDevice::GetImmediateDrawables()
     {
         return _immediateDrawingApparatus->_immediateDrawables;
     }

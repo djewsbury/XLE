@@ -19,7 +19,7 @@
 #include "../RenderCore/LightingEngine/ShadowPreparer.h"        // to reserve ShadowOperatorDesc
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IImmediateDrawables; class DeformersPacket; } }
+namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IDrawableSubmitter; class DeformersPacket; } }
 namespace RenderCore { namespace LightingEngine { class ILightScene; struct ShadowOperatorDesc; class IProbeRenderingInstance; }}
 namespace RenderOverlays { class FontRenderingManager; }
 namespace Assets { class DependencyValidation; }
@@ -77,7 +77,7 @@ namespace SceneEngine
     public:
         virtual void ExecuteOverlay(
             RenderCore::Techniques::ParsingContext&,
-            RenderCore::Techniques::IImmediateDrawables&,
+            RenderCore::Techniques::IDrawableSubmitter&,
             RenderOverlays::FontRenderingManager*) = 0;
         virtual ~ISceneOverlay();
     };

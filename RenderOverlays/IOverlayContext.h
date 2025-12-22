@@ -12,7 +12,7 @@
 #include "../Utility/IteratorUtils.h"
 
 namespace RenderCore { class IResourceView; class MiniInputElementDesc; class IThreadContext; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; class RetainedUniformsStream; class EncoderState; } }
+namespace RenderCore { namespace Techniques { class IDrawableSubmitter; class ImmediateDrawableMaterial; class RetainedUniformsStream; class EncoderState; } }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 
 namespace RenderOverlays
@@ -94,7 +94,7 @@ namespace RenderOverlays
         virtual void* GetService(uint64_t) = 0;
         virtual void AttachService(uint64_t, void*) = 0;
 
-        RenderCore::Techniques::IImmediateDrawables& GetImmediateDrawables();
+        RenderCore::Techniques::IDrawableSubmitter& GetImmediateDrawables();
         RenderCore::IThreadContext& GetThreadContext();
         FontRenderingManager* GetFontRenderingManager();
         RenderCore::BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() const;
@@ -109,13 +109,13 @@ namespace RenderOverlays
         virtual ~IOverlayContext();
 
     protected:
-        RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
+        RenderCore::Techniques::IDrawableSubmitter* _immediateDrawables;
         RenderCore::IThreadContext* _threadContext;
         FontRenderingManager* _fontRenderingManager;
         RenderCore::BufferUploads::CommandListID _requiredBufferUploadsCommandList;
     };
 
-    inline RenderCore::Techniques::IImmediateDrawables& IOverlayContext::GetImmediateDrawables() { return *_immediateDrawables; }
+    inline RenderCore::Techniques::IDrawableSubmitter& IOverlayContext::GetImmediateDrawables() { return *_immediateDrawables; }
     inline RenderCore::IThreadContext& IOverlayContext::GetThreadContext() { return *_threadContext; }
     inline FontRenderingManager* IOverlayContext::GetFontRenderingManager() { return _fontRenderingManager; }
 

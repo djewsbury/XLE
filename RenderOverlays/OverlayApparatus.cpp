@@ -7,7 +7,7 @@
 #include "FontRendering.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/Techniques/SubFrameEvents.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/PipelineCollection.h"
@@ -30,12 +30,12 @@ namespace RenderOverlays
 		_fontResources = CreateFTFontResources();
 		RegisterFontLibraryFile(FONTS_DAT);
 
-		_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(_overlayPipelineAccelerators);
+		_immediateDrawables =  RenderCore::Techniques::CreateDrawableSubmitter(_overlayPipelineAccelerators);
 		_fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*_mainDrawingApparatus->_device);
 
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
-			[im=std::weak_ptr<RenderCore::Techniques::IImmediateDrawables>{_immediateDrawables}, fr=std::weak_ptr<RenderOverlays::FontRenderingManager>(_fontRenderingManager)]() {
+			[im=std::weak_ptr<RenderCore::Techniques::IDrawableSubmitter>{_immediateDrawables}, fr=std::weak_ptr<RenderOverlays::FontRenderingManager>(_fontRenderingManager)]() {
 				if (auto l = im.lock(); l) l->OnFrameBarrier();
 				if (auto l2 = fr.lock(); l2) l2->OnFrameBarrier();
 			});
@@ -57,7 +57,7 @@ namespace RenderOverlays
 	void ExecuteDraws(
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		RenderCore::Techniques::RenderPassInstance& rpi,
-		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 		ShapesRenderingDelegate& shapesRenderingDelegate)
 	{
 		immediateDrawables.ExecuteDraws(parsingContext, shapesRenderingDelegate.GetTechniqueDelegate(), rpi);

@@ -11,7 +11,7 @@
 #include <memory>
 
 namespace RenderCore { class IResource; class IResourceView; class IThreadContext; class IDevice; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; class ImmediateDrawableMaterial; class RetainedUniformsStream; }}
+namespace RenderCore { namespace Techniques { class IDrawableSubmitter; class ImmediateDrawableMaterial; class RetainedUniformsStream; }}
 namespace RenderCore { namespace Assets { class RenderStateSet; }}
 
 namespace RenderOverlays
@@ -21,7 +21,7 @@ namespace RenderOverlays
 	class FontRenderingManager;
 
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
-						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, DrawTextFlags::BitField flags,
 						float x, float y, float maxX, float maxY,
@@ -30,7 +30,7 @@ namespace RenderOverlays
 						ColorB col);
 
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
-						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, DrawTextFlags::BitField flags,
 						float x, float y, float maxX, float maxY,
@@ -39,7 +39,7 @@ namespace RenderOverlays
 						ColorB col);
 
 	void 		Draw(	RenderCore::IThreadContext& threadContext,
-						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, DrawTextFlags::BitField flags,
 						StringSection<> text,
@@ -49,7 +49,7 @@ namespace RenderOverlays
 	using FontPtrAndFlags = std::pair<Font*, DrawTextFlags::BitField>;
 	void		DrawWithTable(
 						RenderCore::IThreadContext& threadContext,
-						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
 						FontPtrAndFlags fontTable[256],
 						float x, float y, float maxX, float maxY,
@@ -60,13 +60,13 @@ namespace RenderOverlays
 						ColorB shadowColor);
 
 	bool 		Draw(		RenderCore::IThreadContext& threadContext,
-							RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+							RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 							FontRenderingManager& textureMan,
 							const Font& font, const FontSpan& span,
 							ColorB color, Float2 offset = Float2{0,0});
 
 	bool 		DrawOutline(	RenderCore::IThreadContext& threadContext,
-								RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+								RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 								FontRenderingManager& textureMan,
 								const Font& font, const FontSpan& span,
 								ColorB color, Float2 offset = Float2{0,0}, float outlineWidth = 1.f);

@@ -2,7 +2,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "ImmediateDrawables.h"
+#include "DrawableSubmitter.h"
 #include "PipelineAccelerator.h"
 #include "DrawableDelegates.h"
 #include "TechniqueDelegates.h"
@@ -125,7 +125,7 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	class ImmediateDrawables : public IImmediateDrawables
+	class DrawableSubmitter : public IDrawableSubmitter
 	{
 	public:
 		template<typename Drawable>
@@ -460,7 +460,7 @@ namespace RenderCore { namespace Techniques
 			_pipelineAcceleratorsVisibility = _pipelineAcceleratorPool->VisibilityBarrier();
 		}
 
-		ImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
+		DrawableSubmitter(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
 		: _pipelineAcceleratorPool(std::move(pipelineAccelerators))
 		{
 			_lastQueuedDrawable = nullptr;
@@ -522,12 +522,12 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
+	std::shared_ptr<IDrawableSubmitter> CreateDrawableSubmitter(std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators)
 	{
-		return std::make_shared<ImmediateDrawables>(std::move(pipelineAccelerators));
+		return std::make_shared<DrawableSubmitter>(std::move(pipelineAccelerators));
 	}
 
-	void IImmediateDrawables::ExecuteDraws(ParsingContext& parsingContext, const std::shared_ptr<ITechniqueDelegate>& techDel, const RenderPassInstance& rpi)
+	void IDrawableSubmitter::ExecuteDraws(ParsingContext& parsingContext, const std::shared_ptr<ITechniqueDelegate>& techDel, const RenderPassInstance& rpi)
 	{
 		ExecuteDraws(parsingContext, techDel, rpi.GetFrameBufferDesc(), rpi.GetCurrentSubpassIndex());
 	}
@@ -660,7 +660,7 @@ namespace RenderCore { namespace Techniques
 		}
 	}
 
-	IImmediateDrawables::~IImmediateDrawables() {}
+	IDrawableSubmitter::~IDrawableSubmitter() {}
 	RetainedUniformsStream::RetainedUniformsStream() = default;
 	RetainedUniformsStream::RetainedUniformsStream(const RetainedUniformsStream&) = default;
 	RetainedUniformsStream::RetainedUniformsStream(RetainedUniformsStream&&) = default;

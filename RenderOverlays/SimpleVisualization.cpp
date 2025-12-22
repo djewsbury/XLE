@@ -11,7 +11,7 @@
 #include "DrawText.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../RenderCore/Techniques/RenderPassUtils.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../Math/ProjectionMath.h"
@@ -33,7 +33,7 @@ namespace RenderOverlays
 	};
 
 	void DrawBasisAxes(
-		RenderCore::Techniques::IImmediateDrawables& immDrawables, RenderCore::Techniques::ParsingContext& parserContext, 
+		RenderCore::Techniques::IDrawableSubmitter& immDrawables, RenderCore::Techniques::ParsingContext& parserContext, 
 		Float2 ssMins, Float2 ssMaxs)
 	{
 			//
@@ -132,7 +132,7 @@ namespace RenderOverlays
 	}
 
 	void DrawGrid(
-		RenderCore::Techniques::IImmediateDrawables& immDrawables, RenderCore::Techniques::ParsingContext& parserContext,
+		RenderCore::Techniques::IDrawableSubmitter& immDrawables, RenderCore::Techniques::ParsingContext& parserContext,
 		float gridScaleFactor, Float3 origin)
 	{
 		// draw a grid to give some sense of scale
@@ -264,7 +264,7 @@ namespace RenderOverlays
 
 	void DrawBottomOfScreenErrorMsg(
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 		RenderOverlays::FontRenderingManager& fontRenderingManager,
 		ShapesRenderingDelegate& shapesRenderingDelegate,
 		StringSection<> msg)

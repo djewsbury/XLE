@@ -10,7 +10,7 @@
 #include "../../RenderCore/Techniques/ManualDrawables.h"
 #include "../../RenderCore/Techniques/DescriptorSetAccelerator.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
-#include "../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../../RenderCore/Assets/ScaffoldCmdStream.h"
 #include "../../RenderCore/Assets/RawMaterial.h"
 #include "../../RenderCore/Assets/ShaderPatchCollection.h"

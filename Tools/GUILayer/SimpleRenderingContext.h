@@ -5,11 +5,10 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "CLIXAutoPtr.h"
-#include "../../RenderCore/Techniques/ImmediateDrawables.h"
 #include <memory>
 
 namespace RenderCore { class IThreadContext; }
-namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; class IPipelineAcceleratorPool; } }
+namespace RenderCore { namespace Techniques { class ParsingContext; class IDrawableSubmitter; class IPipelineAcceleratorPool; } }
 
 namespace GUILayer
 {
@@ -49,7 +48,7 @@ namespace GUILayer
         const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& GetPipelineAcceleratorsPtr() { return _pipelineAccelerators.GetNativePtr(); }
 
         SimpleRenderingContext(
-            RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+            RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
             RetainedRenderResources^ savedRes,
             std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
             void* parsingContext);
@@ -57,7 +56,7 @@ namespace GUILayer
         !SimpleRenderingContext();
     protected:
         RetainedRenderResources^ _retainedRes;
-        RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;     // note -- keeping an unprotected pointer here (SimpleRenderingContext is typically short lived). Create must be careful to manage lifetimes
+        RenderCore::Techniques::IDrawableSubmitter* _immediateDrawables;     // note -- keeping an unprotected pointer here (SimpleRenderingContext is typically short lived). Create must be careful to manage lifetimes
         RenderCore::Techniques::ParsingContext* _parsingContext;
         clix::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
         RenderCore::IThreadContext* _threadContext;     // note -- keeping an unprotected pointer here (SimpleRenderingContext is typically short lived). Create must be careful to manage lifetimes

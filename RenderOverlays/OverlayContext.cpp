@@ -6,7 +6,7 @@
 #include "Font.h"
 #include "FontRendering.h"
 #include "../RenderCore/Techniques/Techniques.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/Format.h"
@@ -242,7 +242,7 @@ namespace RenderOverlays
 
 	ImmediateOverlayContext::ImmediateOverlayContext(
 		RenderCore::IThreadContext& threadContext,
-		RenderCore::Techniques::IImmediateDrawables& immediateDrawables)
+		RenderCore::Techniques::IDrawableSubmitter& immediateDrawables)
 	{
 		_immediateDrawables = &immediateDrawables;
 		_threadContext = &threadContext;
@@ -254,7 +254,7 @@ namespace RenderOverlays
 
 	ImmediateOverlayContext::ImmediateOverlayContext(
 		RenderCore::IThreadContext& threadContext,
-		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 		FontRenderingManager* fontRenderingManager)
 	: ImmediateOverlayContext(threadContext, immediateDrawables)
 	{
@@ -268,7 +268,7 @@ namespace RenderOverlays
 	std::unique_ptr<ImmediateOverlayContext>
 		MakeImmediateOverlayContext(
 			RenderCore::IThreadContext& threadContext,
-			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			FontRenderingManager* fontRenderingManager)
 	{
 		return std::make_unique<ImmediateOverlayContext>(threadContext, immediateDrawables, fontRenderingManager);

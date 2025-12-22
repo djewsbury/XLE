@@ -16,7 +16,7 @@ namespace ConsoleRig { class GlobalServices; class CrossModule; class StartupCon
 namespace RenderCore { namespace Techniques 
 { 
     class IPipelineAcceleratorPool;
-    class IImmediateDrawables;
+    class IDrawableSubmitter;
     class Services;
     class DrawingApparatus;
     class PrimaryResourcesApparatus;
@@ -45,7 +45,7 @@ namespace GUILayer
         const std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus>& GetLightingEngineApparatus();
 
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& GetMainPipelineAcceleratorPool();
-        const std::shared_ptr<RenderCore::Techniques::IImmediateDrawables>& GetImmediateDrawables();
+        const std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter>& GetImmediateDrawables();
 
         void MountTextEntityDocument(StringSection<> mountingPt, StringSection<> documentFileName);
 

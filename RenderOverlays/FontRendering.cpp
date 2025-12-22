@@ -4,23 +4,19 @@
 
 #include "FontRendering.h"
 #include "ShapesInternal.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/BufferUploads/IBufferUploads.h"
 #include "../RenderCore/Metal/DeviceContext.h"
 #include "../RenderCore/Metal/Resource.h"
-#include "../RenderCore/RenderUtils.h"
 #include "../RenderCore/ResourceUtils.h"
 #include "../RenderCore/Types.h"
 #include "../RenderCore/Format.h"
 #include "../Assets/Assets.h"
-#include "../Assets/Continuation.h"
 #include "../Math/RectanglePacking.h"
 #include "../Math/Transformations.h"
-#include "../ConsoleRig/ResourceBox.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/StringUtils.h"
-#include "../Utility/PtrUtils.h"
 #include "../Utility/BitUtils.h"
 #include "../Math/Vector.h"
 #include <assert.h>
@@ -73,14 +69,14 @@ namespace RenderOverlays
 		void ReserveQuads(unsigned reservedQuads);
 
 		WorkingVertexSetFontResource(
-			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			const RenderCore::Techniques::ImmediateDrawableMaterial& material,
 			const RenderCore::Techniques::RetainedUniformsStream& uniforms,
 			float depth, bool snap, Float2 offset = Float2{0,0});
 		WorkingVertexSetFontResource();
 
 	protected:
-		RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
+		RenderCore::Techniques::IDrawableSubmitter* _immediateDrawables;
 		const RenderCore::Techniques::ImmediateDrawableMaterial* _material;
 		const RenderCore::Techniques::RetainedUniformsStream* _uniforms;
 		IteratorRange<Vertex*> 	_currentAllocation;
@@ -188,7 +184,7 @@ namespace RenderOverlays
 	}
 
 	WorkingVertexSetFontResource::WorkingVertexSetFontResource(
-		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 		const RenderCore::Techniques::ImmediateDrawableMaterial& material,
 		const RenderCore::Techniques::RetainedUniformsStream& uniforms,
 		float depth, bool snap, Float2 offset)
@@ -252,7 +248,7 @@ namespace RenderOverlays
 		}
 
 		WorkingVertexSetFontResource3D(
-			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			const RenderCore::Techniques::ImmediateDrawableMaterial& baseMaterial,
 			const RenderCore::Techniques::RetainedUniformsStream& uniforms,
 			const Float3x4& localToWorld, RenderCore::Assets::RenderStateSet stateSet)
@@ -286,14 +282,14 @@ namespace RenderOverlays
 		void ReserveQuads(unsigned reservedQuads);
 
 		WorkingVertexSetPCT(
-			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			const RenderCore::Techniques::ImmediateDrawableMaterial& material,
 			const RenderCore::Techniques::RetainedUniformsStream& uniforms,
 			float depth, bool snap, Float2 offset = Float2{0,0});
 		WorkingVertexSetPCT();
 
 	protected:
-		RenderCore::Techniques::IImmediateDrawables* _immediateDrawables;
+		RenderCore::Techniques::IDrawableSubmitter* _immediateDrawables;
 		const RenderCore::Techniques::ImmediateDrawableMaterial* _material;
 		const RenderCore::Techniques::RetainedUniformsStream* _uniforms;
 		IteratorRange<Vertex*> 	_currentAllocation;
@@ -400,7 +396,7 @@ namespace RenderOverlays
 	}
 
 	WorkingVertexSetPCT::WorkingVertexSetPCT(
-		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 		const RenderCore::Techniques::ImmediateDrawableMaterial& material,
 		const RenderCore::Techniques::RetainedUniformsStream& uniforms,
 		float depth, bool snap, Float2 offset)
@@ -800,7 +796,7 @@ namespace RenderOverlays
 	template<typename CharType, typename WorkingSetType, bool CheckMaxXY, bool SnapCoords>
 		static Float2 DrawTemplate(
 			RenderCore::IThreadContext& threadContext,
-			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			FontRenderingManager& textureMan,
 			const Font& font, DrawTextFlags::BitField flags,
 			float x, float y, float xAtLineStart, float maxX, float maxY,
@@ -828,7 +824,7 @@ namespace RenderOverlays
 	template<typename CharType, typename WorkingSetType>
 		static Float2 DrawTemplate(
 			RenderCore::IThreadContext& threadContext,
-			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			FontRenderingManager& textureMan,
 			const Font& font, DrawTextFlags::BitField flags,
 			StringSection<CharType> text,
@@ -853,7 +849,7 @@ namespace RenderOverlays
 	}
 
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
-						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, DrawTextFlags::BitField flags,
 						float x, float y, float maxX, float maxY,
@@ -879,7 +875,7 @@ namespace RenderOverlays
 	}
 
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
-						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, DrawTextFlags::BitField flags,
 						float x, float y, float maxX, float maxY,
@@ -905,7 +901,7 @@ namespace RenderOverlays
 	}
 
 	void 		Draw(	RenderCore::IThreadContext& threadContext,
-						RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
 						const Font& font, DrawTextFlags::BitField flags,
 						StringSection<> text,
@@ -923,7 +919,7 @@ namespace RenderOverlays
 	template<typename CharType>
 		static void DrawWithTableTemplate(
 			RenderCore::IThreadContext& threadContext,
-			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			FontRenderingManager& textureMan,
 			FontPtrAndFlags fontTable[256],
 			float x, float y, float maxX, float maxY,
@@ -1094,7 +1090,7 @@ namespace RenderOverlays
 
 	void DrawWithTable(
 			RenderCore::IThreadContext& threadContext,
-			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			FontRenderingManager& textureMan,
 			FontPtrAndFlags fontTable[256],
 			float x, float y, float maxX, float maxY,
@@ -1156,7 +1152,7 @@ namespace RenderOverlays
 	}
 
 	bool 		Draw(		RenderCore::IThreadContext& threadContext,
-							RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+							RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 							FontRenderingManager& textureMan,
 							const Font& font, const FontSpan& span,
 							ColorB color, Float2 offset)
@@ -1274,7 +1270,7 @@ namespace RenderOverlays
 	}
 
 	bool 		DrawOutline(	RenderCore::IThreadContext& threadContext,
-								RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+								RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 								FontRenderingManager& textureMan,
 								const Font& font, const FontSpan& span,
 								ColorB color, Float2 offset, float outlineWidth)

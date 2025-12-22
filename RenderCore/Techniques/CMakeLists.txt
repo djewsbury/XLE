@@ -15,7 +15,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         DescriptorSetAccelerator.cpp
         DrawableConstructor.cpp
         Drawables.cpp
-        ImmediateDrawables.cpp
+        DrawableSubmitter.cpp
         LightWeightBuildDrawables.cpp
         ManualDrawables.cpp
         ParsingContext.cpp

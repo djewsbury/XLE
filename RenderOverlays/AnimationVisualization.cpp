@@ -8,7 +8,7 @@
 #include "../RenderCore/Assets/SkeletonMachine.h"
 #include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/Types.h"
 #include "../Math/Transformations.h"

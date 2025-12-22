@@ -15,7 +15,7 @@
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/Techniques.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
-#include "../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderOverlays/LayoutEngine.h"
 #include "../../RenderOverlays/CommonWidgets.h"

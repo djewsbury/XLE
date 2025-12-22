@@ -15,7 +15,7 @@
 #include "../../RenderCore/LightingEngine/ILightScene.h"
 #include "../../RenderCore/LightingEngine/StandardLightOperators.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
-#include "../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/ManualDrawables.h"

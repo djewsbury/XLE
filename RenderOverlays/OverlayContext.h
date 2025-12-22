@@ -13,7 +13,7 @@
 #pragma warning(disable:4324)
 
 namespace RenderCore { class IThreadContext; class UniformsStreamInterface; }
-namespace RenderCore { namespace Techniques { class IImmediateDrawables; } }
+namespace RenderCore { namespace Techniques { class IDrawableSubmitter; } }
 namespace RenderOverlays { class OverlayApparatus; }
 
 namespace RenderOverlays
@@ -60,11 +60,11 @@ namespace RenderOverlays
 
         ImmediateOverlayContext(
             RenderCore::IThreadContext& threadContext,
-            RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+            RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
             FontRenderingManager* fontRenderingManager);
         ImmediateOverlayContext(
             RenderCore::IThreadContext& threadContext,
-            RenderCore::Techniques::IImmediateDrawables& immediateDrawables);
+            RenderCore::Techniques::IDrawableSubmitter& immediateDrawables);
         ~ImmediateOverlayContext();
 
         class ShaderBox;
@@ -81,7 +81,7 @@ namespace RenderOverlays
 	std::unique_ptr<ImmediateOverlayContext>
 		MakeImmediateOverlayContext(
             RenderCore::IThreadContext& threadContext,
-			RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
             FontRenderingManager* fontRenderingManager = nullptr);
 
     std::unique_ptr<ImmediateOverlayContext>

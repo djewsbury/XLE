@@ -79,7 +79,7 @@ namespace RenderCore { namespace Techniques
 		void MergeIn(const EncoderState&);
 	};
 
-	class IImmediateDrawables
+	class IDrawableSubmitter
 	{
 	public:
 		virtual IteratorRange<void*> QueueDraw(
@@ -147,10 +147,10 @@ namespace RenderCore { namespace Techniques
 		virtual std::shared_ptr<IPipelineAcceleratorPool> GetPipelineAcceleratorPool() = 0;
 		virtual void OnFrameBarrier() = 0;
 
-		virtual ~IImmediateDrawables();
+		virtual ~IDrawableSubmitter();
 	};
 
-	std::shared_ptr<IImmediateDrawables> CreateImmediateDrawables(std::shared_ptr<IPipelineAcceleratorPool>);
+	std::shared_ptr<IDrawableSubmitter> CreateDrawableSubmitter(std::shared_ptr<IPipelineAcceleratorPool>);
 
 	IteratorRange<void*> QueueDraw(
 		DrawablesPacket& pkt,

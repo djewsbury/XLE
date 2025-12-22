@@ -20,7 +20,7 @@
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../RenderCore/Techniques/RenderPassUtils.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
-#include "../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderCore/Techniques/CommonBindings.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
@@ -312,7 +312,7 @@ namespace GUILayer
 ////////////////////////////////////////////////////////////////////////////////////////////////?//
 
     SimpleRenderingContext::SimpleRenderingContext(
-        RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+        RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
         RetainedRenderResources^ savedRes,
         std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
         void* parsingContext)

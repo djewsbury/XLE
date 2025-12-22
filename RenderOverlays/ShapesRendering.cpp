@@ -7,7 +7,7 @@
 #include "OverlayContext.h"
 #include "DrawText.h"
 #include "ShapesInternal.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/TechniqueDelegates.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"

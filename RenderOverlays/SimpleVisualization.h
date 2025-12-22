@@ -9,7 +9,7 @@
 #include "../Math/Vector.h"
 #include "../Utility/StringFormat.h"
 
-namespace RenderCore { namespace Techniques { class ParsingContext; class IImmediateDrawables; }}
+namespace RenderCore { namespace Techniques { class ParsingContext; class IDrawableSubmitter; }}
 namespace RenderCore { class IThreadContext; }
 
 namespace RenderOverlays
@@ -21,11 +21,11 @@ namespace RenderOverlays
 	class ShapesRenderingDelegate;
 
 	void DrawBasisAxes(
-		RenderCore::Techniques::IImmediateDrawables&, RenderCore::Techniques::ParsingContext& parserContext, 
+		RenderCore::Techniques::IDrawableSubmitter&, RenderCore::Techniques::ParsingContext& parserContext, 
 		Float2 ssMins = Float2(24,24), Float2 ssMaxs = Float2(64+24,64+24));
 
 	void DrawGrid(
-		RenderCore::Techniques::IImmediateDrawables&, RenderCore::Techniques::ParsingContext& parserContext, 
+		RenderCore::Techniques::IDrawableSubmitter&, RenderCore::Techniques::ParsingContext& parserContext, 
 		float gridScaleFactor = 1.0f, Float3 origin = Float3(0,0,0));
 
 	void FillScreenWithMsg(
@@ -35,7 +35,7 @@ namespace RenderOverlays
 
 	void DrawBottomOfScreenErrorMsg(
 		RenderCore::Techniques::ParsingContext& parsingContext,
-		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 		FontRenderingManager& fontRenderingManager,
 		ShapesRenderingDelegate& shapesRenderingDelegate,
 		StringSection<> msg);

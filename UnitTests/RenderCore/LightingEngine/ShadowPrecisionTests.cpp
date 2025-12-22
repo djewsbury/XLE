@@ -22,7 +22,7 @@
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
 #include "../../../RenderCore/Techniques/PipelineOperators.h"
 #include "../../../RenderCore/Techniques/PipelineLayoutDelegate.h"
-#include "../../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../../../RenderCore/Techniques/CommonResources.h"
 #include "../../../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../../../RenderCore/Metal/Resource.h"
@@ -260,7 +260,7 @@ namespace UnitTests
 
 	struct ImmediateDrawingHelper
 	{
-		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
+		std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _shapesRendering;
 
@@ -269,7 +269,7 @@ namespace UnitTests
 			_shapesRendering = std::make_shared<RenderOverlays::ShapesRenderingDelegate>();
 			auto pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(metalHelper._device);
 			auto overlayPipelineAccelerators = RenderCore::Techniques::CreatePipelineAcceleratorPool(metalHelper._device, nullptr, pipelineCollection, _shapesRendering->GetPipelineLayoutDelegate(), 0);
-			_immediateDrawables =  RenderCore::Techniques::CreateImmediateDrawables(overlayPipelineAccelerators);
+			_immediateDrawables =  RenderCore::Techniques::CreateDrawableSubmitter(overlayPipelineAccelerators);
 			// _fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*metalHelper._device);
 		}
 	};

@@ -7,7 +7,7 @@
 #include "../ReusableDataFiles.h"
 #include "../Metal/MetalTestHelper.h"
 #include "../../../RenderOverlays/ShapesRendering.h"
-#include "../../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../../../RenderCore/Techniques/Drawables.h"
 #include "../../../RenderCore/Techniques/ParsingContext.h"
 #include "../../../RenderCore/Techniques/Services.h"
@@ -72,7 +72,7 @@ namespace UnitTests
 	)";
 
 	static void StallForResources(
-		RenderCore::Techniques::IImmediateDrawables& immediateDrawables,
+		RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 		std::shared_ptr<RenderCore::Techniques::ITechniqueDelegate> techniqueDelegate,
 		const RenderCore::FrameBufferDesc& fbDesc, unsigned subpassIndex)
 	{
@@ -111,7 +111,7 @@ namespace UnitTests
 		auto shapeRenderingDelegates = std::make_shared<RenderOverlays::ShapesRenderingDelegate>();
 		auto pipelineCollection = std::make_shared<RenderCore::Techniques::PipelineCollection>(testHelper->_device);
 		auto overlayPipelineAccelerators = RenderCore::Techniques::CreatePipelineAcceleratorPool(testHelper->_device, nullptr, pipelineCollection, shapeRenderingDelegates->GetPipelineLayoutDelegate(), 0);
-		auto immediateDrawables = Techniques::CreateImmediateDrawables(overlayPipelineAccelerators);
+		auto immediateDrawables = Techniques::CreateDrawableSubmitter(overlayPipelineAccelerators);
 
 		auto techniqueContext = std::make_shared<Techniques::TechniqueContext>();
 		techniqueContext->_commonResources = techniqueServices->GetCommonResources();

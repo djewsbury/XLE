@@ -28,7 +28,6 @@
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
 #include "../RenderCore/Techniques/DeferredShaderResource.h"
-#include "../RenderCore/Techniques/ImmediateDrawables.h"
 #include "../RenderCore/BufferUploads/IBufferUploads.h"
 
 #include "../Assets/Assets.h"

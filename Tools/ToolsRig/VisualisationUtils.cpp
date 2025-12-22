@@ -30,7 +30,7 @@
 #include "../../RenderCore/Techniques/CommonBindings.h"
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
-#include "../../RenderCore/Techniques/ImmediateDrawables.h"
+#include "../../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../../RenderCore/Techniques/Services.h"
 #include "../../RenderCore/Techniques/Drawables.h"
 #include "../../RenderCore/Techniques/SubFrameEvents.h"
@@ -251,7 +251,7 @@ namespace ToolsRig
 
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<RenderCore::Techniques::IDeformAcceleratorPool> _deformAccelerators;
-		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
+		std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _debugShapesDelegate;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<RenderCore::LightingEngine::LightingEngineApparatus> _lightingApparatus;
@@ -907,7 +907,7 @@ namespace ToolsRig
 		std::shared_ptr<VisAnimationState> _animState;
 		std::shared_ptr<MouseOverTrackingListener> _inputListener;
 		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
-		std::shared_ptr<RenderCore::Techniques::IImmediateDrawables> _immediateDrawables;
+		std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> _immediateDrawables;
 		std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _debugShapesDelegate;
 		std::shared_ptr<RenderOverlays::FontRenderingManager> _fontRenderingManager;
 		std::shared_ptr<RenderCore::Techniques::DrawingApparatus> _drawingApparatus;
