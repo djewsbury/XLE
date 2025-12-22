@@ -55,6 +55,20 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
 			std::shared_ptr<AssetsNew::CompoundAssetUtil> util, const AssetsNew::ScaffoldIndexer& indexer,
 			IteratorRange<const RenderCore::MiniInputElementDesc*> inputAssembly, RenderCore::Topology topology);
+
+		static void ConstructToPromise(
+			std::promise<DataDrivenAccelerators>&& promise,
+			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+			std::shared_ptr<AssetsNew::CompoundAssetUtil> util, const AssetsNew::ScaffoldIndexer& indexer,
+			const RenderCore::Assets::RawMaterial&& materialOverrides,
+			IteratorRange<const RenderCore::InputElementDesc*> inputAssembly, RenderCore::Topology topology);
+
+		static void ConstructToPromise(
+			std::promise<DataDrivenAccelerators>&& promise,
+			std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+			std::shared_ptr<AssetsNew::CompoundAssetUtil> util, const AssetsNew::ScaffoldIndexer& indexer,
+			const RenderCore::Assets::RawMaterial&& materialOverrides,
+			IteratorRange<const RenderCore::MiniInputElementDesc*> inputAssembly, RenderCore::Topology topology);
 	};
 
 	class DataDrivenAcceleratorsWithDeform : public DataDrivenAccelerators

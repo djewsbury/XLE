@@ -127,6 +127,71 @@ namespace RenderCore { namespace Techniques
 			});
 	}
 
+	void DataDrivenAccelerators::ConstructToPromise(
+		std::promise<DataDrivenAccelerators>&& promise,
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+		std::shared_ptr<AssetsNew::CompoundAssetUtil> util, const AssetsNew::ScaffoldIndexer& indexer,
+		const RenderCore::Assets::RawMaterial&& materialOverrides,
+		IteratorRange<const RenderCore::InputElementDesc*> inputAssembly, RenderCore::Topology topology)
+	{
+		using namespace Utility::Literals;
+		auto futureMaterial = util->GetFuture<RenderCore::Assets::RawMaterial>("RawMaterial"_h, indexer);
+		auto futureShaderPatches = util->GetFuture<std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>>("ShaderPatchCollection"_h, indexer);
+		auto futureDescSet = util->GetFuture<std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>>("DescriptorSet"_h, indexer);
+		std::string name = "particle-material";
+		if (auto* contextAndIdentifier =  std::get_if<AssetsNew::ContextAndIdentifier>(&indexer)) name = contextAndIdentifier->_identifier;
+		#if defined(_DEBUG)
+			else if (auto* scaffoldAndEntityName =  std::get_if<AssetsNew::ScaffoldAndEntityName>(&indexer)) name = scaffoldAndEntityName->_entityName;
+		#endif
+		::Assets::WhenAll(std::move(futureMaterial), std::move(futureShaderPatches), std::move(futureDescSet)).ThenConstructToPromise(
+			std::move(promise),
+			[pa=pipelineAccelerators, topology, ia=std::vector<RenderCore::InputElementDesc>(inputAssembly.begin(), inputAssembly.end()), name, rawMatOverrides=std::move(materialOverrides)](const auto& material, const auto& shaderPatches, const auto& descSet) mutable {
+				RenderCore::Assets::RawMaterial rawMat = std::get<0>(std::move(material));
+				rawMat.MergeInWithFilenameResolve(std::move(rawMatOverrides), {});
+				DescriptorSetConstructorHelper descSetHelper { std::move(rawMat), shaderPatches, descSet };
+				auto descriptorSet = pa->CreateDescriptorSetAccelerator(nullptr, descSetHelper._patchCollection, descSetHelper._matDescSet, descSetHelper._matMachine, descSetHelper._matScaffold, std::move(name));
+				auto pipeline = pa->CreatePipelineAccelerator(descSetHelper._patchCollection, descSetHelper._matDescSet, std::move(descSetHelper._matMachineDecomposed._matSelectors), ia, topology, descSetHelper._matMachineDecomposed._stateSet);
+
+				::Assets::DependencyValidationMarker depVals[] { descSetHelper._matScaffold->GetDependencyValidation(), std::get<::Assets::DependencyValidation>(material), std::get<::Assets::DependencyValidation>(shaderPatches) };
+				auto depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+				auto vertexStride = RenderCore::CalculateVertexStrideForSlot(ia, 0);
+				return DataDrivenAccelerators { std::move(pipeline), std::move(descriptorSet), vertexStride, std::move(depVal) };
+			});
+	}
+
+	void DataDrivenAccelerators::ConstructToPromise(
+		std::promise<DataDrivenAccelerators>&& promise,
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pipelineAccelerators,
+		std::shared_ptr<AssetsNew::CompoundAssetUtil> util, const AssetsNew::ScaffoldIndexer& indexer,
+		const RenderCore::Assets::RawMaterial&& materialOverrides,
+		IteratorRange<const RenderCore::MiniInputElementDesc*> inputAssembly, RenderCore::Topology topology)
+	{
+		using namespace Utility::Literals;
+		assert(pipelineAccelerators);
+		auto futureMaterial = util->GetFuture<RenderCore::Assets::RawMaterial>("RawMaterial"_h, indexer);
+		auto futureShaderPatches = util->GetFuture<std::shared_ptr<RenderCore::Assets::ShaderPatchCollection>>("ShaderPatchCollection"_h, indexer);
+		auto futureDescSet = util->GetFuture<std::shared_ptr<RenderCore::Assets::PredefinedDescriptorSetLayout>>("DescriptorSet"_h, indexer);
+		std::string name = "particle-material";
+		if (auto* contextAndIdentifier =  std::get_if<AssetsNew::ContextAndIdentifier>(&indexer)) name = contextAndIdentifier->_identifier;
+		#if defined(_DEBUG)
+			else if (auto* scaffoldAndEntityName =  std::get_if<AssetsNew::ScaffoldAndEntityName>(&indexer)) name = scaffoldAndEntityName->_entityName;
+		#endif
+		::Assets::WhenAll(std::move(futureMaterial), std::move(futureShaderPatches), std::move(futureDescSet)).ThenConstructToPromise(
+			std::move(promise),
+			[pa=pipelineAccelerators, topology, ia=std::vector<RenderCore::MiniInputElementDesc>(inputAssembly.begin(), inputAssembly.end()), name, rawMatOverrides=std::move(materialOverrides)](const auto& material, const auto& shaderPatches, const auto& descSet) mutable {
+				RenderCore::Assets::RawMaterial rawMat = std::get<0>(std::move(material));
+				rawMat.MergeInWithFilenameResolve(std::move(rawMatOverrides), {});
+				DescriptorSetConstructorHelper descSetHelper { std::move(rawMat), shaderPatches, descSet };
+				auto descriptorSet = pa->CreateDescriptorSetAccelerator(nullptr, descSetHelper._patchCollection, descSetHelper._matDescSet, descSetHelper._matMachine, descSetHelper._matScaffold, std::move(name));
+				auto pipeline = pa->CreatePipelineAccelerator(descSetHelper._patchCollection, descSetHelper._matDescSet, std::move(descSetHelper._matMachineDecomposed._matSelectors), ia, topology, descSetHelper._matMachineDecomposed._stateSet);
+
+				::Assets::DependencyValidationMarker depVals[] { descSetHelper._matScaffold->GetDependencyValidation(), std::get<::Assets::DependencyValidation>(material), std::get<::Assets::DependencyValidation>(shaderPatches) };
+				auto depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
+				auto vertexStride = RenderCore::CalculateVertexStride(ia);
+				return DataDrivenAccelerators { std::move(pipeline), std::move(descriptorSet), vertexStride, std::move(depVal) };
+			});
+	}
+
 	DataDrivenAcceleratorsWithDeform::DataDrivenAcceleratorsWithDeform(
 		std::shared_ptr<RenderCore::Techniques::PipelineAccelerator> pipeline,
 		std::shared_ptr<RenderCore::Techniques::DescriptorSetAccelerator> descriptorSet,
