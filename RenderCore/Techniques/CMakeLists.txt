@@ -5,40 +5,41 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         Apparatuses.cpp
         CommonResources.cpp
         CommonUtils.cpp
-        ShaderPatchInstantiationUtil.cpp
+        DataDrivenAccelerators.cpp
         DeferredShaderResource.cpp
+        DeformAccelerator.cpp
+        DeformerConstruction.cpp
+        DeformGeoInternal.cpp
+        DeformGeometryInfrastructure.cpp
+        DeformUniformsInfrastructure.cpp
         DescriptorSetAccelerator.cpp
+        DrawableConstructor.cpp
         Drawables.cpp
         ImmediateDrawables.cpp
+        LightWeightBuildDrawables.cpp
+        ManualDrawables.cpp
         ParsingContext.cpp
         PipelineAccelerator.cpp
+        PipelineCollection.cpp
+        PipelineLayoutDelegate.cpp
         PipelineOperators.cpp
         RenderPass.cpp
         RenderPassUtils.cpp
+        ResourceConstructionContext.cpp
+        Services.cpp
+        ShaderPatchInstantiationUtil.cpp
         ShaderVariationSet.cpp
-        DeformerConstruction.cpp
         SimpleModelRenderer.cpp
         SkinDeformer.cpp
         SpriteTechnique.cpp
+        SubFrameUtil.cpp
         SystemUniformsDelegate.cpp
         TechniqueDelegates.cpp
         Techniques.cpp
         TechniqueUtils.cpp
-        Services.cpp
         UniformDelegateManager.cpp
-        PipelineCollection.cpp
-        DeformAccelerator.cpp
-        DeformGeoInternal.cpp
-        DeformGeometryInfrastructure.cpp
-        DeformUniformsInfrastructure.cpp
-        DrawableConstructor.cpp
-        PipelineLayoutDelegate.cpp
-        LightWeightBuildDrawables.cpp
-        ManualDrawables.cpp
-        ResourceConstructionContext.cpp
-        SubFrameUtil.cpp
         ../../Tools/ToolsRig/VisualisationGeo.cpp
-        )
+    )
 
     add_library(RenderCoreTechniques-${metal_name} STATIC ${Src})
     xle_configure_library(RenderCoreTechniques-${metal_name})
