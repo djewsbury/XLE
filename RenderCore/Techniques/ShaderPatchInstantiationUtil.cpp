@@ -11,9 +11,7 @@
 #include "../Assets/IntermediateCompilers.h"
 #include "../MinimalShaderSource.h"
 #include "../../ConsoleRig/GlobalServices.h"
-#include "../../OSServices/AttachableLibrary.h"
 #include "../../ShaderParser/ShaderPatcher.h"
-#include "../../ShaderParser/NodeGraphProvider.h"
 #include "../../ShaderParser/ShaderAnalysis.h"
 #include "../../ShaderParser/DescriptorSetInstantiation.h"
 #include "../../Assets/DepVal.h"
@@ -23,7 +21,6 @@
 #include "../../Assets/ICompileOperation.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Streams/PathUtils.h"
-#include "../../Utility/Threading/CompletionThreadPool.h"
 #include "../../xleres/FileList.h"
 
 namespace RenderCore { namespace Techniques
