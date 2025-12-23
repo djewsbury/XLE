@@ -8,7 +8,7 @@
 
 #include "../DebuggingDisplay.h"
 
-namespace SceneEngine { class OceanLightingSettings; class DeepOceanSimSettings; }
+namespace SceneEngine { class OceanLightingSettings; struct DeepOceanSimSettings; }
 
 namespace Overlays
 {
