@@ -20,5 +20,9 @@ namespace EntityInterface
         std::stringstream&&,
         ::Assets::DependencyValidation&& depVal);
 
+    std::shared_ptr<Formatters::IDynamicInputFormatter> CreateDynamicFormatter(
+        std::string&&,
+        ::Assets::DependencyValidation&& depVal);
+
     std::shared_ptr<IEntityDocument> CreateTextEntityDocument(StringSection<> filename);
 }

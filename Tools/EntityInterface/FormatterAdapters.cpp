@@ -224,4 +224,11 @@ namespace EntityInterface
 			return std::make_shared<MemoryStreamTextFormatterAdapter>(formatter.str(), std::move(depVal));
 		#endif
 	}
+
+	std::shared_ptr<Formatters::IDynamicInputFormatter> CreateDynamicFormatter(
+        std::string&& str,
+        ::Assets::DependencyValidation&& depVal)
+	{
+		return std::make_shared<MemoryStreamTextFormatterAdapter>(std::move(str), std::move(depVal));
+	}
 }
