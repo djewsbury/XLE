@@ -616,9 +616,9 @@ namespace RenderCore { namespace Techniques
 		RetainedUniformsStream&& uniforms,
 		Topology topology)
 	{
-		assert(customGeo._ibFormat == Format(0));		// assuming no index buffer, just a vertex count
+		bool indexed = customGeo._ibFormat != Format(0);
 		auto* drawable = pkt._drawables.Allocate<DrawableWithVertexCount>();
-		drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
+		drawable->_drawFn = indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn;
 		drawable->_geo = &customGeo;
 		drawable->_pipeline = &pipeline;
 		drawable->_descriptorSet = &prebuiltDescriptorSet;
@@ -643,9 +643,9 @@ namespace RenderCore { namespace Techniques
 		std::vector<RetainedUniformsStream>&& uniforms,
 		Topology topology)
 	{
-		assert(customGeo._ibFormat == Format(0));		// assuming no index buffer, just a vertex count
+		bool indexed = customGeo._ibFormat != Format(0);
 		auto* drawable = pkt._drawables.Allocate<DrawableManyWithVertexCount>();
-		drawable->_drawFn = &DrawableManyWithVertexCount::ExecuteFn;
+		drawable->_drawFn = indexed ? &DrawableManyWithVertexCount::IndexedExecuteFn : &DrawableManyWithVertexCount::ExecuteFn;
 		drawable->_geo = &customGeo;
 		drawable->_pipeline = &pipeline;
 		drawable->_descriptorSet = &prebuiltDescriptorSet;

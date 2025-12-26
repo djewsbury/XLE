@@ -71,3 +71,14 @@ float4 outlinepatch(GStoPS input) : SV_Target0
 		return 1.0.xxxx;
 	#endif
 }
+
+float4 outlinepatch2(
+	float3 barycentricCoords	 : BARYCENTRIC,
+	float2 texCoord 			 : TEXCOORD0
+	) : SV_Target0
+{
+	float E = edgeFactor( barycentricCoords, 1.5f );
+	float patchEdge = 1.0f - edgeFactor2(frac(texCoord), 5.f).xxx;
+	float3 result = lerp( E.xxx, float3(0,1,0), patchEdge );
+	return float4( result, 1.f );
+}
