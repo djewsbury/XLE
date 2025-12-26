@@ -1208,7 +1208,7 @@ namespace Utility
 		//			page. This can result in a recursive walk down the list of pages, doing one swap
 		//			per page
 		if (!before._pageIterator) {
-			return emplace_back(std::move(p)...); // triggered when placing off the end of the current heap
+			return emplace_back(std::forward<Params>(p)...); // triggered when placing off the end of the current heap
 		} else if (!before._pageIterator->full()) {
 			before._pageIterator->emplace(before._idxWithinPage, std::forward<Params>(p)...);
 			unsigned c=before._pageIdx+1;
