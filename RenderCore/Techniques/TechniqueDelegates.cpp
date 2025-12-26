@@ -464,9 +464,8 @@ namespace RenderCore { namespace Techniques
 			} else {
 
 				// new style, more flexible approach
-				if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h) {
-					i->second.Configure(*nascentDesc, std::move(shaderPatches), iaAttributes);
-				}
+				if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h)
+					i->second.Configure(*nascentDesc, shaderPatches, iaAttributes);
 
 			}
 

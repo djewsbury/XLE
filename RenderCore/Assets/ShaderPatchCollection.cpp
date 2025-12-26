@@ -64,9 +64,10 @@ namespace RenderCore { namespace Assets
 			_preconfiguration = src._preconfiguration;
 		for (unsigned c=0; c<dimof(src._overrideShaders); ++c)
 			if (!src._overrideShaders[c].empty()) {
+				auto splitName = MakeFileNameSplitter(src._overrideShaders[c]);
 				char buffer[MaxPath];
-				searchRules.ResolveFile(buffer, src._overrideShaders[c]);
-				_overrideShaders[c] = buffer;
+				searchRules.ResolveFile(buffer, splitName.AllExceptParameters());
+				_overrideShaders[c] = Concatenate(buffer, splitName.ParametersWithDivider());
 			}
 
 		SortAndCalculateHash();
