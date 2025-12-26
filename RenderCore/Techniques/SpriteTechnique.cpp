@@ -1201,8 +1201,11 @@ void WriteBarycentricCoords(
 				for (auto& a:psEntryAttributes) arranger.AddFragmentOutput(a);
 
 				for (unsigned ep=0; ep<patches.size(); ++ep)
-					if (patches[ep]._implementsHash == "SV_AutoVS"_h)
+					if (patches[ep]._implementsHash == "SV_AutoVS"_h) {
 						arranger.AddStep(patches[ep]._name, *patches[ep]._signature, patches[ep]._implementsHash);
+					} else if (patches[ep]._implementsHash == "SV_SystemVS"_h) {
+						vsSystemPatches.emplace_back(patches[ep]);
+					}
 
 				Internal::ConnectSystemPatches(
 					arranger, vsSystemPatches,

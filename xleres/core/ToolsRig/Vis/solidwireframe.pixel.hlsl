@@ -64,7 +64,7 @@ float4 outlinepatch(GStoPS input) : SV_Target0
 {
 	#if SOLIDWIREFRAME_TEXCOORD==1
 		float E = edgeFactor( input.barycentricCoords, 1.5f );
-		float patchEdge = 1.0f - edgeFactor2(frac(input.texCoord), 5.f).xxx;
+		float patchEdge = 1.0f - edgeFactor2(frac(input.texCoord), 5.f);
 		float3 result = lerp( E.xxx, float3(0,1,0), patchEdge );
 		return float4( result, 1.f );
 	#else
@@ -78,7 +78,7 @@ float4 outlinepatch2(
 	) : SV_Target0
 {
 	float E = edgeFactor( barycentricCoords, 1.5f );
-	float patchEdge = 1.0f - edgeFactor2(frac(texCoord), 5.f).xxx;
+	float patchEdge = 1.0f - edgeFactor2(frac(texCoord), 5.f);
 	float3 result = lerp( E.xxx, float3(0,1,0), patchEdge );
 	return float4( result, 1.f );
 }
