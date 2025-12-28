@@ -134,8 +134,10 @@ namespace RenderCore { namespace BufferUploads
         virtual void stop() override;
 
         enum class ContinuationMode { AssemblyLineThread, SeparateThread };
+
+        std::shared_ptr<IDevice> GetDevice() const { return _device; }
         
-        AssemblyLine(IDevice& device, ContinuationMode continuationMode);
+        AssemblyLine(std::shared_ptr<IDevice> device, ContinuationMode continuationMode);
         ~AssemblyLine();
 
     protected:
@@ -187,7 +189,7 @@ namespace RenderCore { namespace BufferUploads
         Threading::Mutex        _transactionsLock;
         std::atomic<unsigned>   _allocatedTransactionCount;
 
-        IDevice*    _device;
+        std::shared_ptr<IDevice>    _device;
 
         TransactionRefHolder    GetTransaction(TransactionID id);
         TransactionRefHolder    AllocateTransaction(TransactionOptions::BitField flags);
@@ -795,8 +797,8 @@ namespace RenderCore { namespace BufferUploads
         return *this;
     }
 
-    AssemblyLine::AssemblyLine(IDevice& device, ContinuationMode continuationMode)
-    :   _device(&device)
+    AssemblyLine::AssemblyLine(std::shared_ptr<IDevice> device, ContinuationMode continuationMode)
+    :   _device(std::move(device))
     ,   _transactionsHeap((2*1024)<<4)
     , _continuationMode(continuationMode)
     {
@@ -1812,12 +1814,13 @@ namespace RenderCore { namespace BufferUploads
         std::optional<CommandListID>           LatestCommandListPendingProcessing() override;
 
         CommandListMetrics      PopMetrics() override;
+        auto GetDevice() const -> std::shared_ptr<IDevice> override;
 
         void                    OnFrameBarrier(IThreadContext&) override;
 
         unsigned GetGUID() const override { return _guid; }
 
-        Manager(const ManagerDesc& desc, IDevice& renderDevice);
+        Manager(std::shared_ptr<IDevice> renderDevice, const ManagerDesc& desc);
         ~Manager();
 
     private:
@@ -1883,6 +1886,11 @@ namespace RenderCore { namespace BufferUploads
         return _foregroundContext->PopMetrics();
     }
 
+    auto			        Manager::GetDevice() const -> std::shared_ptr<IDevice>
+    {
+        return _assemblyLine->GetDevice();
+    }
+
     void                    Manager::OnFrameBarrier(IThreadContext& immediateContext)
     {
         if (_foregroundStepMask)
@@ -1910,9 +1918,9 @@ namespace RenderCore { namespace BufferUploads
 
     static unsigned s_nextManagerGuid = 1;
 
-    Manager::Manager(const ManagerDesc& desc, IDevice& renderDevice)
+    Manager::Manager(std::shared_ptr<IDevice> renderDevice, const ManagerDesc& desc)
     {
-        if (!renderDevice.GetDeviceFeatures()._timelineSemaphore)
+        if (!renderDevice->GetDeviceFeatures()._timelineSemaphore)
             Throw(std::runtime_error("Timeline semaphores device feature is disabled, but is required"));
 
         _shutdownBackgroundThread = false;
@@ -1925,11 +1933,11 @@ namespace RenderCore { namespace BufferUploads
 
         _assemblyLine = std::make_shared<AssemblyLine>(renderDevice, multithreadingOk ? AssemblyLine::ContinuationMode::AssemblyLineThread : AssemblyLine::ContinuationMode::SeparateThread);
 
-        auto immediateDeviceContext = renderDevice.GetImmediateContext();
+        auto immediateDeviceContext = renderDevice->GetImmediateContext();
         decltype(immediateDeviceContext) backgroundDeviceContext;
 
         if (multithreadingOk) {
-            backgroundDeviceContext = renderDevice.CreateDeferredContext();
+            backgroundDeviceContext = renderDevice->CreateDeferredContext();
 
                 //
                 //      When using an older feature level, we can fail while
@@ -1978,8 +1986,8 @@ namespace RenderCore { namespace BufferUploads
         if (_backgroundStepMask) {
 
             decltype(immediateDeviceContext) transferQueueContext;
-            if (renderDevice.GetDeviceFeatures()._dedicatedTransferQueue)
-                if (auto* vulkanDevice = query_interface_cast<IDeviceVulkan*>(&renderDevice))
+            if (renderDevice->GetDeviceFeatures()._dedicatedTransferQueue)
+                if (auto* vulkanDevice = query_interface_cast<IDeviceVulkan*>(renderDevice.get()))
                     transferQueueContext = vulkanDevice->CreateDedicatedTransferContext();
 
             _backgroundContext = std::make_unique<PlatformInterface::UploadsThreadContext>(
@@ -2053,9 +2061,9 @@ namespace RenderCore { namespace BufferUploads
         _stagingPageBytes = CalculateStagingBufferSpace();
     }
 
-    std::unique_ptr<IManager> CreateManager(const ManagerDesc& desc, IDevice& renderDevice)
+    std::unique_ptr<IManager> CreateManager(std::shared_ptr<IDevice> renderDevice, const ManagerDesc& desc)
     {
-        return std::make_unique<Manager>(desc, renderDevice);
+        return std::make_unique<Manager>(std::move(renderDevice), desc);
     }
 
     IManager::~IManager() {}

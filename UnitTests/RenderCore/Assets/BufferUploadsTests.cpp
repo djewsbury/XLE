@@ -81,7 +81,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
-		auto bu = BufferUploads::CreateManager(s_managerDesc, *metalHelper->_device);
+		auto bu = BufferUploads::CreateManager(metalHelper->_device, s_managerDesc);
 
 		std::vector<unsigned> rawData;
 		rawData.resize(256*256, 0xff7fff7f);
@@ -162,7 +162,7 @@ namespace UnitTests
 		auto mnt0 = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", UnitTests::CreateEmbeddedResFileSystem());
 
 		auto metalHelper = MakeTestHelper();
-		auto bu = BufferUploads::CreateManager(s_managerDesc, *metalHelper->_device);
+		auto bu = BufferUploads::CreateManager(metalHelper->_device, s_managerDesc);
 		auto& immediateContext = *metalHelper->_device->GetImmediateContext();
 
 		auto ddsLoader = RenderCore::Assets::CreateDDSTextureLoader();
@@ -326,7 +326,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
-		auto bu = BufferUploads::CreateManager(s_managerDesc, *metalHelper->_device);
+		auto bu = BufferUploads::CreateManager(metalHelper->_device, s_managerDesc);
 		auto& immediateContext = *metalHelper->_device->GetImmediateContext();
 
 		const unsigned steadyPoint = 384;
@@ -480,7 +480,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
-		auto bu = BufferUploads::CreateManager(s_managerDesc, *metalHelper->_device);
+		auto bu = BufferUploads::CreateManager(metalHelper->_device, s_managerDesc);
 		auto threadContext = metalHelper->_device->GetImmediateContext();
 
 		auto testDesc = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc, TextureDesc::Plain2D(256, 256, RenderCore::Format::R8G8B8A8_UNORM, 9, 3));
@@ -495,7 +495,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
-		auto bu = BufferUploads::CreateManager(s_managerDesc, *metalHelper->_device);
+		auto bu = BufferUploads::CreateManager(metalHelper->_device, s_managerDesc);
 		auto threadContext = metalHelper->_device->GetImmediateContext();
 
 		auto massiveTexture = CreateDesc(BindFlag::ShaderResource|BindFlag::TransferSrc|BindFlag::TransferDst, TextureDesc::Plain2D(1024, 1024, RenderCore::Format::R32G32B32A32_FLOAT, 11, 4));
@@ -565,7 +565,7 @@ namespace UnitTests
 		using namespace RenderCore;
 		auto globalServices = ConsoleRig::MakeGlobalServices(GetStartupConfig());
 		auto metalHelper = MakeTestHelper();
-		auto bu = BufferUploads::CreateManager(s_managerDesc, *metalHelper->_device);
+		auto bu = BufferUploads::CreateManager(metalHelper->_device, s_managerDesc);
 		auto& immediateContext = *metalHelper->_device->GetImmediateContext();
 
 		const unsigned steadyPoint = 384;

@@ -132,6 +132,8 @@ namespace RenderCore { namespace BufferUploads
         virtual CommandListMetrics      PopMetrics              () = 0;
             /// @}
 
+        virtual auto			        GetDevice() const -> std::shared_ptr<IDevice> = 0;
+
         virtual unsigned GetGUID() const = 0;
 
         virtual ~IManager();
@@ -272,7 +274,7 @@ namespace RenderCore { namespace BufferUploads
 
     buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyPacket(const ResourceDesc& desc, std::string&& name);
     buffer_upload_dll_export std::shared_ptr<IDataPacket> CreateEmptyLinearBufferPacket(size_t size, std::string&& name);
-    buffer_upload_dll_export std::unique_ptr<IManager> CreateManager(const ManagerDesc& desc, IDevice& renderDevice);
+    buffer_upload_dll_export std::unique_ptr<IManager> CreateManager(std::shared_ptr<IDevice> renderDevice, const ManagerDesc& desc);
 
 }}
 

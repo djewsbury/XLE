@@ -157,7 +157,7 @@ namespace RenderCore { namespace Techniques
 		if (!_techniqueServices)
 			_techniqueServices = std::make_shared<Services>(device);
 
-		_bufferUploads = BufferUploads::CreateManager(bufferUploadsConfiguration, *device);
+		_bufferUploads = BufferUploads::CreateManager(device, bufferUploadsConfiguration);
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 
 		_techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());
