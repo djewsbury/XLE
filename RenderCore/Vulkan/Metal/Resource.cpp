@@ -2135,7 +2135,7 @@ namespace RenderCore { namespace Metal_Vulkan
 				// We're allowed to nest captures so long as they are of the same type,
 				// and we release them in opposite order to creation order (ie shoes and socks order)
 				if (existing->second._layout != _capturedLayout)
-					Throw(std::runtime_error("Attempting to CaptureForBind a resource that is already captured in another state"));
+					Log(Warning) << "Attempting to CaptureForBind a resource that is already captured in another state" << std::endl;
 				previousLayout = existing->second._layout;
 			}
 
