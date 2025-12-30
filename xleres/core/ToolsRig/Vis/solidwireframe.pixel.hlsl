@@ -20,14 +20,6 @@ float edgeFactor( float3 barycentricCoords, float width )
 	return min(min(a3.x, a3.y), a3.z);
 }
 
-
-float edgeFactor2( float2 coords, float width )
-{
-	float2 d = fwidth(coords);
-	float2 a3 = smoothstep(0.0.xx, d*width, coords);
-	return min(a3.x, a3.y);
-}
-
 float4 main(GStoPS input) : SV_Target0
 {
 	float E = edgeFactor( input.barycentricCoords, 1.f );
@@ -66,25 +58,3 @@ float4 marker(GStoPS input) : SV_Target0
 	return float4(col, 1.f);
 }
 
-float4 outlinepatch(GStoPS input) : SV_Target0
-{
-	#if SOLIDWIREFRAME_TEXCOORD==1
-		float E = edgeFactor( input.barycentricCoords, 1.5f );
-		float patchEdge = 1.0f - edgeFactor2(frac(input.texCoord), 5.f);
-		float3 result = lerp( E.xxx, float3(0,1,0), patchEdge );
-		return float4( result, 1.f );
-	#else
-		return 1.0.xxxx;
-	#endif
-}
-
-float4 outlinepatch2(
-	float3 barycentricCoords	 : BARYCENTRIC,
-	float2 texCoord 			 : TEXCOORD0
-	) : SV_Target0
-{
-	float E = edgeFactor( barycentricCoords, 1.5f );
-	float patchEdge = 1.0f - edgeFactor2(frac(texCoord), 5.f);
-	float3 result = lerp( E.xxx, float3(0,1,0), patchEdge );
-	return float4( result, 1.f );
-}
