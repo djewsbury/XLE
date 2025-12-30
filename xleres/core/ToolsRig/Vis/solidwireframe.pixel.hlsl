@@ -15,22 +15,28 @@ struct GStoPS
 
 float edgeFactor( float3 barycentricCoords, float width )
 {
-    float3 d = fwidth(barycentricCoords);
-    float3 a3 = smoothstep(0.0.xxx, d*width, barycentricCoords);
-    return min(min(a3.x, a3.y), a3.z);
+	float3 d = fwidth(barycentricCoords);
+	float3 a3 = smoothstep(0.0.xxx, d*width, barycentricCoords);
+	return min(min(a3.x, a3.y), a3.z);
 }
 
 
 float edgeFactor2( float2 coords, float width )
 {
-    float2 d = fwidth(coords);
-    float2 a3 = smoothstep(0.0.xx, d*width, coords);
-    return min(a3.x, a3.y);
+	float2 d = fwidth(coords);
+	float2 a3 = smoothstep(0.0.xx, d*width, coords);
+	return min(a3.x, a3.y);
 }
 
 float4 main(GStoPS input) : SV_Target0
 {
 	float E = edgeFactor( input.barycentricCoords, 1.f );
+	return float4( E.xxx, 1.f );
+}
+
+float4 main2(float3 barycentricCoords : BARYCENTRIC) : SV_Target0
+{
+	float E = edgeFactor( barycentricCoords, 1.f );
 	return float4( E.xxx, 1.f );
 }
 
