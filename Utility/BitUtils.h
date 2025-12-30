@@ -80,6 +80,22 @@ namespace Utility
         return input + multiple - 1 - (input - 1) % multiple;
     }
 
+    inline uint32_t InterleaveBits(uint16_t ix, uint16_t iy)
+    {
+        uint32_t x = ix, y = iy;
+        x = (x | (x << 8u)) & 0x00FF00FFu;
+        x = (x | (x << 4u)) & 0x0F0F0F0Fu;
+        x = (x | (x << 2u)) & 0x33333333u;
+        x = (x | (x << 1u)) & 0x55555555u;
+
+        y = (y | (y << 8u)) & 0x00FF00FFu;
+        y = (y | (y << 4u)) & 0x0F0F0F0Fu;
+        y = (y | (y << 2u)) & 0x33333333u;
+        y = (y | (y << 1u)) & 0x55555555u;
+
+        return x | (y << 1u);
+    }
+
     class BitHeap
     {
     public:
