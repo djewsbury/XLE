@@ -73,7 +73,7 @@ namespace RenderCore { namespace Techniques
 
 	class RenderPassInstance;
 
-	enum class FullViewportOperatorSubType { DisableDepth, MaxDepth };
+	enum class FullViewportOperatorSubType { DisableDepth, MaxDepth, Flip };
 
 	struct PixelOutputStates
 	{

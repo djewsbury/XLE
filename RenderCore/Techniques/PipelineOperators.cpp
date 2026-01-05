@@ -177,6 +177,8 @@ namespace RenderCore { namespace Techniques
 		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompileResourceName(pixelShader);
 		if (subType == FullViewportOperatorSubType::DisableDepth) {
 			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector"};
+		} else if (subType == FullViewportOperatorSubType::Flip) {
+			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_flip_viewfrustumvector"};
 		} else {
 			assert(subType == FullViewportOperatorSubType::MaxDepth);
 			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector_deep"};
