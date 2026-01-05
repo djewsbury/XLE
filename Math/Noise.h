@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Vector.h"
+#include "../Utility/BitUtils.h"
 
 namespace XLEMath
 {
@@ -54,38 +55,6 @@ namespace XLEMath
 			state._s[2] = c;
 			state._s[3] = d;
 		}
-	}
-
-	inline float AsFloatBits(uint32_t input)
-	{
-			// (or just use a reinterpret cast)
-		union Converter { float f; uint32_t i; };
-		Converter c; c.i = input; 
-		return c.f;
-	}
-
-	inline uint32_t AsUInt32Bits(float input)
-	{
-			// (or just use a reinterpret cast)
-		union Converter { float f; uint32_t i; };
-		Converter c; c.f = input; 
-		return c.i;
-	}
-
-	inline double AsFloatBits(uint64_t input)
-	{
-			// (or just use a reinterpret cast)
-		union Converter { double f; uint64_t i; };
-		Converter c; c.i = input; 
-		return c.f;
-	}
-
-	inline uint64_t AsUInt64Bits(double input)
-	{
-			// (or just use a reinterpret cast)
-		union Converter { double f; uint64_t i; };
-		Converter c; c.f = input; 
-		return c.i;
 	}
 
 	inline float ZeroToOneFromBits(uint32_t i)
