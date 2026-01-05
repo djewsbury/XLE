@@ -202,6 +202,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 	public:
 		const IPreparedShadowResult* GetPreparedShadow(unsigned setIdx, unsigned lightIdx);
+		const ShadowOperatorDesc& GetShadowOperatorDesc(unsigned setIdx, unsigned lightIdx);
 
 		struct PreparedShadow { unsigned _preparerIdx = ~0u; const IPreparedShadowResult* _preparedResult = nullptr; ShadowOperatorDesc _opDesc; };
 		std::vector<PreparedShadow> GetAllPreparedShadows();		// intended for debugging

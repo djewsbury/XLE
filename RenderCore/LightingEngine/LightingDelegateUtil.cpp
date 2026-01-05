@@ -68,13 +68,6 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		void AttachDriver(std::shared_ptr<ILightBase> driver) override { _driver = std::move(driver); }
 	};
 
-	auto PriorityShadowProjectionScheduler::GetPreparedShadow(unsigned setIdx, unsigned lightIdx) -> const IPreparedShadowResult*
-	{
-		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) return {};
-		assert(_sceneSets[setIdx]->_activeProjections.IsAllocated(lightIdx));
-		return _sceneSets[setIdx]->_preparedResult[lightIdx].get();
-	}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	class PriorityShadowSchedulerUtil
@@ -221,6 +214,23 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 					return res;
 			return _sceneSets[setIdx]->_projections[lightIdx]->QueryInterface(interfaceTypeCode);
 		}
+	}
+
+	auto PriorityShadowProjectionScheduler::GetPreparedShadow(unsigned setIdx, unsigned lightIdx) -> const IPreparedShadowResult*
+	{
+		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) return nullptr;
+		assert(_sceneSets[setIdx]->_activeProjections.IsAllocated(lightIdx));
+		return _sceneSets[setIdx]->_preparedResult[lightIdx].get();
+	}
+
+	const ShadowOperatorDesc& PriorityShadowProjectionScheduler::GetShadowOperatorDesc(unsigned setIdx, unsigned lightIdx)
+	{
+		if (setIdx >= _sceneSets.size() || !_sceneSets[setIdx]) {
+			static ShadowOperatorDesc s_dummy;
+			return s_dummy;
+		}
+		assert(_sceneSets[setIdx]->_activeProjections.IsAllocated(lightIdx));
+		return _shadowPreparers->_preparers[_sceneSets[setIdx]->_preparerId]._desc;
 	}
 
 	auto PriorityShadowProjectionScheduler::GetAllPreparedShadows() -> std::vector<PreparedShadow>

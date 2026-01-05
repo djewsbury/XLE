@@ -2,6 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#pragma once
+
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Math/Matrix.h"
