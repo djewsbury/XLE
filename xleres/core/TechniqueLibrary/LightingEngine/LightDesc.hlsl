@@ -24,11 +24,14 @@ struct RangeFogDesc
 struct VolumeFogDesc
 {
 	float	OpticalThickness;
+	float	DensityScale;
 	float	HeightStart;
 	float	HeightEnd;
 	bool	EnableFlag;
 	float3	SunInscatter;
 	float3	AmbientInscatter;
+	float	LargeParticleBalance;
+	float	MieIsotropicCoefficient;
 };
 
 struct LightDesc
