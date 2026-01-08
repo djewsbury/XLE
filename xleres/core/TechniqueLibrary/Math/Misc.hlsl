@@ -105,6 +105,24 @@ uint InterleaveNibbles(uint2 xy)
 	return xy.x | (xy.y << 4u);
 }
 
+uint InterleaveNibbles(uint3 xyz)
+{
+	// 11 bits from X & Y
+	// 10 bits from Z
+	//
+	// ---- ---- ---- ---- ---- ---- ---- ----
+	// ZZYY YXXX ZZZZ YYYY XXXX ZZZZ YYYY XXXX
+	// 0000 0111 0000 0000 1111 0000 0000 1111		(X) 0x0700F00F
+	// 0011 1000 0000 1111 0000 0000 1111 0000		(Y) 0x380F00F0
+	// 1100 0000 1111 0000 0000 1111 0000 0000		(Z) 0xC0F00F00
+
+	xyz.x = (xyz.x | (xyz.x << 8) | (xyz.x << 16)) & 0x0700F00F;
+	xyz.y = (xyz.y | (xyz.y << 8) | (xyz.y << 16)) & 0x0700F00F;
+	xyz.z = (xyz.z | (xyz.z << 8) | (xyz.z << 16)) & 0x0700F00F;
+	
+	return xyz.x | (xyz.y << 4u) | (xyz.z << 8u);
+}
+
 uint InterleaveBits(uint2 xy)
 {
 	xy.x = (xy.x | (xy.x << 8u)) & 0x00FF00FFu;
