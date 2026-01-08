@@ -115,28 +115,5 @@ namespace RenderCore { namespace Metal_Vulkan
 		QueryType _type;
 		unsigned _outputCount = 0;
 	};
-
-    #if defined(GPUANNOTATIONS_ENABLE)
-
-        class GPUAnnotation
-        {
-        public:
-			static void Begin(DeviceContext& context, const char annotationName[]) {}
-			static void End(DeviceContext& context) {}
-
-			GPUAnnotation(DeviceContext& context, const char annotationName[]) {}
-        };
-
-    #else
-
-        class GPUAnnotation
-        {
-        public:
-			static void Begin(DeviceContext& context, const char annotationName[]) {}
-			static void End(DeviceContext& context, const char annotationName[]) {}
-			GPUAnnotation(DeviceContext&, const char[]) {}
-        };
-
-    #endif
 }}
 

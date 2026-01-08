@@ -5,8 +5,6 @@
 #pragma once
 
 #include "IDevice.h"
-#include <utility>
-#include <memory>
 #include <functional>
 
 namespace RenderCore

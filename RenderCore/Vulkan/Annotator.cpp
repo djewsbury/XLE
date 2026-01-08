@@ -88,9 +88,9 @@ namespace RenderCore { namespace ImplVulkan
 
 		auto& metalContext = *Metal::DeviceContext::Get(*context);
 		if (types & EventTypes::MarkerBegin) {
-			Metal::GPUAnnotation::Begin(metalContext, name);
+			metalContext.BeginLabel(name);
 		} else if (types & EventTypes::MarkerEnd) {
-			Metal::GPUAnnotation::End(metalContext);
+			metalContext.EndLabel();
 		}
 
 		if (!(types & (EventTypes::ProfileBegin|EventTypes::ProfileEnd)))

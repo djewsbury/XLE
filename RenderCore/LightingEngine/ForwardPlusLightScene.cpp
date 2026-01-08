@@ -53,8 +53,8 @@ namespace RenderCore { namespace LightingEngine
 		auto& device = *_pipelineAccelerators->GetDevice();
 		for (unsigned c=0; c<dimof(_uniforms); c++)
 			_uniforms[c]._propertyCB = device.CreateResource(
-				CreateDesc(BindFlag::ConstantBuffer, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps))), "env-props");
-		_unmapPropertyCB = device.CreateResource(CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps))), "env-props");
+				CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst|BindFlag::TransferSrc, allocationRulesForDynamicCBs, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps))), "env-props");
+		_unmapPropertyCB = device.CreateResource(CreateDesc(BindFlag::ConstantBuffer|BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(Internal::CB_EnvironmentProps))), "env-props");
 		if (_unmapPropertyCB) {
 			_uniforms[0]._propertyCBView = _unmapPropertyCB->CreateBufferView(BindFlag::ConstantBuffer);
 			for (unsigned c=0; c<dimof(_uniforms); c++) _uniforms[c]._propertyCBView = _uniforms[0]._propertyCBView;

@@ -1673,7 +1673,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (varinfo._isStructType)
 			return DescriptorSlot { DescriptorType::UniformBuffer, 1 };
 		if (varinfo._isRuntimeArrayStructType)
-			return DescriptorSlot { DescriptorType::UnorderedAccessBuffer, 1 };
+			return DescriptorSlot { DescriptorType::UnorderedAccessBuffer, varinfo._arrayElementCount.value_or(1) };
 
 		DescriptorSlot result;
 		if (varinfo._basicType) {

@@ -735,7 +735,7 @@ namespace RenderCore { namespace Metal_Vulkan
 						blankStorageBuffer, false
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
 				} else if (b == DescriptorType::UniformTexelBuffer || b == DescriptorType::UnorderedAccessTexelBuffer) {
-					/* note sure if there's a good dummy here, because we may have to match the texel format from the shader */
+					/* not sure if there's a good dummy here, because we may have to match the texel format from the shader */
 				} else if (b == DescriptorType::InputAttachment) {
 					/* not sure what would be a correct dummy descriptor for an input attachment */
 				} else if (b == DescriptorType::Empty) {
@@ -769,6 +769,8 @@ namespace RenderCore { namespace Metal_Vulkan
 						AsVkDescriptorType(b),
 						0, MakeIteratorRange(bindingInfos, bindingInfos+_signature[bIndex]._count)
 						VULKAN_VERBOSE_DEBUG_ONLY(, s_dummyDescriptorString));
+				} else if (b == DescriptorType::UniformTexelBuffer || b == DescriptorType::UnorderedAccessTexelBuffer) {
+					/* not sure if there's a good dummy here, because we may have to match the texel format from the shader */
 				} else if (b == DescriptorType::Empty) {
 					/* treated as empty */
 				} else {
