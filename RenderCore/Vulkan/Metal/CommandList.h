@@ -68,6 +68,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			const VkClearDepthStencilValue* pDepthStencil,
 			uint32_t rangeCount,
 			const VkImageSubresourceRange* pRanges);
+		void FillBuffer(
+			VkBuffer dstBuffer,
+			VkDeviceSize dstOffset,
+			VkDeviceSize size,
+			uint32_t data);
 		void PipelineBarrier(
 			VkPipelineStageFlags            srcStageMask,
 			VkPipelineStageFlags            dstStageMask,

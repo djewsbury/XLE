@@ -1155,7 +1155,10 @@ namespace RenderCore { namespace Metal_Vulkan
 				resView.GetImageLayout(),
 				&clearValue, 1, &subResRange);
 		} else {
-			Throw(std::runtime_error("Attempting to clear non-image resource with GraphicsEncoder::Clear"));
+			assert((ByteCount(res.AccessDesc()) % 4) == 0);		// VK_WHOLE_SIZE behaves unexpectedly when the buffer size isn't a multiple of 4 (see spec)
+			_sharedState->_commandList.FillBuffer(
+				res.GetBuffer(),
+				0, VK_WHOLE_SIZE, clearColour[0]);
 		}
 	}
 
