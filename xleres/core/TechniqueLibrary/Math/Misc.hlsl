@@ -96,12 +96,8 @@ uint32_t IntegerHashLowBits(uint32_t x)
 
 uint InterleaveNibbles(uint2 xy)
 {
-	xy.x = (xy.x | (xy.x << 8)) & 0x00FF00FF;
-	xy.x = (xy.x | (xy.x << 4)) & 0x0F0F0F0F;
-
-	xy.y = (xy.y | (xy.y << 8)) & 0x00FF00FF;
-	xy.y = (xy.y | (xy.y << 4)) & 0x0F0F0F0F;
-
+	xy = (xy | (xy << 8)) & 0x00FF00FF;
+	xy = (xy | (xy << 4)) & 0x0F0F0F0F;
 	return xy.x | (xy.y << 4u);
 }
 
@@ -116,25 +112,16 @@ uint InterleaveNibbles(uint3 xyz)
 	// 0011 1000 0000 1111 0000 0000 1111 0000		(Y) 0x380F00F0
 	// 1100 0000 1111 0000 0000 1111 0000 0000		(Z) 0xC0F00F00
 
-	xyz.x = (xyz.x | (xyz.x << 8) | (xyz.x << 16)) & 0x0700F00F;
-	xyz.y = (xyz.y | (xyz.y << 8) | (xyz.y << 16)) & 0x0700F00F;
-	xyz.z = (xyz.z | (xyz.z << 8) | (xyz.z << 16)) & 0x0700F00F;
-	
+	xyz = (xyz | (xyz << 8) | (xyz << 16)) & 0x0700F00F;
 	return xyz.x | (xyz.y << 4u) | (xyz.z << 8u);
 }
 
 uint InterleaveBits(uint2 xy)
 {
-	xy.x = (xy.x | (xy.x << 8u)) & 0x00FF00FFu;
-	xy.x = (xy.x | (xy.x << 4u)) & 0x0F0F0F0Fu;
-	xy.x = (xy.x | (xy.x << 2u)) & 0x33333333u;
-	xy.x = (xy.x | (xy.x << 1u)) & 0x55555555u;
-
-	xy.y = (xy.y | (xy.y << 8u)) & 0x00FF00FFu;
-	xy.y = (xy.y | (xy.y << 4u)) & 0x0F0F0F0Fu;
-	xy.y = (xy.y | (xy.y << 2u)) & 0x33333333u;
-	xy.y = (xy.y | (xy.y << 1u)) & 0x55555555u;
-
+	xy = (xy | (xy << 8u)) & 0x00FF00FFu;
+	xy = (xy | (xy << 4u)) & 0x0F0F0F0Fu;
+	xy = (xy | (xy << 2u)) & 0x33333333u;
+	xy = (xy | (xy << 1u)) & 0x55555555u;
 	return xy.x | (xy.y << 1u);
 }
 
