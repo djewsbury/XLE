@@ -1095,6 +1095,7 @@ void WriteBarycentricCoords(
 				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
 					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);
 
+			ps << "[earlydepthstencil] ";
 			psSignature = writerHelper.WriteFragment(ps, "PSEntry");
 		}
 
@@ -1332,6 +1333,7 @@ void WriteBarycentricCoords(
 				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
 					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);
 
+			ps << "[earlydepthstencil] ";
 			psSignature = writerHelper.WriteFragment(ps, "PSEntry");
 		}
 
