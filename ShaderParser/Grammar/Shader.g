@@ -130,7 +130,7 @@ tokens
 	RECOGNIZER->displayRecognitionError = (void (*)(struct ANTLR3_BASE_RECOGNIZER_struct *, pANTLR3_UINT8 *))&CustomDisplayRecognitionError;
 }
 
-storage_class : 'extern' | 'nointerpolation' | 'precise' | 'shared' | 'groupshared' | 'static' | 'uniform' | 'volatile';
+storage_class : 'extern' | 'nointerpolation' | 'precise' | 'shared' | 'groupshared' | 'static' | 'uniform' | 'volatile' | 'globallycoherent';
 type_modifier : 'const' | 'row_major' | 'column_major';
 
 entrypoint
