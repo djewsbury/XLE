@@ -19,6 +19,7 @@
 #include "PipelineCollection.h"
 #include "PipelineOperators.h"
 #include "PipelineLayoutDelegate.h"
+#include "ParsingContext.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Assets/PredefinedPipelineLayout.h"
 #include "../Assets/PipelineConfigurationUtils.h"
@@ -176,8 +177,8 @@ namespace RenderCore { namespace Techniques
 		
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		_prePresentBinding = subFrameEvents._onPrePresent.Bind(
-			[bu=_bufferUploads](RenderCore::IThreadContext& context) {
-				bu->OnFrameBarrier(context);
+			[bu=_bufferUploads](ParsingContext& context) {
+				bu->OnFrameBarrier(context.GetThreadContext());
 			});
 
 		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(

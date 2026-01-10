@@ -11,7 +11,6 @@
 #include "../FrameBufferDesc.h"
 #include "../ResourceUtils.h"           // for ViewPool
 #include "../Metal/Forward.h"
-#include "../../Math/Vector.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>

@@ -223,7 +223,7 @@ namespace PlatformRig
         TRY {
 
             if (_subFrameEvents)
-                _subFrameEvents->_onPrePresent.Invoke(context);
+                _subFrameEvents->_onPrePresent.Invoke(parserContext);
 
             Techniques::Services::GetBufferUploads().StallAndMarkCommandListDependency(context, parserContext._requiredBufferUploadsCommandList);
 
@@ -243,7 +243,7 @@ namespace PlatformRig
 			}
 
             if (_subFrameEvents)
-                _subFrameEvents->_onPostPresent.Invoke(context);
+                _subFrameEvents->_onPostPresent.Invoke(parserContext);
 
             _pimpl->_capturedDoubleBufferAttachments = parserContext.GetAttachmentReservation().CaptureDoubleBufferAttachments();
 

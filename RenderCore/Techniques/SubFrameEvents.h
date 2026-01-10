@@ -12,8 +12,8 @@ namespace RenderCore { namespace Techniques
 	class SubFrameEvents
 	{
 	public:
-		Signal<IThreadContext&> _onPrePresent;
-		Signal<IThreadContext&> _onPostPresent;
+		Signal<ParsingContext&> _onPrePresent;
+		Signal<ParsingContext&> _onPostPresent;
 		Signal<> _onFrameBarrier;
 		Signal<ParsingContext&> _onBeginFrame;
 
