@@ -100,8 +100,10 @@ namespace RenderCore { namespace Assets
 		case Format::BC3_TYPELESS: return CMP_FORMAT_BC3;
 		case Format::BC3_UNORM: return CMP_FORMAT_BC3;
 		case Format::BC3_UNORM_SRGB: return CMP_FORMAT_BC3;
-		case Format::BC4_UNORM: return CMP_FORMAT_BC4;		// CMP_FORMAT_BC4_S not accessible
-		case Format::BC5_UNORM: return CMP_FORMAT_BC5;		// CMP_FORMAT_BC5_S not accessible
+		case Format::BC4_UNORM: return CMP_FORMAT_BC4;
+		case Format::BC4_SNORM: return CMP_FORMAT_BC4_S;
+		case Format::BC5_UNORM: return CMP_FORMAT_BC5;
+		case Format::BC5_SNORM: return CMP_FORMAT_BC5_S;
 		case Format::BC6H_UF16: return CMP_FORMAT_BC6H;
 		case Format::BC6H_SF16: return CMP_FORMAT_BC6H_SF;
 		case Format::BC7_TYPELESS: return CMP_FORMAT_BC7;
