@@ -1346,7 +1346,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "HaltonSampler"_h))
-			return util->GetFuture<std::shared_ptr<Compiler_HaltonSampler>>("HaltonSampler"_h, indexer).get().get();
+			return Actualize<std::shared_ptr<Compiler_HaltonSampler>>(*util, "HaltonSampler"_h, indexer).get();
 
 		class Compiler_HaltonOrderedSamples : public Assets::ITextureCompiler
 		{
@@ -1366,7 +1366,7 @@ namespace RenderCore { namespace LightingEngine
 		};
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "HaltonOrderedSamples"_h))
-			return util->GetFuture<std::shared_ptr<Compiler_HaltonOrderedSamples>>("HaltonOrderedSamples"_h, indexer).get().get();
+			return Actualize<std::shared_ptr<Compiler_HaltonOrderedSamples>>(*util, "HaltonOrderedSamples"_h, indexer).get();
 
 		return nullptr;
 	}
@@ -1378,7 +1378,7 @@ namespace RenderCore { namespace LightingEngine
 		auto scaffold = indexer._scaffold.get();
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "JustLoad"_h))
-			return util->GetFuture<std::shared_ptr<Compiler_JustLoad>>("JustLoad"_h, indexer).get().get();
+			return Actualize<std::shared_ptr<Compiler_JustLoad>>(*util, "JustLoad"_h, indexer).get();
 
 		return nullptr;
 	}

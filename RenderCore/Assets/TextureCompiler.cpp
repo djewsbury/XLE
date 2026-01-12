@@ -552,6 +552,8 @@ namespace RenderCore { namespace Assets
 		Compiler_BalancedNoise(unsigned width, unsigned height) : _width(width), _height(height) {}
 	};
 
+	template<typename T> decltype(std::declval<T&&>().get()) YieldToPoolAndGet(T&& future) { YieldToPool(future); return future.get(); }
+
 	std::shared_ptr<ITextureCompiler> TextureCompiler_Base(
 		std::shared_ptr<::AssetsNew::CompoundAssetUtil> util,
 		const ::AssetsNew::ScaffoldAndEntityName& indexer)
@@ -559,7 +561,7 @@ namespace RenderCore { namespace Assets
 		auto scaffold = indexer._scaffold.get();
 
 		if (scaffold->HasComponent(indexer._entityNameHash, "BalancedNoise"_h))
-			return util->GetFuture<std::shared_ptr<Compiler_BalancedNoise>>("BalancedNoise"_h, indexer).get().get();
+			return YieldToPoolAndGet(util->GetFuture<std::shared_ptr<Compiler_BalancedNoise>>("BalancedNoise"_h, indexer)).get();
 		
 		return nullptr;
 	}
@@ -717,8 +719,8 @@ namespace RenderCore { namespace Assets
 		result._intermediateName = result._subCompiler->GetIntermediateName();
 
 		if (indexer._scaffold.get()->HasComponent(indexer._entityNameHash, "PostConvert"_h)) {
-			result._postConvert = util->GetFuture<PostConvert>("PostConvert"_h, indexer).get();
-			result._intermediateName = Concatenate(result._intermediateName, "-", AsString(result._postConvert->_format));
+			result._postConvert = YieldToPoolAndGet(util->GetFuture<PostConvert>("PostConvert"_h, indexer));
+			result._intermediateName = Concatenate(result._intermediateName, "-", AsString(result._postConvert->_format), result._postConvert->_buildMipmaps?"-m":"");
 		}
 
 		return result;
