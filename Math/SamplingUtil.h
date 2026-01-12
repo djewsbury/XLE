@@ -34,7 +34,7 @@ namespace XLEMath
 		static unsigned primeSums[dimof(Primes)];
 		static std::vector<uint16_t> digitPerms;
 		if (digitPerms.empty()) {
-			std::mt19937_64 rng(6294384621946ull);
+			std::mt19937_64 rng(0x4F28C5B9868F397Aull);
 			unsigned accumulator = 0;
 			for (unsigned c=0; c<dimof(Primes); ++c) {
 				primeSums[c] = accumulator;
