@@ -31,7 +31,7 @@
 namespace RenderCore { namespace Assets
 {
 
-	static RenderCore::TextureDesc BuildTextureDesc(const DirectX::TexMetadata& metadata)
+	RenderCore::TextureDesc BuildTextureDesc(const DirectX::TexMetadata& metadata)
 	{
 		using namespace DirectX;
 		RenderCore::TextureDesc desc = RenderCore::TextureDesc::Empty();

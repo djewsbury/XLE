@@ -67,6 +67,7 @@ namespace RenderCore { namespace Assets
 	struct PostConvert
 	{
 		Format _format = Format::Unknown;
+		bool _buildMipmaps = false;
 		friend void DeserializationOperator(Formatters::TextInputFormatter<char>&, PostConvert&);
 	};
 

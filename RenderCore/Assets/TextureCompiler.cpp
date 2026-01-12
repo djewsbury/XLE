@@ -27,6 +27,15 @@
 	#include "Compressonator.h"
 #endif
 
+#if ENABLE_DXTEX
+	#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
+		#include "../../OSServices/WinAPI/IncludeWindows.h"	// get in before DirectXTex includes it
+	#endif
+	#define DeleteFile DeleteFileA
+	#include "../../Foreign/DirectXTex/DirectXTex/DirectXTex.h"
+	#undef DeleteFile
+#endif
+
 using namespace Utility::Literals;
 
 namespace RenderCore { namespace Assets
@@ -117,11 +126,14 @@ namespace RenderCore { namespace Assets
 		}
 	}
 
+	RenderCore::TextureDesc BuildTextureDesc(const DirectX::TexMetadata& metadata);
+
 	class CompressonatorTexture
 	{
 	public:
 		CMP_Texture _srcTexture;
 		TextureDesc _srcDesc;
+		AlignedUniquePtr<uint8_t> _retainedData;
 
 		CompressonatorTexture(BufferUploads::IAsyncDataSource& dataSrc)
 		{
@@ -139,7 +151,8 @@ namespace RenderCore { namespace Assets
 			_srcTexture.dwPitch    = 0;		// interpreted as packed
 			_srcTexture.format     = AsCompressonatorFormat(desc._textureDesc._format);
 			_srcTexture.dwDataSize = ByteCount(desc._textureDesc);
-			_srcTexture.pData = (CMP_BYTE*)XlMemAlign(_srcTexture.dwDataSize, 64);		// use a very large alignment, even if it's not specifically requested by compressonator
+			_retainedData.reset((uint8_t*)XlMemAlign(_srcTexture.dwDataSize, 64));		// use a very large alignment, even if it's not specifically requested by compressonator
+			_srcTexture.pData = _retainedData.get();
 
 			auto mipCount = desc._textureDesc._mipCount;
 			auto arrayLayerCount = ActualArrayLayerCount(desc._textureDesc);
@@ -161,32 +174,44 @@ namespace RenderCore { namespace Assets
 				unsigned char blue;
 				for (CMP_DWORD i = 0; i < _srcTexture.dwDataSize; i += 4)
 				{
-					blue                    = _srcTexture.pData[i];
-					_srcTexture.pData[i]     = _srcTexture.pData[i + 2];
+					blue = _srcTexture.pData[i];
+					_srcTexture.pData[i] = _srcTexture.pData[i + 2];
 					_srcTexture.pData[i + 2] = blue;
 				}
 				_srcTexture.format = CMP_FORMAT_RGBA_8888;
 			}
 		}
 
+		#if ENABLE_DXTEX
+			CompressonatorTexture(const DirectX::ScratchImage& scratchImage)		// scratchImage must outlive this
+			{
+				XlZeroMemory(_srcTexture);
+				_srcDesc = BuildTextureDesc(scratchImage.GetMetadata());
+
+				_srcTexture.dwSize     = sizeof(_srcTexture);
+				_srcTexture.dwWidth    = _srcDesc._width;
+				_srcTexture.dwHeight   = _srcDesc._height;
+				_srcTexture.dwPitch    = 0;		// interpreted as packed
+				_srcTexture.format     = AsCompressonatorFormat(_srcDesc._format);
+				_srcTexture.dwDataSize = ByteCount(_srcDesc);
+				_srcTexture.pData      = scratchImage.GetPixels();
+			}
+		#endif
+
 		CompressonatorTexture()
 		{
 			XlZeroMemory(_srcTexture);
 		}
 
-		~CompressonatorTexture()
-		{
-			XlMemAlignFree(_srcTexture.pData);
-		}
+		~CompressonatorTexture() {}
 		CompressonatorTexture(CompressonatorTexture&&) = default;
 		CompressonatorTexture& operator=(CompressonatorTexture&&) = default;
 	};
 
 	::Assets::Blob ConvertAndPrepareDDSBlobSync(
-		BufferUploads::IAsyncDataSource& srcPkt,
+		const CompressonatorTexture& input,
 		Format dstFmt)
 	{
-		CompressonatorTexture input{srcPkt};
 
 		auto dstDesc = input._srcDesc;
 		dstDesc._format = dstFmt;
@@ -348,6 +373,53 @@ namespace RenderCore { namespace Assets
 		l.unlock();
 
 		return destinationBlob;
+	}
+
+	::Assets::Blob ConvertAndPrepareDDSBlobSync(
+		BufferUploads::IAsyncDataSource& srcPkt,
+		Format dstFmt)
+	{
+		CompressonatorTexture input{srcPkt};
+		return ConvertAndPrepareDDSBlobSync(input, dstFmt);
+	}
+#endif
+
+#if ENABLE_DXTEX
+	std::optional<DirectX::ScratchImage> BuildMipmaps(BufferUploads::IAsyncDataSource& srcPkt)
+	{
+		auto inputDesc = srcPkt.GetDesc().get();
+		assert(inputDesc._type == ResourceDesc::Type::Texture);
+		assert(inputDesc._textureDesc._arrayCount <= 1);			// not supporting arrayed textures
+		if (inputDesc._textureDesc._mipCount > 1) return {};		// already got mipmaps
+		
+		std::vector<uint8_t> tempBuffer;
+		tempBuffer.resize(ByteCount(inputDesc));
+		BufferUploads::IAsyncDataSource::SubResource sr;
+		sr._destination = MakeIteratorRange(tempBuffer);
+		sr._id = {0,0};
+		sr._pitches = MakeTexturePitches(inputDesc._textureDesc);
+		srcPkt.PrepareData(MakeIteratorRange(&sr, &sr+1)).get();
+
+		// Build mips needs to know if we're dealing with SRGB or linear data... If it's typeless, we have to assume SRGB, given that we have no specific direction on this
+		// todo -- we may have to make this a flag in the PostConvert object -- particularly given that normal maps may come through this path
+		auto fmt = inputDesc._textureDesc._format;
+		if (GetComponentType(fmt) == FormatComponentType::Typeless) fmt = AsSRGBFormat(fmt);
+		if (GetComponentType(fmt) == FormatComponentType::Typeless) fmt = AsLinearFormat(fmt);
+
+		DirectX::Image inputImage;
+		inputImage.width = inputDesc._textureDesc._width;
+		inputImage.height = inputDesc._textureDesc._height;
+		inputImage.format = (DXGI_FORMAT)fmt;
+		inputImage.rowPitch = sr._pitches._rowPitch;
+		inputImage.slicePitch = sr._pitches._slicePitch;
+		inputImage.pixels = tempBuffer.data();
+
+		DirectX::ScratchImage newImage;
+		auto mipmapHresult = GenerateMipMaps(inputImage, DirectX::TEX_FILTER_DEFAULT, 0, newImage);
+		if (!SUCCEEDED(mipmapHresult))
+			Throw(std::runtime_error("Failed while building mip-maps in PostConvert"));
+
+		return newImage;
 	}
 #endif
 
@@ -518,6 +590,8 @@ namespace RenderCore { namespace Assets
 				auto mode = Formatters::RequireStringValue(fmttr);
 				if (auto fmtOpt = AsFormat(mode)) dst._format = *fmtOpt;
 				else Throw(Formatters::FormatException("Unknown 'Format' field in texture compiler file: " + mode.AsString(), fmttr.GetLocation()));
+			} else if (XlEqString(kn, "BuildMipmaps")) {
+				dst._buildMipmaps = Formatters::RequireCastValue<bool>(fmttr);
 			} else Formatters::SkipValueOrElement(fmttr);
 		}
 	}
@@ -565,8 +639,20 @@ namespace RenderCore { namespace Assets
 			#if XLE_COMPRESSONATOR_ENABLE
 				if (opHelper)
 					opHelper.SetMessage(Concatenate("Compressing to pixel format ", AsString(postConvert._format)));
-				auto blob = ConvertAndPrepareDDSBlobSync(*pkt, postConvert._format);
+				::Assets::Blob blob;
+				if (postConvert._buildMipmaps) {
+					#if ENABLE_DXTEX
+						if (auto mipped = BuildMipmaps(*pkt)) {
+							blob = ConvertAndPrepareDDSBlobSync(CompressonatorTexture{*mipped}, postConvert._format);
+						} else
+							blob = ConvertAndPrepareDDSBlobSync(*pkt, postConvert._format);
+					#else
+						assert(0);
+					#endif
+				} else
+					blob = ConvertAndPrepareDDSBlobSync(*pkt, postConvert._format);
 			#else
+				assert(!postConvert._buildMipmaps);
 				auto blob = PrepareDDSBlobSyncWithoutConvert(*pkt);
 			#endif
 
