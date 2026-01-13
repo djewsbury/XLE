@@ -172,7 +172,7 @@ float3 CalculateIllumination(
 						[branch] if (l.Shape == LIGHT_SHAPE_DIRECTIONAL) {
 							result += shadowing * DirectionalLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
 						} else if ((l.Shape|2) == LIGHT_SHAPE_CONE) {
-							float light = SphereLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
+							float3 light = SphereLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
 							[branch] if (l.Shape == LIGHT_SHAPE_CONE) light *= ConeLightShapeMultipler(l, worldPosition, screenDest);
 							result += shadowing * light;
 						}

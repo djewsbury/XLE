@@ -65,9 +65,11 @@ float3 TangentFromNormalBitangent(float3 normal, float3 bitangent, float handine
 	return cross(normal, bitangent) * handiness;
 }
 
-#define NORMAL_MAP_FORMAT_UVW 			0		// 3 component normal map
-#define NORMAL_MAP_FORMAT_UV 			1		// 2 component normal map (ie, tangent & bitangent factors, normal is implied)
-#define NORMAL_MAP_FORMAT_UV_FLIPPED 	2		// 2 component normal map, but V factor is flipped (as is common in some Unreal focused assets)
+#define NORMAL_MAP_FORMAT_UVW 					0		// 3 component normal map
+#define NORMAL_MAP_FORMAT_UV 					1		// 2 component normal map (ie, tangent & bitangent factors, normal is implied)
+#define NORMAL_MAP_FORMAT_UV_FLIPPED 			2		// 2 component normal map, but V factor is flipped (as is common in some Unreal focused assets)
+#define NORMAL_MAP_FORMAT_UV_SIGNED 			3		// 2 component normal map, signed components (ie, tangent & bitangent factors, normal is implied)
+#define NORMAL_MAP_FORMAT_UV_FLIPPED_SIGNED 	4		// 2 component normal map, signed components, but V factor is flipped (as is common in some Unreal focused assets)
 
 float3 SampleNormalMap(Texture2D normalMap, SamplerState samplerObject, uint normalMapFormat, float2 texCoord)
 {
@@ -81,7 +83,11 @@ float3 SampleNormalMap(Texture2D normalMap, SamplerState samplerObject, uint nor
 
     } else {
 
-		float2 result = normalMap.Sample(samplerObject, texCoord).xy * 2.f - 1.0.xx;
+		float2 result = normalMap.Sample(samplerObject, texCoord).xy;
+		
+		#if normalMapFormat != NORMAL_MAP_FORMAT_UV_SIGNED && normalMapFormat != NORMAL_MAP_FORMAT_UV_FLIPPED_SIGNED
+		 	result = result * 2.f - 1.0.xx;
+		#endif
 
         float2 coordTwiddle = float2(result.x, result.y);
         if (normalMapFormat == NORMAL_MAP_FORMAT_UV_FLIPPED)
