@@ -184,6 +184,8 @@ namespace SceneEngine
             virtual auto                GetWorldBoundingBox(unsigned index) const -> std::pair<Float3, Float3> = 0;
             virtual std::string         GetMaterialName(unsigned objectIndex, uint64_t materialGuid) const = 0;
 
+            virtual void    Absorb(IteratorRange<const PlacementGUID*> placements) = 0;
+
             virtual void    SetObject(unsigned index, const ObjTransDef& newState) = 0;
             virtual bool    Create(const ObjTransDef& newState) = 0;
             virtual bool    Create(PlacementGUID guid, const ObjTransDef& newState) = 0;
@@ -200,7 +202,7 @@ namespace SceneEngine
             typedef unsigned BitField;
         };
         std::shared_ptr<ITransaction> Transaction_Begin(
-            const PlacementGUID* placementsBegin, const PlacementGUID* placementsEnd,
+            IteratorRange<const PlacementGUID*> placements,
             TransactionFlags::BitField transactionFlags = 0);
 
         uint64_t  CreateCell(const ::Assets::ResChar name[], const Float2& mins, const Float2& maxs);

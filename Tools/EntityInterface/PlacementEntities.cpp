@@ -91,9 +91,9 @@ namespace EntityInterface
 		auto guid = SceneEngine::PlacementGUID(_cellId, entityId);
 		std::shared_ptr<SceneEngine::PlacementsEditor::ITransaction> transaction;
 		if (visChange == MakeHidden) {
-			transaction = _hiddenObjects->Transaction_Begin(nullptr, nullptr);
+			transaction = _hiddenObjects->Transaction_Begin({});
 		} else
-			transaction = _editor->Transaction_Begin(nullptr, nullptr);
+			transaction = _editor->Transaction_Begin({});
 		if (transaction->Create(guid, newObj)) {
 			transaction->Commit();
 			return true;
@@ -105,7 +105,7 @@ namespace EntityInterface
 	static std::shared_ptr<SceneEngine::PlacementsEditor::ITransaction> Begin(SceneEngine::PlacementsEditor& editor, SceneEngine::PlacementGUID guid)
 	{
 		auto result = editor.Transaction_Begin(
-			&guid, &guid + 1,
+			{&guid, &guid + 1},
 			SceneEngine::PlacementsEditor::TransactionFlags::IgnoreIdTop32Bits);
 		assert(result);
 		return result;

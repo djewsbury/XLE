@@ -139,8 +139,7 @@ namespace SceneEngine
 
                 //  we need to create a temporary transaction to get
                 //  at the information for these objects.
-            auto trans = placementsEditor.Transaction_Begin(
-                AsPointer(roughIntersection.cbegin()), AsPointer(roughIntersection.cend()));
+            auto trans = placementsEditor.Transaction_Begin(roughIntersection);
 
             TRY
             {
@@ -289,8 +288,7 @@ namespace SceneEngine
             if (!roughIntersection.empty() && drawingApparatus) {
                     //  we need to create a temporary transaction to get
                     //  at the information for these objects.
-                auto trans = _placementsEditor->Transaction_Begin(
-                    AsPointer(roughIntersection.cbegin()), AsPointer(roughIntersection.cend()));
+                auto trans = _placementsEditor->Transaction_Begin(roughIntersection);
 
                 TRY
                 {

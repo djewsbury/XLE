@@ -2396,6 +2396,8 @@ namespace SceneEngine
         std::pair<Float3, Float3>   GetWorldBoundingBox(unsigned index) const;
         std::string         GetMaterialName(unsigned objectIndex, uint64_t materialGuid) const;
 
+        virtual void    Absorb(IteratorRange<const PlacementGUID*> placements);
+
         virtual void        SetObject(unsigned index, const ObjTransDef& newState);
 
         virtual bool        Create(const ObjTransDef& newState);
@@ -2408,8 +2410,6 @@ namespace SceneEngine
 
         Transaction(
             PlacementsEditor::Pimpl*    editorPimpl,
-            const PlacementGUID*        placementsBegin,
-            const PlacementGUID*        placementsEnd,
             PlacementsEditor::TransactionFlags::BitField transactionFlags = 0);
         ~Transaction();
 
@@ -2427,6 +2427,9 @@ namespace SceneEngine
 
         enum State { Active, Committed };
         State _state;
+        PlacementsEditor::TransactionFlags::BitField _transactionFlags;
+
+        void Absorb(PlacementGUID guid, const ObjTransDef& def);
     };
 
     auto    Transaction::GetObject(unsigned index) const -> const ObjTransDef&              { return _objects[index]; }
@@ -2459,13 +2462,24 @@ namespace SceneEngine
             placements = GetPlacements(*cell, *_editorPimpl->_cellSet, *_editorPimpl->_placementsCache);
         if (!placements) return s_invalidBoundingBox;
 
-        auto count = placements->GetObjectReferences().size();
-        auto* objects = placements->GetObjectReferences().begin();
+        auto objects = placements->GetObjectReferences();
+        auto cellSpaceBoundaries = placements->GetCellSpaceBoundaries();
 
-        auto dst = std::lower_bound(objects, &objects[count], guid.second, CompareObjectId());
-        auto idx = dst - objects;
-        assert(!placements->GetCellSpaceBoundaries().empty());
-        return TransformBoundingBox(cellToWorld, placements->GetCellSpaceBoundaries()[idx]);
+        auto dst = std::lower_bound(objects.begin(), objects.end(), guid.second, CompareObjectId());
+        if (dst != objects.end() && dst->_guid == guid.second) {
+            auto idx = dst - objects.begin();
+            if (!placements->GetCellSpaceBoundaries().empty())
+                return TransformBoundingBox(cellToWorld, placements->GetCellSpaceBoundaries()[idx]);
+
+            PlacementsScaffold::BoundingBox localBoundingBox;
+            auto assetState = TryGetBoundingBox(localBoundingBox, _editorPimpl->_placementsCache->GetRigidModelScene(), *placements, idx);
+
+                // When assets aren't yet ready, we can't return this reliably
+            if (assetState == ::Assets::AssetState::Ready)
+                return TransformBoundingBox(cellToWorld, localBoundingBox);
+        }
+
+        return s_invalidBoundingBox;
     }
 
     std::string Transaction::GetMaterialName(unsigned objectIndex, uint64_t materialGuid) const
@@ -2576,7 +2590,6 @@ namespace SceneEngine
         std::string materialFilename = newState._material;
 
         PlacementGUID guid(0, 0);
-        PlacementsTransform localToCell = Identity<PlacementsTransform>();
 
         if (!newState._model.empty()) {     // (don't attempt to create a placement with an empty model field)
             auto& cells = _editorPimpl->_cellSet->_pimpl->_cells;
@@ -2602,6 +2615,7 @@ namespace SceneEngine
                         if (!dynPlacements->HasObject(id)) { break; }
                     }
 
+                    PlacementsTransform localToCell = Combine(newState._localToWorld, InvertOrthonormalTransform(i->_cellToWorld));
                     auto suppGuid = StringToSupplementGuids(newState._supplements.c_str());
                     dynPlacements->AddPlacement(
                         _editorPimpl->_placementsCache->GetRigidModelScene(),
@@ -2643,7 +2657,6 @@ namespace SceneEngine
 
         std::string materialFilename = newState._material;
 
-        PlacementsTransform localToCell = Identity<PlacementsTransform>();
         bool foundCell = false;
 
         if (!newState._model.empty()) {
@@ -2653,7 +2666,7 @@ namespace SceneEngine
                 auto dynPlacements = _editorPimpl->GetDynPlacements(i->_filenameHash);
                 _pushedChanges = true;
 
-                localToCell = Combine(newState._localToWorld, InvertOrthonormalTransform(i->_cellToWorld));
+                
 
                 auto idTopPart = ObjectIdTopPart(newState._model, materialFilename);
                 uint64_t id = idTopPart | uint64_t(guid.second & 0xffffffffull);
@@ -2662,6 +2675,7 @@ namespace SceneEngine
                     return false;
                 }
 
+                PlacementsTransform localToCell = Combine(newState._localToWorld, InvertOrthonormalTransform(i->_cellToWorld));
                 auto supp = StringToSupplementGuids(newState._supplements.c_str());
                 dynPlacements->AddPlacement(
                     _editorPimpl->_placementsCache->GetRigidModelScene(),
@@ -2802,21 +2816,31 @@ namespace SceneEngine
             _pushedChanges = false;
         }
     }
-    
-    Transaction::Transaction(
-        PlacementsEditor::Pimpl*    editorPimpl,
-        const PlacementGUID*        guidsBegin,
-        const PlacementGUID*        guidsEnd,
-        PlacementsEditor::TransactionFlags::BitField transactionFlags)
+
+    void Transaction::Absorb(PlacementGUID guid, const ObjTransDef& def)
     {
-            //  We need to sort; because this method is mostly assuming we're working
-            //  with a sorted list. Most of the time originalPlacements will be close
-            //  to sorted order (which, of course, means that quick sort isn't ideal, but, anyway...)
-        auto guids = std::vector<PlacementGUID>(guidsBegin, guidsEnd);
+        auto w = std::lower_bound(_originalGuids.begin(), _originalGuids.end(), guid);
+        if (w != _originalGuids.end() && *w == guid) return;    // already here
+
+        auto idx = w-_originalGuids.begin();
+        _originalGuids.insert(_originalGuids.begin()+idx, guid);
+        _pushedGuids.insert(_pushedGuids.begin()+idx, guid);
+        _originalState.insert(_originalState.begin()+idx, def);
+        _objects.insert(_objects.begin()+idx, def);
+    }
+
+    void Transaction::Absorb(IteratorRange<const PlacementGUID*> placements)
+    {
+        assert(_state == State::Active);
+        _originalGuids.reserve(_originalGuids.size()+placements.size());
+        _pushedGuids.reserve(_pushedGuids.size()+placements.size());
+        _originalState.reserve(_originalState.size()+placements.size());
+        _objects.reserve(_objects.size()+placements.size());
+
+        auto guids = std::vector<PlacementGUID>(placements.begin(), placements.end());
         std::sort(guids.begin(), guids.end(), CompareGUID);
 
-        std::vector<ObjTransDef> originalState;
-        auto& cells = editorPimpl->_cellSet->_pimpl->_cells;
+        auto& cells = _editorPimpl->_cellSet->_pimpl->_cells;
         auto cellIterator = cells.begin();
         for (auto i=guids.begin(); i!=guids.end();) {
             auto iend = std::find_if(i, guids.end(), 
@@ -2829,7 +2853,7 @@ namespace SceneEngine
             }
 
             auto cellToWorld = cellIterator->_cellToWorld;
-            auto* placements = GetPlacements(*cellIterator, *editorPimpl->_cellSet, *editorPimpl->_placementsCache);
+            auto* placements = GetPlacements(*cellIterator, *_editorPimpl->_cellSet, *_editorPimpl->_placementsCache);
             if (!placements) {
 				// If we didn't get an actual "placements" object, it means that nothing has been created
 				// in this cell yet (and maybe the original asset is invalid/uncreated).
@@ -2838,14 +2862,14 @@ namespace SceneEngine
 					ObjTransDef def;
 					def._localToWorld = Identity<decltype(def._localToWorld)>();
 					def._transaction = ObjTransDef::Error;
-					originalState.push_back(def);
+					Absorb(*i, def);
 				}
 				continue; 
 			}
 
             auto objectReferences = placements->GetObjectReferences();
 
-            if (transactionFlags & PlacementsEditor::TransactionFlags::IgnoreIdTop32Bits) {
+            if (_transactionFlags & PlacementsEditor::TransactionFlags::IgnoreIdTop32Bits) {
                     //  Sometimes we want to ignore the top 32 bits of the id. It works, but it's
                     //  much less efficient, because we can't take advantage of the sorting.
                     //  Ideally we should avoid this path
@@ -2863,13 +2887,13 @@ namespace SceneEngine
                         def._material = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_materialFilenameOffset);
                         def._supplements = SupplementsGuidsToString(AsSupplements(placements->GetSupplementsBuffer(), pIterator->_supplementsOffset));
                         def._transaction = ObjTransDef::Unchanged;
-                        originalState.push_back(def);
+                        Absorb(*i, def);
                     } else {
                             // we couldn't find an original for this object. It's invalid
                         ObjTransDef def;
                         def._localToWorld = Identity<decltype(def._localToWorld)>();
                         def._transaction = ObjTransDef::Error;
-                        originalState.push_back(def);
+                        Absorb(*i, def);
                     }
                 }
             } else {
@@ -2886,22 +2910,22 @@ namespace SceneEngine
                         def._material = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_materialFilenameOffset);
                         def._supplements = SupplementsGuidsToString(AsSupplements(placements->GetSupplementsBuffer(), pIterator->_supplementsOffset));
                         def._transaction = ObjTransDef::Unchanged;
-                        originalState.push_back(def);
+                        Absorb(*i, def);
                     } else {
                             // we couldn't find an original for this object. It's invalid
                         ObjTransDef def;
                         def._localToWorld = Identity<decltype(def._localToWorld)>();
                         def._transaction = ObjTransDef::Error;
-                        originalState.push_back(def);
+                        Absorb(*i, def);
                     }
                 }
             }
         }
+    }
 
-        _objects = originalState;
-        _originalState = std::move(originalState);
-        _originalGuids = guids;
-        _pushedGuids = std::move(guids);
+    Transaction::Transaction(PlacementsEditor::Pimpl* editorPimpl, PlacementsEditor::TransactionFlags::BitField transactionFlags)
+    : _transactionFlags(transactionFlags)
+    {
         _editorPimpl = editorPimpl;
         _state = Active;
     }
@@ -3109,11 +3133,12 @@ namespace SceneEngine
     }
 
     auto PlacementsEditor::Transaction_Begin(
-        const PlacementGUID* placementsBegin, 
-        const PlacementGUID* placementsEnd,
+        IteratorRange<const PlacementGUID*> placements,
         TransactionFlags::BitField transactionFlags) -> std::shared_ptr<ITransaction>
     {
-        return std::make_shared<Transaction>(_pimpl.get(), placementsBegin, placementsEnd, transactionFlags);
+        auto result = std::make_shared<Transaction>(_pimpl.get(), transactionFlags);
+        result->Absorb(placements);
+        return result;
     }
 
     std::shared_ptr<PlacementsManager> PlacementsEditor::GetManager() { return _pimpl->_manager; }

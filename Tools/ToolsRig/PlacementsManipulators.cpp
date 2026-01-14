@@ -442,7 +442,7 @@ namespace ToolsRig
                 }
 
                 if (firstHit.first && firstHit.second) {
-                    _transaction = _editor->Transaction_Begin(&firstHit, &firstHit + 1);
+                    _transaction = _editor->Transaction_Begin({&firstHit, &firstHit + 1});
                 
                         //  Reset the anchor point
                         //  There are a number of different possible ways we could calculate
@@ -496,7 +496,7 @@ namespace ToolsRig
                     SceneEngine::PlacementGUID firstHit(0,0);
                     firstHit = TryAnyCast(hitTestResult._metadataQuery("PlacementGUID"_h), firstHit);
 
-                    auto tempTrans = _editor->Transaction_Begin(&firstHit, &firstHit+1);
+                    auto tempTrans = _editor->Transaction_Begin({&firstHit, &firstHit+1});
                     if (tempTrans->GetObjectCount() == 1) {
                         _manInterface->SelectModel(tempTrans->GetObject(0)._model.c_str(), tempTrans->GetObject(0)._model.c_str());
                         _manInterface->SwitchToMode(IPlacementManipulatorSettings::Mode::PlaceSingle);
@@ -678,7 +678,7 @@ namespace ToolsRig
         const char modelName[], const char materialName[])
     {
         if (!_transaction) {
-            _transaction = _editor->Transaction_Begin(nullptr, nullptr);
+            _transaction = _editor->Transaction_Begin({});
         }
 
         SceneEngine::PlacementsEditor::ObjTransDef newState(
@@ -1277,8 +1277,7 @@ namespace ToolsRig
             //  We have a list of placements using the same model, and within the placement area.
             //  We want to either add or remove one.
 
-        auto trans = _editor->Transaction_Begin(
-            AsPointer(toBeDeleted.cbegin()), AsPointer(toBeDeleted.cend()));
+        auto trans = _editor->Transaction_Begin(toBeDeleted);
         for (unsigned c=0; c<trans->GetObjectCount(); ++c) {
             trans->Delete(c);
         }
