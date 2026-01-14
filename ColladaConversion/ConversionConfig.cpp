@@ -87,6 +87,8 @@ namespace ColladaConversion
                 Formatters::RequireBeginElement(formatter);
                 _vertexSemanticBindings = BindingConfig(formatter);
                 Formatters::RequireEndElement(formatter);
+            } else if (XlEqString(kn, "DefaultMaterialInherit")) {
+                _defaultMaterialInherit = Formatters::RequireStringValue(formatter);
             } else
                 Formatters::SkipValueOrElement(formatter);
         }

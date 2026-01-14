@@ -39,6 +39,7 @@ namespace ColladaConversion
 		const BindingConfig& GetResourceBindings() const { return _resourceBindings; }
 		const BindingConfig& GetConstantBindings() const { return _constantsBindings; }
 		const BindingConfig& GetVertexSemanticBindings() const { return _vertexSemanticBindings; }
+		std::string GetDefaultMaterialInherit() const { return _defaultMaterialInherit; }
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
@@ -49,6 +50,7 @@ namespace ColladaConversion
 		BindingConfig _resourceBindings;
 		BindingConfig _constantsBindings;
 		BindingConfig _vertexSemanticBindings;
+		std::string _defaultMaterialInherit;
 
 		::Assets::DependencyValidation _depVal;
 	};

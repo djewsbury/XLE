@@ -503,13 +503,17 @@ namespace ColladaConversion
             } CATCH_END
         }
 
+		::Assets::InheritList inheritList;
+		if (!model._cfg.GetDefaultMaterialInherit().empty())
+			inheritList.push_back(model._cfg.GetDefaultMaterialInherit());
+
         auto mats = model._doc->GetMaterials();
         for (auto m=mats.cbegin(); m!=mats.cend(); ++m) {
             GuidReference effect(m->_effectReference);
 			auto i = LowerBound(compiledEffects, NascentObjectGuid { effect._id, effect._fileHash });
 			if (i == compiledEffects.end() || !(i->first == NascentObjectGuid { effect._id, effect._fileHash }))
                 continue;
-			result.AddMaterial(m->GetId().GetOriginal().AsString(), i->second);
+			result.AddMaterial(m->GetId().GetOriginal().AsString(), i->second, inheritList);
         }
     }
 
