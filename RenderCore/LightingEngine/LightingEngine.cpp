@@ -626,20 +626,22 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IShaderResourceDelegate>& uniformDelegate)
 	{
 		assert(_drawablePktsPerParse);
-		VLA(Techniques::DrawablesPacket*, pkts, _drawablePktsPerParse);
-		GetPkts(MakeIteratorRange(pkts, pkts+_drawablePktsPerParse), parseId);
 		if (uniformDelegate)
 			_parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(uniformDelegate);
-		for (unsigned c=0; c<_drawablePktsPerParse; ++c) {
-			if (!pkts[c] || pkts[c]->_drawables.empty()) continue;
-			TRY {
+
+		TRY {
+			VLA(Techniques::DrawablesPacket*, pkts, _drawablePktsPerParse);
+			GetPkts(MakeIteratorRange(pkts, pkts+_drawablePktsPerParse), parseId);
+			for (unsigned c=0; c<_drawablePktsPerParse; ++c) {
+				if (!pkts[c] || pkts[c]->_drawables.empty()) continue;
 				Techniques::Draw(*_parsingContext, _parsingContext->GetPipelineAccelerators(), sequencerCfg, *pkts[c]);
-			} CATCH(...) {
-				if (uniformDelegate)
-					_parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDelegate);
-				throw;
-			} CATCH_END
-		}
+			}
+		} CATCH(...) {
+			if (uniformDelegate)
+				_parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDelegate);
+			throw;
+		} CATCH_END
+
 		if (uniformDelegate)
 			_parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*uniformDelegate);
 	}
