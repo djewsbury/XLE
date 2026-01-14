@@ -57,6 +57,7 @@ namespace OSServices
 
     std::string SystemErrorCodeAsString(int errorCode);
     std::string GetAppDataPath();
+    std::string GetDocumentsPath();
     std::optional<std::string> ModalSelectFolderDialog(StringSection<> = {});
     std::optional<std::string> ModalSaveFileDialog(StringSection<> = {});
     void MessageUser(StringSection<> text, StringSection<> title);

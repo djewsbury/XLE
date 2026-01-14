@@ -362,6 +362,20 @@ std::string GetAppDataPath()
     return Conversion::Convert<std::string>(temp);
 }
 
+std::string GetDocumentsPath()
+{
+    // Requires Vista or later
+    PWSTR wpath;
+    auto hres = SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &wpath);
+    if (!SUCCEEDED(hres)) {
+        CoTaskMemFree(wpath);
+        return {};
+    }
+    std::wstring temp = wpath;
+    CoTaskMemFree(wpath);
+    return Conversion::Convert<std::string>(temp);
+}
+
 std::optional<std::string> ModalSelectFolderDialog(StringSection<> initialFolder)
 {
     // Windows Vista API for common dialogs
