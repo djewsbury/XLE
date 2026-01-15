@@ -34,6 +34,8 @@ namespace Formatters
 
 		template<typename Type>
 			void FormatKeyedValue(StringSection<> name, const Type& t);
+		template<typename Type>
+			void FormatSequencedValue(const Type& t);
 		
 		void NewLine();
 		void SuppressHeader();
@@ -81,5 +83,12 @@ namespace Formatters
 		// Note that we can't check for formatting characters using this path!
 		WriteDanglingKey(name);
 		*_stream << t;
+		_hotLine = HotLine::Hot;
+	}
+
+	template<typename Type>
+		void TextOutputFormatter::FormatSequencedValue(const Type& t)
+	{
+		FormatKeyedValue({}, t);
 	}
 }
