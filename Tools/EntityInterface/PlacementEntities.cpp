@@ -95,7 +95,6 @@ namespace EntityInterface
 		} else
 			transaction = _editor->Transaction_Begin({});
 		if (transaction->Create(guid, newObj)) {
-			transaction->Commit();
 			return true;
 		}
 
@@ -129,14 +128,12 @@ namespace EntityInterface
         auto transaction = Begin(*_editor, guid);
         if (transaction->GetObjectCount()==1) {
             transaction->Delete(0);
-            transaction->Commit();
             result |= true;
         }
 
 		transaction = Begin(*_hiddenObjects, guid);
 		if (transaction->GetObjectCount() == 1) {
 			transaction->Delete(0);
-			transaction->Commit();
 			result |= true;
 		}
 
@@ -179,7 +176,6 @@ namespace EntityInterface
 					// Copy across, delete the hidden item, and then commit the result
 					visibleTrans->SetObject(0, hiddenTrans->GetObject(0));
 					hiddenTrans->Delete(0);
-					hiddenTrans->Commit();
 					pendingTransactionCommit = true;
 				}
 			}
@@ -192,7 +188,6 @@ namespace EntityInterface
 				if (FoundExistingObject(*visibleTrans)) {
 					hiddenTrans->SetObject(0, visibleTrans->GetObject(0));
 					visibleTrans->Delete(0);
-					visibleTrans->Commit();
 					pendingTransactionCommit = true;
 				}
 			}
@@ -222,7 +217,6 @@ namespace EntityInterface
                 pendingTransactionCommit |= SetObjProperty(originalObject, initializers[c]);
             if (pendingTransactionCommit) {
 				mainTransaction->SetObject(0, originalObject);
-				mainTransaction->Commit();
                 return true;
             }
         }

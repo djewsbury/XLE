@@ -46,6 +46,8 @@
 #include "../Utility/Streams/PathUtils.h"
 #include "../Formatters/TextFormatter.h"
 #include "../Formatters/StreamDOM.h"
+#include "../Formatters/FormatterUtils.h"
+#include "../Math/MathSerialization.h"
 #include "../Utility/Conversion.h"
 
 #include <random>
@@ -2404,7 +2406,6 @@ namespace SceneEngine
         virtual bool        Create(PlacementGUID guid, const ObjTransDef& newState);
         virtual void        Delete(unsigned index);
 
-        virtual void    Commit();
         virtual void    Cancel();
         virtual void    UndoAndRestart();
 
@@ -2425,8 +2426,6 @@ namespace SceneEngine
 
         void PushObj(unsigned index, const ObjTransDef& newState);
 
-        enum State { Active, Committed };
-        State _state;
         PlacementsEditor::TransactionFlags::BitField _transactionFlags;
 
         void Absorb(PlacementGUID guid, const ObjTransDef& def);
@@ -2524,7 +2523,7 @@ namespace SceneEngine
         return result;
     }
 
-    static uint64_t ObjectIdTopPart(const std::string& model, const std::string& material)
+    static uint64_t ObjectIdTopPart(StringSection<> model, StringSection<> material)
     {
         auto modelAndMaterialHash = Hash64(model, Hash64(material));
         return uint64_t(EverySecondBit(modelAndMaterialHash)) << 32ull;
@@ -2788,25 +2787,14 @@ namespace SceneEngine
         }
     }
 
-    void    Transaction::Commit()
-    {
-        _state = Committed;
-    }
-
     void    Transaction::Cancel()
     {
-        if (_state == Active) {
-                // we need to revert all of the objects to their original state
-            UndoAndRestart();
-        }
-
-        _state = Committed;
+            // we need to revert all of the objects to their original state
+        UndoAndRestart();
     }
 
     void    Transaction::UndoAndRestart()
     {
-        if (_state != Active) return;
-
             // we just have to reset all objects to their previous state
         if (_pushedChanges) {
             for (unsigned c=0; c<_objects.size(); ++c) {
@@ -2831,7 +2819,6 @@ namespace SceneEngine
 
     void Transaction::Absorb(IteratorRange<const PlacementGUID*> placements)
     {
-        assert(_state == State::Active);
         _originalGuids.reserve(_originalGuids.size()+placements.size());
         _pushedGuids.reserve(_pushedGuids.size()+placements.size());
         _originalState.reserve(_originalState.size()+placements.size());
@@ -2927,15 +2914,10 @@ namespace SceneEngine
     : _transactionFlags(transactionFlags)
     {
         _editorPimpl = editorPimpl;
-        _state = Active;
     }
 
     Transaction::~Transaction()
-    {
-        if (_state == Active) {
-            Cancel();
-        }
-    }
+    {}
 
     uint64_t PlacementsEditor::CreateCell(
         const ::Assets::ResChar name[],
@@ -3094,6 +3076,88 @@ namespace SceneEngine
         Throw(
             ::Exceptions::BasicLabel("Could not find cell with given id (0x%08x%08x). Saving cancelled",
                 uint32_t(cellId>>32), uint32_t(cellId)));
+    }
+
+    void PlacementsEditor::Serialize(Formatters::TextOutputFormatter& fmttr)
+    {
+        char buffer[256];
+        for (auto& cell:_pimpl->_cellSet->_pimpl->_cells) {
+            auto ce = fmttr.BeginKeyedElement(cell._filename);
+
+            fmttr.FormatKeyedValue("CellToWorld", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._cellToWorld));
+            fmttr.FormatKeyedValue("AABBMin", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._aabbMin));
+            fmttr.FormatKeyedValue("AABBMax", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._aabbMax));
+            fmttr.FormatKeyedValue("CaptureMins", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._captureMins));
+            fmttr.FormatKeyedValue("CaptureMaxs", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._captureMaxs));
+
+            // note that GetDynPlacements will create the dynamic placements if it doesn't already exist
+            if (auto dynPlacement = _pimpl->GetDynPlacements(cell._filenameHash)) {
+                auto e = fmttr.BeginKeyedElement("Placements");
+                auto fns = (const char*)dynPlacement->GetFilenamesBuffer();
+                for (auto& o:dynPlacement->GetObjectReferences()) {
+                    fmttr.FormatSequencedValue(StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(o._localToCell));
+                    fmttr.WriteSequencedValue(fns+o._modelFilenameOffset+sizeof(uint64_t));
+                    fmttr.WriteSequencedValue(fns+o._materialFilenameOffset+sizeof(uint64_t));
+                }
+                fmttr.EndElement(e);
+            }
+
+            fmttr.EndElement(ce);
+        }
+    }
+
+    void PlacementsEditor::Deserialize(Formatters::TextInputFormatter<char>& fmttr)
+    {
+        assert(_pimpl->_cellSet->_pimpl->_cells.empty());
+        assert(_pimpl->_cellSet->_pimpl->_cellOverrides.empty());
+
+        StringSection kn;
+        while (fmttr.TryKeyedItem(kn)) {
+            PlacementCell protoCell;
+            XlCopyString(protoCell._filename, kn);
+            protoCell._filenameHash = Hash64(protoCell._filename);
+            auto& newCell = *_pimpl->_cellSet->_pimpl->_cells.insert(
+                std::lower_bound(b2e(_pimpl->_cellSet->_pimpl->_cells), protoCell._filenameHash, CompareFilenameHash{}),
+                protoCell);
+
+            Formatters::RequireBeginElement(fmttr);
+            while (fmttr.TryKeyedItem(kn)) {
+                if (XlEqString(kn, "CellToWorld")) {
+                    newCell._cellToWorld = Formatters::RequireCastValue<decltype(newCell._cellToWorld)>(fmttr);
+                } else if (XlEqString(kn, "AABBMin")) {
+                    newCell._aabbMin = Formatters::RequireCastValue<decltype(newCell._aabbMin)>(fmttr);
+                } else if (XlEqString(kn, "AABBMax")) {
+                    newCell._aabbMax = Formatters::RequireCastValue<decltype(newCell._aabbMax)>(fmttr);
+                } else if (XlEqString(kn, "CaptureMins")) {
+                    newCell._captureMins = Formatters::RequireCastValue<decltype(newCell._captureMins)>(fmttr);
+                } else if (XlEqString(kn, "CaptureMaxs")) {
+                    newCell._captureMaxs = Formatters::RequireCastValue<decltype(newCell._captureMaxs)>(fmttr);
+                } else if (XlEqString(kn, "Placements")) {
+                    auto dynPlacements = _pimpl->GetDynPlacements(newCell._filenameHash);
+
+                    Formatters::RequireBeginElement(fmttr);
+                    while (!fmttr.TryEndElement()) {
+                        auto localToCell = Formatters::RequireCastValue<PlacementsTransform>(fmttr);
+                        auto model = Formatters::RequireStringValue(fmttr);
+                        auto material = Formatters::RequireStringValue(fmttr);
+
+                        uint64_t id, idTopPart = ObjectIdTopPart(model, material);
+                        for (;;) {
+                            auto id32 = BuildGuid32();
+                            id = idTopPart | uint64_t(id32);
+                            if (!dynPlacements->HasObject(id)) { break; }
+                        }
+
+                        dynPlacements->AddPlacement(
+                            _pimpl->_placementsCache->GetRigidModelScene(),
+                            localToCell, model, material, {}, id);
+                    }
+                } else {
+                    Formatters::SkipValueOrElement(fmttr);
+                }
+            }
+            Formatters::RequireEndElement(fmttr);
+        }
     }
 
     std::string PlacementsEditor::GetMetricsString(uint64_t cellId) const

@@ -19,6 +19,7 @@ namespace Assets { class DirectorySearchRules; class IAsyncMarker; }
 namespace RenderOverlays { namespace DebuggingDisplay { class IWidget; }}
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace Assets { class OperationContext; }
+namespace Formatters { template<typename T> class TextInputFormatter; class TextOutputFormatter; }
 namespace std { template<typename T> class future; }
 
 namespace SceneEngine
@@ -191,7 +192,6 @@ namespace SceneEngine
             virtual bool    Create(PlacementGUID guid, const ObjTransDef& newState) = 0;
             virtual void    Delete(unsigned index) = 0;
 
-            virtual void    Commit() = 0;
             virtual void    Cancel() = 0;
             virtual void    UndoAndRestart() = 0;
             virtual ~ITransaction();
@@ -219,6 +219,9 @@ namespace SceneEngine
 
         std::shared_ptr<PlacementsManager> GetManager();
         const PlacementCellSet& GetCellSet() const;
+
+        void Serialize(Formatters::TextOutputFormatter&);
+        void Deserialize(Formatters::TextInputFormatter<char>&);
 
         PlacementsEditor(
             std::shared_ptr<PlacementCellSet> cellSet,

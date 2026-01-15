@@ -419,10 +419,7 @@ namespace ToolsRig
 
             if (_activeSubop._type != SubOperation::None) {
 
-                if (_transaction) { 
-                    _transaction->Commit();  
-                    _transaction.reset();
-                }
+                _transaction.reset();
                 _activeSubop = SubOperation();
 
             } else {
@@ -436,10 +433,7 @@ namespace ToolsRig
                 }
 
                     // replace the currently active selection
-                if (_transaction) {
-                    _transaction->Commit();
-                    _transaction.reset();
-                }
+                _transaction.reset();
 
                 if (firstHit.first && firstHit.second) {
                     _transaction = _editor->Transaction_Begin({&firstHit, &firstHit + 1});
@@ -735,10 +729,7 @@ namespace ToolsRig
             // We add a small timeout 
         const auto safetyTimeout = std::chrono::milliseconds(200);
         if (evnt.IsRelease_LButton() && (_placeTimeout - std::chrono::steady_clock::now()) > safetyTimeout) {
-            if (_transaction) {
-                _transaction->Commit();
-                _transaction.reset();
-            }
+            _transaction.reset();
         }
 
         if (evnt.IsRelease_RButton() || evnt.IsPress("escape"_key)) {
@@ -1288,8 +1279,6 @@ namespace ToolsRig
             trans->Create(SceneEngine::PlacementsEditor::ObjTransDef(
                 AsFloat3x4(objectToWorld), modelName, materialName, nullptr));
         }
-
-        trans->Commit();
     }
 
     void ScatterPlacements::Render(RenderOverlays::IOverlayContext& overlayContext)
