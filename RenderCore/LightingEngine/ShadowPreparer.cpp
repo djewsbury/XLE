@@ -31,8 +31,9 @@ namespace RenderCore { namespace LightingEngine
 	class PreparedShadowResult : public IPreparedShadowResult
 	{
 	public:
-		IDescriptorSet* _descriptorSet;
-		IDescriptorSet* GetDescriptorSet() const override { return _descriptorSet; }
+		IDescriptorSet* _graphicsDescriptorSet = nullptr, *_computeDescriptorSet = nullptr;
+		IDescriptorSet* GetDescriptorSet() const override { assert(_graphicsDescriptorSet); return _graphicsDescriptorSet; }
+		IDescriptorSet* GetComputeDescriptorSet() const override { assert(_computeDescriptorSet); return _computeDescriptorSet; }
 	};
 
 	IPreparedShadowResult::~IPreparedShadowResult() {}
@@ -74,9 +75,11 @@ namespace RenderCore { namespace LightingEngine
 
 		Internal::PreparedDMShadowFrustum _workingDMFrustum;
 
-		Techniques::SubFrameDescriptorSetHeap _descSetHeap;
-		std::vector<DescriptorSetInitializer::BindTypeAndIdx> _descSetSlotBindings;
-		bool _descSetGood = false;
+		Techniques::SubFrameDescriptorSetHeap _graphicsDescSetHeap;
+		Techniques::SubFrameDescriptorSetHeap _computeDescSetHeap;
+		std::vector<DescriptorSetInitializer::BindTypeAndIdx> _graphicsDescSetSlotBindings;
+		std::vector<DescriptorSetInitializer::BindTypeAndIdx> _computeDescSetSlotBindings;
+		bool _graphicsDescSetGood = false, _computeDescSetGood = false;
 		float _shadowTextureSize = 0.f;
 		unsigned _maxFrustumCount = 0;
 		ViewPool* _viewPool = nullptr;
@@ -328,10 +331,9 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::RenderPassInstance& rpi,
 		IPreparedShadowResult& res)
 	{
-		assert(_descSetGood);
+		assert(_graphicsDescSetGood || _computeDescSetGood);
 
 		DescriptorSetInitializer descSetInit;
-		descSetInit._slotBindings = _descSetSlotBindings;
 		auto srv = _viewPool->GetTextureView(rpi.GetDepthStencilAttachmentResource(), BindFlag::ShaderResource, {});
 		const IResourceView* srvs[] = { srv.get() };
 		IteratorRange<const void*> immediateData[3];
@@ -348,10 +350,21 @@ namespace RenderCore { namespace LightingEngine
 		descSetInit._bindItems._immediateData = MakeIteratorRange(immediateData);
 
 		// We can only use this descriptor set during this frame -- but there's no protections for this, we're on our own
-		auto* descSet = _descSetHeap.Allocate();
-		assert(descSet);
-		Techniques::WriteWithSubframeImmediates(parsingContext.GetThreadContext(), *descSet, descSetInit);
-		checked_cast<PreparedShadowResult*>(&res)->_descriptorSet = descSet;
+		if (_graphicsDescSetGood) {
+			descSetInit._slotBindings = _graphicsDescSetSlotBindings;
+			auto* descSet = _graphicsDescSetHeap.Allocate();
+			assert(descSet);
+			Techniques::WriteWithSubframeImmediates(parsingContext.GetThreadContext(), *descSet, descSetInit);
+			checked_cast<PreparedShadowResult*>(&res)->_graphicsDescriptorSet = descSet;
+		}
+
+		if (_computeDescSetGood) {
+			auto* descSet = _computeDescSetHeap.Allocate();
+			descSetInit._slotBindings = _computeDescSetSlotBindings;
+			assert(descSet);
+			Techniques::WriteWithSubframeImmediates(parsingContext.GetThreadContext(), *descSet, descSetInit);
+			checked_cast<PreparedShadowResult*>(&res)->_computeDescriptorSet = descSet;
+		}
 
 		parsingContext.GetProjectionDesc() = _savedProjectionDesc;
 		parsingContext.GetViewport() = _savedViewport;
@@ -377,26 +390,29 @@ namespace RenderCore { namespace LightingEngine
 		PipelineType pipelineType)
 	{
 		auto& commonResources = *Techniques::Services::GetCommonResources();
-		_descSetHeap = Techniques::SubFrameDescriptorSetHeap {
+		auto* heap = pipelineType == PipelineType::Graphics ? &_graphicsDescSetHeap : &_computeDescSetHeap;
+		auto* bindings = pipelineType == PipelineType::Graphics ? &_graphicsDescSetSlotBindings : &_computeDescSetSlotBindings;
+		*heap = Techniques::SubFrameDescriptorSetHeap {
 			*_pipelineAccelerators->GetDevice(),
 			descSetLayout->MakeDescriptorSetSignature(&commonResources._samplerPool),
 			pipelineType,
 			"DMShadowPreparer" };
-		_descSetSlotBindings.clear();
-		_descSetSlotBindings.reserve(descSetLayout->_slots.size());
+		bindings->clear();
+		bindings->reserve(descSetLayout->_slots.size());
 		for (unsigned c=0; c<descSetLayout->_slots.size(); ++c) {
 			const auto& s = descSetLayout->_slots[c];
 			if (s._nameHash == "DMShadow"_h64) {
-				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ResourceView, 0, c});
+				bindings->push_back({DescriptorSetInitializer::BindType::ResourceView, 0, c});
 			} else if (s._nameHash == "ShadowProjection"_h64) {
-				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 0, c});
+				bindings->push_back({DescriptorSetInitializer::BindType::ImmediateData, 0, c});
 			} else if (s._nameHash == "ShadowResolveParameters"_h64) {
-				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 1, c});
+				bindings->push_back({DescriptorSetInitializer::BindType::ImmediateData, 1, c});
 			} else if (s._nameHash == "ScreenToShadowProjection"_h64) {
-				_descSetSlotBindings.push_back({DescriptorSetInitializer::BindType::ImmediateData, 2, c});
+				bindings->push_back({DescriptorSetInitializer::BindType::ImmediateData, 2, c});
 			}
 		}
-		_descSetGood = true;
+		_graphicsDescSetGood |= pipelineType == PipelineType::Graphics;
+		_computeDescSetGood |= pipelineType == PipelineType::Compute;
 	}
 
 	DMShadowPreparer::DMShadowPreparer(
@@ -466,7 +482,7 @@ namespace RenderCore { namespace LightingEngine
 		pipelineAccelerators->SetFrameBufferDesc(*_sequencerConfigs, _fbDesc._fbDesc, 0);
 		_uniformDelegate = std::make_shared<UniformDelegate>(*this);
 
-		_descSetGood = false;
+		_graphicsDescSetGood = _computeDescSetGood = false;
 		_shadowTextureSize = (float)std::min(desc._width, desc._height);
 		_maxFrustumCount = desc._normalProjCount;
 	}

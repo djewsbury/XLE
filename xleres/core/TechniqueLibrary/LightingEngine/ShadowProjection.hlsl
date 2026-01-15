@@ -77,10 +77,7 @@ uint GetShadowSubProjectionCount()
 float3 AdjustForOrthoCascade(float3 basePosition, uint cascadeIndex)
 {
 	#if (SHADOW_CASCADE_MODE == SHADOW_CASCADE_MODE_ORTHOGONAL)
-		return float3(
-			basePosition.x * OrthoShadowCascadeScale[cascadeIndex].x + OrthoShadowCascadeTrans[cascadeIndex].x,
-			basePosition.y * OrthoShadowCascadeScale[cascadeIndex].y + OrthoShadowCascadeTrans[cascadeIndex].y,
-			basePosition.z * OrthoShadowCascadeScale[cascadeIndex].z + OrthoShadowCascadeTrans[cascadeIndex].z);
+		return basePosition * OrthoShadowCascadeScale[cascadeIndex] + OrthoShadowCascadeTrans[cascadeIndex];
 	#else
 		return basePosition;
 	#endif

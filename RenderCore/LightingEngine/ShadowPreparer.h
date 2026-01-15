@@ -72,6 +72,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		virtual IDescriptorSet* GetDescriptorSet() const = 0;
+		virtual IDescriptorSet* GetComputeDescriptorSet() const = 0;
 		virtual ~IPreparedShadowResult();
 	};
 
