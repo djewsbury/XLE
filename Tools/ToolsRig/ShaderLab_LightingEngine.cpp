@@ -13,6 +13,7 @@
 #include "../../RenderCore/LightingEngine/HierarchicalDepths.h"
 #include "../../RenderCore/LightingEngine/ScreenSpaceReflections.h"
 #include "../../RenderCore/LightingEngine/TextureCompilerUtil.h"
+#include "../../RenderCore/LightingEngine/LightTiler.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
@@ -38,12 +39,9 @@ namespace ToolsRig
 	class PrepareForwardLightScene : public std::enable_shared_from_this<PrepareForwardLightScene>
 	{
 	public:
-		void DoShadowPrepare(LightingEngine::SequenceIterator& iterator, LightingEngine::Sequence& sequence)
+		void Prerender(IThreadContext& threadContext)
 		{
-			if (_lightScene->_priorityShadowScheduler)
-				_lightScene->_priorityShadowScheduler->DoShadowPrepare(iterator, sequence);
-			if (_lightScene->_dynamicProbeScheduler)
-				_lightScene->_dynamicProbeScheduler->DoShadowPrepare(iterator, sequence);
+			_lightScene->Prerender(threadContext);
 		}
 
 		void ConfigureParsingContext(Techniques::ParsingContext& parsingContext)
@@ -52,10 +50,14 @@ namespace ToolsRig
 			_lightScene->ConfigureParsingContext(parsingContext, enableSSR);
 			if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
 				parsingContext.GetUniformDelegateManager()->BindFixedDescriptorSet(s_shadowTemplate, *dominantShadow->GetDescriptorSet());
+			if (_lightSceneResourceDelegate)
+				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_lightSceneResourceDelegate);
 		}
 
 		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext)
 		{
+			if (_lightSceneResourceDelegate)
+				parsingContext.GetUniformDelegateManager()->UnbindShaderResourceDelegate(*_lightSceneResourceDelegate);
 			if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
 				parsingContext.GetUniformDelegateManager()->UnbindFixedDescriptorSet(*dominantShadow->GetDescriptorSet());
 			if (_lightScene->_dynamicProbeScheduler)
@@ -66,18 +68,21 @@ namespace ToolsRig
 
 		std::shared_ptr<LightingEngine::ForwardPlusLightScene> _lightScene;
 
-		PrepareForwardLightScene(std::shared_ptr<IDevice> device, std::shared_ptr<LightingEngine::ILightScene> lightScene, PipelineType shadowDescSetPipelineType)
+		PrepareForwardLightScene(std::shared_ptr<IDevice> device, std::shared_ptr<LightingEngine::ILightScene> lightScene)
 		{
 			_lightScene = std::dynamic_pointer_cast<LightingEngine::ForwardPlusLightScene>(std::move(lightScene));
 			if (!_lightScene)
 				Throw(std::runtime_error("No light scene, or light scene is of wrong type (ForwardPlusLightScene required)"));
+			_lightSceneResourceDelegate = _lightScene->CreateMainSceneResourceDelegate();
 		}
+
+		std::shared_ptr<Techniques::IShaderResourceDelegate> _lightSceneResourceDelegate;
 	};
 
 	void RegisterPrepareLightScene(ToolsRig::ShaderLab& shaderLab)
 	{
 		shaderLab.RegisterOperation(
-			"PrepareLightScene",
+			"PrepareShadows",
 			[](auto& formatter, auto& context, auto* sequence) {
 				if (sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used outside of a sequence"));
 
@@ -90,14 +95,29 @@ namespace ToolsRig
 						formatter.SkipValueOrElement();
 				}
 
-				auto opStep = std::make_shared<PrepareForwardLightScene>(context._drawingApparatus->_device, context._lightScene, shadowDescSetPipelineType);
+				LightingEngine::ForwardPlusLightScene* forwardLightScene = nullptr;
+				if (context._lightScene) forwardLightScene = (LightingEngine::ForwardPlusLightScene*)context._lightScene->QueryInterface(TypeHashCode<LightingEngine::ForwardPlusLightScene>);
+				if (!forwardLightScene) Throw(std::runtime_error("Missing light scene, or incorrect type in PrepareShadows"));
+
 				context._technique->CreateDynamicSequence(
-					[opStep](auto& iterator, auto& sequence) {
-						opStep->DoShadowPrepare(iterator, sequence);
-						sequence.CreateStep_CallFunction(
-							[opStep=opStep.get()](auto& iterator) {
-								opStep->ConfigureParsingContext(*iterator._parsingContext);
-							});
+					[forwardLightScene](auto& iterator, auto& sequence) {
+						if (forwardLightScene->_priorityShadowScheduler)
+							forwardLightScene->_priorityShadowScheduler->DoShadowPrepare(iterator, sequence);
+						if (forwardLightScene->_dynamicProbeScheduler)
+							forwardLightScene->_dynamicProbeScheduler->DoShadowPrepare(iterator, sequence);
+					});
+			});
+
+		shaderLab.RegisterOperation(
+			"BindLightScene",
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used in a sequence"));
+
+				auto opStep = std::make_shared<PrepareForwardLightScene>(context._drawingApparatus->_device, context._lightScene);
+				sequence->CreateStep_CallFunction(
+					[opStep](auto& iterator) {
+						opStep->Prerender(*iterator._threadContext);
+						opStep->ConfigureParsingContext(*iterator._parsingContext);
 					});
 
 				context._techniqueFinalizers.emplace_back(
@@ -107,6 +127,33 @@ namespace ToolsRig
 								opStep->ReleaseParsingContext(*iterator._parsingContext);
 							});
 					});
+			});
+
+		shaderLab.RegisterOperation(
+			"PrepareTiledLights",
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used in a sequence"));
+
+				LightingEngine::ForwardPlusLightScene* forwardLightScene = nullptr;
+				if (context._lightScene) forwardLightScene = (LightingEngine::ForwardPlusLightScene*)context._lightScene->QueryInterface(TypeHashCode<LightingEngine::ForwardPlusLightScene>);
+				if (!forwardLightScene) Throw(std::runtime_error("Missing light scene, or incorrect type in PrepareTiledLights"));
+
+				// tiler
+				if (!forwardLightScene->GetLightTiler()) return;
+
+				forwardLightScene->GetLightTiler()->PreregisterAttachments(context._stitchingContext, context._fbProps);
+
+				sequence->CreateStep_CallFunction(
+					[forwardLightScene](auto& iterator) {
+						forwardLightScene->GetLightTiler()->UpdatePreFragmentUniforms(iterator);
+					});
+				sequence->CreateStep_RunFragments(forwardLightScene->GetLightTiler()->CreateInitFragment(context._fbProps));
+				sequence->CreateStep_RunFragments(forwardLightScene->GetLightTiler()->CreateFragment(context._fbProps));
+				sequence->CreateStep_CallFunction(
+					[forwardLightScene](auto& iterator) {
+						forwardLightScene->GetLightTiler()->BarrierToReadingLayout(*iterator._threadContext);
+					});
+				sequence->ResolvePendingCreateFragmentSteps();
 			});
 	}
 

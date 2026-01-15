@@ -156,6 +156,9 @@ namespace RenderCore { namespace LightingEngine
 		case TypeHashCode<Internal::DominantLightSet>:
 			return (Internal::DominantLightSet*)_dominantLightSet.get();
 
+		case TypeHashCode<ForwardPlusLightScene>:
+			return (ForwardPlusLightScene*)this;
+
 		default:
 			// We get a lambda from the lighting delegate to query for more interfaces. It's a bit awkward, but it's convenient
 			if (_queryInterfaceHelper)
@@ -224,6 +227,7 @@ namespace RenderCore { namespace LightingEngine
 					dst[0] = &_lightScene->_tiledLightScheduler->GetLightDepthTableUAV();
 					dst[1] = &_lightScene->_tiledLightScheduler->GetLightListUAV();
 					dst[2] = _lightScene->_lightTiler->_outputs._tiledLightBitFieldSRV.get();
+					assert(dst[0] && dst[1] && dst[2]);
 				} else {
 					dst[0] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
 					dst[1] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
