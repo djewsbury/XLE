@@ -14,6 +14,7 @@
 #include "../../RenderCore/LightingEngine/ScreenSpaceReflections.h"
 #include "../../RenderCore/LightingEngine/TextureCompilerUtil.h"
 #include "../../RenderCore/LightingEngine/LightTiler.h"
+#include "../../RenderCore/LightingEngine/SkyOperator.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"
 #include "../../RenderCore/Techniques/ParsingContext.h"
 #include "../../RenderCore/Techniques/DeferredShaderResource.h"
@@ -26,6 +27,7 @@
 #include "../../Formatters/IDynamicFormatter.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/MemoryUtils.h"
+#include "../../Utility/ImpliedTyping.h"
 #include "../../Formatters/FormatterUtils.h"
 #include <memory>
 
@@ -208,6 +210,41 @@ namespace ToolsRig
 								if (helper->_delegate) iterator._parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*helper->_delegate);
 							});
 					});
+			});
+
+		shaderLab.RegisterOperation(
+			"BindIBL",
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used in a sequence"));
+
+				LightingEngine::ForwardPlusLightScene* forwardLightScene = nullptr;
+				if (context._lightScene) forwardLightScene = (LightingEngine::ForwardPlusLightScene*)context._lightScene->QueryInterface(TypeHashCode<LightingEngine::ForwardPlusLightScene>);
+				if (!forwardLightScene) Throw(std::runtime_error("Missing light scene, or incorrect type in BindIBL"));
+
+				LightingEngine::SkyOperatorDesc opDesc;
+				LightingEngine::SkyTextureProcessorDesc processorDesc;
+
+				StringSection<> kn;
+				while (formatter.TryKeyedItem(kn)) {
+					IteratorRange<const void*> data; ImpliedTyping::TypeDesc typeDesc;
+					if (Formatters::TryRawValue(formatter, data, typeDesc)) {
+						SceneEngine::SetProperty(processorDesc, Hash64(kn), data, typeDesc);
+					} else
+						formatter.SkipValueOrElement();
+				}
+				
+				auto opStep = std::make_shared<LightingEngine::SkyOperator>(context._drawingApparatus->_graphicsPipelinePool, opDesc);
+				auto processor = LightingEngine::CreateSkyTextureProcessor(
+					processorDesc, opStep,
+					[](std::shared_ptr<IResourceView>, BufferUploads::CommandListID) {},
+					[forwardLightScene](std::shared_ptr<IResourceView> specularResource, BufferUploads::CommandListID completionCmdList, LightingEngine::SHCoefficients& shCoefficients) {
+						forwardLightScene->SetDiffuseSHCoefficients(shCoefficients);
+						forwardLightScene->SetDistantSpecularIBL(std::move(specularResource), completionCmdList);
+					});
+
+				sequence->CreateStep_CallFunction(
+					[processor](auto& iterator) {});		// just keeping the processor alive
+
 			});
 	}
 
