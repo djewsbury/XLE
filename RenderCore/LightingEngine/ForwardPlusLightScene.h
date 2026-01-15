@@ -65,6 +65,7 @@ namespace RenderCore { namespace LightingEngine
 			unsigned _dominantLightOperator = ~0u;
 			unsigned _ambientLightOperator = ~0u;
 		};
+		const LightOperatorsMapping& GetLightOperatorsMapping() const { return _lightOperatorsMapping; }
 
 		struct IntegrationParams
 		{

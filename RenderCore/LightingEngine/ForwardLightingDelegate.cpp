@@ -253,8 +253,7 @@ namespace RenderCore { namespace LightingEngine
 	static RenderStepFragmentInterface CreateForwardSceneFragment(
 		std::shared_ptr<ForwardLightingCaptures> captures,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
-		bool hasSSR, bool hasSSAO,
-		bool hasDistantIBL,
+		bool hasSSR, bool hasSSAO, bool hasDistantIBL,
 		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
 		const ForwardPlusLightScene::LightOperatorsMapping& lightOperatorMapping)
 	{
@@ -309,9 +308,7 @@ namespace RenderCore { namespace LightingEngine
 			if (lightOperatorMapping._dynamicShadowProbesCfg) box.SetParameter("DYNAMIC_SHADOW_PROBE", 1);
 		}
 
-		if (hasDistantIBL)
-			box.SetParameter("SPECULAR_IBL", 1);
-
+		if (hasDistantIBL) box.SetParameter("SPECULAR_IBL", 1);
 		if (hasSSR) box.SetParameter("SSR", 1);
 		if (hasSSAO) box.SetParameter("SSAO", 1);
 

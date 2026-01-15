@@ -7,6 +7,7 @@
 #include "../../RenderCore/Techniques/RenderPass.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Math/Matrix.h"
+#include "../../Utility/ParameterBox.h"
 #include <memory>
 #include <vector>
 #include <functional>
@@ -103,6 +104,8 @@ namespace ToolsRig
 			std::vector<SetupFunction> _postStitchFunctions;
 
 			std::vector<SetupFunction> _techniqueFinalizers;
+
+			ParameterBox _forwardLightingSelectors;
 
 			RenderCore::LightingEngine::CompiledLightingTechnique* _technique = nullptr;
 			ResourceSet* _resourceSet = nullptr;

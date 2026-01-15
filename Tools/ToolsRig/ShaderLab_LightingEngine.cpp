@@ -79,6 +79,29 @@ namespace ToolsRig
 		std::shared_ptr<Techniques::IShaderResourceDelegate> _lightSceneResourceDelegate;
 	};
 
+	static void ConfigureForwardLightingSelectors(ParameterBox& box, const LightingEngine::ForwardPlusLightScene& scene)
+	{
+		auto& lightOperatorMapping = scene.GetLightOperatorsMapping();
+
+		std::optional<LightingEngine::ShadowOperatorDesc> dominantShadowOperator;
+		if (lightOperatorMapping._dominantLightOperator != ~0u)
+			if (lightOperatorMapping._dominantLightOperator < lightOperatorMapping._operatorInfos.size() && lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._shadowPreparerId != ~0u)
+				dominantShadowOperator = lightOperatorMapping._priorityShadowPreparers[lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._shadowPreparerId];
+
+		if (lightOperatorMapping._dominantLightOperator != ~0u) {
+			auto uniformShapeCode = lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._uniformShapeCode;
+			if (dominantShadowOperator) {
+				// assume the shadow operator that will be associated is index 0
+				LightingEngine::Internal::MakeShadowResolveParam(dominantShadowOperator.value()).WriteShaderSelectors(box);
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)uniformShapeCode | 0x20u);
+			} else {
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)uniformShapeCode);
+			}
+			if (lightOperatorMapping._staticShadowProbesCfg) box.SetParameter("SHADOW_PROBE", 1);
+			if (lightOperatorMapping._dynamicShadowProbesCfg) box.SetParameter("DYNAMIC_SHADOW_PROBE", 1);
+		}
+	}
+
 	void RegisterPrepareLightScene(ToolsRig::ShaderLab& shaderLab)
 	{
 		shaderLab.RegisterOperation(
@@ -127,6 +150,8 @@ namespace ToolsRig
 								opStep->ReleaseParsingContext(*iterator._parsingContext);
 							});
 					});
+
+				ConfigureForwardLightingSelectors(context._forwardLightingSelectors, *opStep->_lightScene);
 			});
 
 		shaderLab.RegisterOperation(
@@ -154,6 +179,35 @@ namespace ToolsRig
 						forwardLightScene->GetLightTiler()->BarrierToReadingLayout(*iterator._threadContext);
 					});
 				sequence->ResolvePendingCreateFragmentSteps();
+			});
+
+		shaderLab.RegisterOperation(
+			"BindBaseLightingResources",
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used in a sequence"));
+
+				struct Helper
+				{
+					std::shared_ptr<Techniques::IShaderResourceDelegate> _delegate;
+					std::future<std::shared_ptr<Techniques::IShaderResourceDelegate>> _futureDelegate;
+				};
+				auto helper = std::make_shared<Helper>();
+
+				helper->_futureDelegate = LightingEngine::Internal::CreateDefaultSequencerResourceDelegate();
+				sequence->CreateStep_CallFunction(
+					[helper](auto& iterator) {
+						if (!helper->_delegate && helper->_futureDelegate.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+							helper->_delegate = helper->_futureDelegate.get();
+						if (helper->_delegate) iterator._parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(helper->_delegate);
+					});
+
+				context._techniqueFinalizers.emplace_back(
+					[helper](auto& context, auto*) {
+						context._technique->CreateSequence().CreateStep_CallFunction(
+							[helper](auto& iterator) {
+								if (helper->_delegate) iterator._parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*helper->_delegate);
+							});
+					});
 			});
 	}
 
