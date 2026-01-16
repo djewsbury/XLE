@@ -4,7 +4,6 @@
 
 #include "ForwardPlusLightScene.h"
 #include "ILightScene.h"
-#include "SHCoefficients.h"
 #include "HierarchicalDepths.h"
 #include "ScreenSpaceReflections.h"
 #include "LightTiler.h"
@@ -34,12 +33,6 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace LightingEngine
 {
-	class ForwardPlusLightScene::AmbientLightConfig
-	{
-	public:
-		bool _ambientLightEnabled = false;
-	};
-
 	void ForwardPlusLightScene::FinalizeConfiguration()
 	{
 		// ensure FiniteRange flag is set for tilable lights
@@ -95,48 +88,9 @@ namespace RenderCore { namespace LightingEngine
 			_priorityShadowScheduler->SetDescriptorSetLayout(_techDelBox->_dmShadowDescSetTemplate, PipelineType::Graphics);
 			RegisterComponent(_priorityShadowScheduler);
 		}
-	}
 
-	ILightScene::LightSourceId ForwardPlusLightScene::CreateLightSource(LightOperatorId op)
-	{
-		if (_lightOperatorsMapping._ambientLightOperator == op) {
-			if (_ambientLight->_ambientLightEnabled)
-				Throw(std::runtime_error("Attempting to create multiple ambient light sources. Only one is supported at a time"));
-			_ambientLight->_ambientLightEnabled = true;
-			return 0;
-		} 
-		return Internal::StandardLightScene::CreateLightSource(op);
-	}
-
-	void ForwardPlusLightScene::DestroyLightSource(LightSourceId sourceId)
-	{
-		if (sourceId == 0) {
-			if (!_ambientLight->_ambientLightEnabled)
-				Throw(std::runtime_error("Attempting to destroy the ambient light source, but it has not been created"));
-			_ambientLight->_ambientLightEnabled = false;
-		} else {
-			Internal::StandardLightScene::DestroyLightSource(sourceId);
-		}
-	}
-
-	void ForwardPlusLightScene::Clear()
-	{
-		_ambientLight->_ambientLightEnabled = false;
-		Internal::StandardLightScene::Clear();
-	}
-
-	void* ForwardPlusLightScene::TryGetLightSourceInterface(LightSourceId sourceId, uint64_t interfaceTypeCode)
-	{
-		if (sourceId == 0) {
-			switch (interfaceTypeCode) {
-			case TypeHashCode<ISkyTextureProcessor>:
-				if (_queryInterfaceHelper)
-					return _queryInterfaceHelper(interfaceTypeCode);	// for the ambient light, get the global ISkyTextureProcessor
-			default: return nullptr;
-			}
-		} else {
-			return Internal::StandardLightScene::TryGetLightSourceInterface(sourceId, interfaceTypeCode);
-		}
+		_ambientResourcesScheduler = std::make_shared<Internal::AmbientResourcesScheduler>(_lightOperatorsMapping._ambientLightOperator);
+		RegisterComponent(_ambientResourcesScheduler);
 	}
 
 	void* ForwardPlusLightScene::QueryInterface(uint64_t typeCode)
@@ -189,7 +143,7 @@ namespace RenderCore { namespace LightingEngine
 				_tiledLightScheduler->WriteEnvProps(*i);
 			
 			i->_enableSSR = enableSSR;
-			std::memcpy(i->_diffuseSHCoefficients, _diffuseSHCoefficients, sizeof(_diffuseSHCoefficients));
+			std::memcpy(i->_diffuseSHCoefficients, _ambientResourcesScheduler->_diffuseSHCoefficients, sizeof(_ambientResourcesScheduler->_diffuseSHCoefficients));
 			map.FlushCache();
 		}
 
@@ -208,6 +162,7 @@ namespace RenderCore { namespace LightingEngine
 		if (_lightTiler) _lightTiler->CompleteInitialization(threadContext);
 		if (_shadowProbes) _shadowProbes->CompleteInitialization(threadContext);
 		if (_dynamicShadowProbes) _dynamicShadowProbes->CompleteInitialization(threadContext);
+		if (_ambientResourcesScheduler) _ambientResourcesScheduler->Prerender();
 	}
 
 	const IPreparedShadowResult* ForwardPlusLightScene::GetDominantPreparedShadow()
@@ -266,9 +221,10 @@ namespace RenderCore { namespace LightingEngine
 			}
 
 			if (bindingFlags & ((1ull<<8ull)|(1ull<<9ull))) {
-				dst[8] = _lightScene->_distantSpecularIBL.get();
+				dst[8] = _lightScene->_ambientResourcesScheduler->_distantSpecularIBL.get();
 				dst[9] = _lightScene->_glossLut.get();
-				context.RequireCommandList(_lightScene->_distantSpecularIBLAndGlossLutCompletion);
+				context.RequireCommandList(_lightScene->_ambientResourcesScheduler->_distantSpecularIBLCompletion);
+				context.RequireCommandList(_lightScene->_glossLutCompletion);
 			}
 		}
 		ForwardPlusLightScene* _lightScene = nullptr;
@@ -293,29 +249,10 @@ namespace RenderCore { namespace LightingEngine
 		return std::make_shared<ShaderResourceDelegate>(*this);
 	}
 
-	void ForwardPlusLightScene::SetDiffuseSHCoefficients(const SHCoefficients& coeffients)
-	{
-		std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
-		std::memcpy(_diffuseSHCoefficients, coeffients.GetCoefficients().begin(), sizeof(Float4)*std::min(coeffients.GetCoefficients().size(), dimof(_diffuseSHCoefficients)));
-	}
-
-	void ForwardPlusLightScene::SetDistantSpecularIBL(std::shared_ptr<IResourceView> resource, BufferUploads::CommandListID completion)
-	{
-		// When distant specular IBL is disabled, _glossLut will be nullptr
-		if (_glossLut) {
-			_distantSpecularIBL = std::move(resource);
-			if (!_distantSpecularIBL) _distantSpecularIBL = Techniques::Services::GetCommonResources()->_blackCubeSRV;
-			_distantSpecularIBLAndGlossLutCompletion = std::max(_distantSpecularIBLAndGlossLutCompletion, completion);
-		}
-	}
-
 	ForwardPlusLightScene::ForwardPlusLightScene()
 	{
-		_ambientLight = std::make_shared<AmbientLightConfig>();
-
 		// We'll maintain the first few ids for system lights (ambient surrounds, etc)
 		ReserveLightSourceIds(32);
-		std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
 	}
 
 	std::shared_ptr<ForwardPlusLightScene> ForwardPlusLightScene::CreateInternal(
@@ -336,8 +273,7 @@ namespace RenderCore { namespace LightingEngine
 
 		lightScene->_lightTiler = lightTiler;
 		lightScene->_glossLut = glossLut ? std::move(glossLut) : Techniques::Services::GetCommonResources()->_black2DSRV;
-		lightScene->_distantSpecularIBLAndGlossLutCompletion = glossLutCompletion;
-		lightScene->_distantSpecularIBL = Techniques::Services::GetCommonResources()->_blackCubeSRV;
+		lightScene->_glossLutCompletion = glossLutCompletion;
 
 		lightScene->FinalizeConfiguration();
 		return lightScene;

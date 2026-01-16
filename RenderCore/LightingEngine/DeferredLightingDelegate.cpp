@@ -155,7 +155,6 @@ namespace RenderCore { namespace LightingEngine
 		void DoLightResolve(SequenceIterator& iterator);
 		void GenerateDebuggingOutputs(SequenceIterator& iterator);
 		OnSkyTextureUpdateFn MakeOnSkyTextureUpdate() { return {}; }
-		OnIBLUpdateFn MakeOnIBLUpdate() { return {}; }
 	};
 
 	class BuildGBufferResourceDelegate : public Techniques::IShaderResourceDelegate
@@ -468,7 +467,7 @@ namespace RenderCore { namespace LightingEngine
 						captures->_skyTextureProcessor = CreateSkyTextureProcessor(
 							*digest._skyTextureProcessor, captures->_skyOperator,
 							captures->MakeOnSkyTextureUpdate(),
-							captures->MakeOnIBLUpdate());
+							nullptr);
 					}
 
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();

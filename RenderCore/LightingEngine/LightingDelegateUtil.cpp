@@ -11,6 +11,8 @@
 #include "ShadowProjectionDriver.h"
 #include "LightTiler.h"
 #include "LightUniforms.h"
+#include "SkyOperator.h"
+#include "SHCoefficients.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/DrawableDelegates.h"
 #include "../Techniques/DeferredShaderResource.h"
@@ -18,6 +20,8 @@
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/PipelineAccelerator.h"
 #include "../Techniques/TechniqueUtils.h"
+#include "../Techniques/Services.h"
+#include "../Techniques/CommonResources.h"
 #include "../Assets/TextureCompiler.h"
 #include "../Metal/Resource.h"
 #include "../Metal/DeviceContext.h"
@@ -1610,6 +1614,83 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	void AmbientResourcesScheduler::RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx)
+	{
+		assert(setIdx == _boundSet);
+		if (_boundLight != ~0u) Throw(std::runtime_error("Multiple lights bound to the AmbientResourcesScheduler"));
+		_boundLight = lightIdx;
+	}
+
+	void AmbientResourcesScheduler::DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx)
+	{
+		assert(setIdx == _boundSet);
+		assert(_boundLight == lightIdx);
+		_boundLight = ~0u;
+	}
+
+	bool AmbientResourcesScheduler::BindToSet(ILightScene::LightOperatorId opId, LightSetId setIdx, QueryInterfaceFunction&&)
+	{
+		if (opId != _operatorId) return false;
+		if (_boundSet != ~0u) Throw(std::runtime_error("Multiple sets bound to the AmbientResourcesScheduler"));
+		_boundSet = setIdx;
+		return true;
+	}
+
+	void* AmbientResourcesScheduler::QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode)
+	{
+		assert(setIdx == _boundSet);
+		if (lightIdx != _boundLight) return nullptr;
+		if (interfaceTypeCode == TypeHashCode<ISkyTextureProcessor>)
+			return _processor.get();
+		return nullptr;
+	}
+
+	void AmbientResourcesScheduler::SetDiffuseSHCoefficients(const SHCoefficients& coeffients)
+	{
+		std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
+		std::memcpy(_diffuseSHCoefficients, coeffients.GetCoefficients().begin(), sizeof(Float4)*std::min(coeffients.GetCoefficients().size(), dimof(_diffuseSHCoefficients)));
+	}
+
+	void AmbientResourcesScheduler::SetDistantSpecularIBL(std::shared_ptr<IResourceView> resource, BufferUploads::CommandListID completion)
+	{
+		// When distant specular IBL is disabled, _glossLut will be nullptr
+		_distantSpecularIBL = std::move(resource);
+		if (!_distantSpecularIBL) _distantSpecularIBL = Techniques::Services::GetCommonResources()->_blackCubeSRV;
+		_distantSpecularIBLCompletion = std::max(_distantSpecularIBLCompletion, completion);
+	}
+
+	void AmbientResourcesScheduler::BindSkyTextureProcessor(std::shared_ptr<ISkyTextureProcessor> processor)
+	{
+		assert(!_processor);
+		assert(_processorBinding == ~0u);
+		_processor = processor;
+
+		_processorBinding = _processor->BindOnChangeIBL(
+			[this](std::shared_ptr<IResourceView> specularResource, BufferUploads::CommandListID completionCmdList, SHCoefficients& shCoefficients) {
+				// Pass the updated SH coefficients into the light scene
+				this->SetDiffuseSHCoefficients(shCoefficients);
+				this->SetDistantSpecularIBL(std::move(specularResource), completionCmdList);
+			});
+	}
+
+	void AmbientResourcesScheduler::Prerender()
+	{
+		if (_processor) SkyTextureProcessorPrerender(*_processor);
+	}
+
+	AmbientResourcesScheduler::AmbientResourcesScheduler(unsigned operatorId)
+	: _operatorId(operatorId)
+	{
+		std::memset(_diffuseSHCoefficients, 0, sizeof(_diffuseSHCoefficients));
+		_distantSpecularIBL = Techniques::Services::GetCommonResources()->_blackCubeSRV;
+	}
+
+	AmbientResourcesScheduler::~AmbientResourcesScheduler()
+	{
+		if (_processor && _processorBinding != ~0u) _processor->UnbindOnChangeIBL(_processorBinding);
+	}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	UInt2 ExtractOutputResolution(IteratorRange<const Techniques::PreregisteredAttachment*> preregs)
 	{

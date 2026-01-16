@@ -73,7 +73,6 @@ namespace RenderCore { namespace LightingEngine
 		void ReleaseParsingContext(Techniques::ParsingContext& parsingContext);
 
 		OnSkyTextureUpdateFn MakeOnSkyTextureUpdate();
-		OnIBLUpdateFn MakeOnIBLUpdate();
 
 		struct SecondStageConstructionOperators;
 		auto ConstructMainSequence(
@@ -147,15 +146,6 @@ namespace RenderCore { namespace LightingEngine
 				};
 		}
 		return {};
-	}
-
-	OnIBLUpdateFn ForwardLightingCaptures::MakeOnIBLUpdate()
-	{
-		return [this](std::shared_ptr<IResourceView> specularResource, BufferUploads::CommandListID completionCmdList, SHCoefficients& shCoefficients) {
-			// Pass the updated SH coefficients into the light scene
-			this->_lightScene->SetDiffuseSHCoefficients(shCoefficients);
-			this->_lightScene->SetDistantSpecularIBL(std::move(specularResource), completionCmdList);
-		};
 	}
 
 	static void PreregisterAttachments(Techniques::FragmentStitchingContext& stitchingContext, const FrameBufferProperties& fbProps)
@@ -725,7 +715,9 @@ namespace RenderCore { namespace LightingEngine
 						captures->_skyTextureProcessor = CreateSkyTextureProcessor(
 							*digest._skyTextureProcessor, captures->_skyOperator,
 							captures->MakeOnSkyTextureUpdate(),
-							captures->MakeOnIBLUpdate());
+							nullptr);
+						if (captures->_lightScene->_ambientResourcesScheduler)
+							captures->_lightScene->_ambientResourcesScheduler->BindSkyTextureProcessor(captures->_skyTextureProcessor);
 					}
 
 					auto depthMotionNormalRoughnessDelegate = helper->_depthMotionNormalRoughnessDelegate.get();
@@ -746,8 +738,6 @@ namespace RenderCore { namespace LightingEngine
 								return (IBloom*)captures->_acesOperator.get();
 							case TypeHashCode<IExposure>:
 								return (IExposure*)captures->_acesOperator.get();
-							case TypeHashCode<ISkyTextureProcessor>:
-								return (ISkyTextureProcessor*)captures->_skyTextureProcessor.get();
 							case TypeHashCode<ISSAmbientOcclusion>:
 								return (ISSAmbientOcclusion*)captures->_ssaoOperator.get();
 							case TypeHashCode<ILightScene>:
@@ -761,8 +751,6 @@ namespace RenderCore { namespace LightingEngine
 						[captures](SequenceIterator& iterator, Sequence& sequence) {
 							captures->DoShadowPrepare(iterator, sequence);
 							captures->_lightScene->Prerender(*iterator._threadContext);
-							if (captures->_skyTextureProcessor)
-								SkyTextureProcessorPrerender(*captures->_skyTextureProcessor);
 						});
 
 					// main sequence & setup second stage construction

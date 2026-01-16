@@ -176,7 +176,7 @@ namespace RenderCore { namespace LightingEngine
 			_onChangeSkyTexture.Unbind(bindId);
 		}
 
-		unsigned BindOnChangeIBL(std::function<void(std::shared_ptr<IResourceView>, BufferUploads::CommandListID, SHCoefficients&)>&& fn)
+		unsigned BindOnChangeIBL(std::function<void(std::shared_ptr<IResourceView>, BufferUploads::CommandListID, SHCoefficients&)>&& fn) override
 		{
 			{
 				ScopedLock(_pendingUpdatesLock);
@@ -186,7 +186,7 @@ namespace RenderCore { namespace LightingEngine
 			return _onChangeIBL.Bind(std::move(fn));
 		}
 
-		void UnbindOnChangeIBL(unsigned bindId)
+		void UnbindOnChangeIBL(unsigned bindId) override
 		{
 			_onChangeIBL.Unbind(bindId);
 		}

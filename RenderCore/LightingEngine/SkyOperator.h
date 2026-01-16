@@ -68,6 +68,10 @@ namespace RenderCore { namespace LightingEngine
 		virtual void SetSkyResource(std::shared_ptr<IResourceView>, BufferUploads::CommandListID) = 0;
 		virtual void SetIBL(std::shared_ptr<IResourceView> specular, BufferUploads::CommandListID specularCompletion, SHCoefficients& diffuse) = 0;
 
+		using OnIBLUpdateFn = std::function<void(std::shared_ptr<IResourceView>, BufferUploads::CommandListID, SHCoefficients&)>;
+		virtual unsigned BindOnChangeIBL(OnIBLUpdateFn&&) = 0;
+		virtual void UnbindOnChangeIBL(unsigned)= 0;
+
 		virtual ~ISkyTextureProcessor();
 	};
 
@@ -101,13 +105,12 @@ namespace RenderCore { namespace LightingEngine
 	};
 
 	using OnSkyTextureUpdateFn = std::function<void(std::shared_ptr<IResourceView>, BufferUploads::CommandListID)>;
-	using OnIBLUpdateFn = std::function<void(std::shared_ptr<IResourceView>, BufferUploads::CommandListID, SHCoefficients&)>;
 
 	std::shared_ptr<ISkyTextureProcessor> CreateSkyTextureProcessor(
 		const SkyTextureProcessorDesc& desc,
-		std::shared_ptr<SkyOperator> skyOperator,
-		OnSkyTextureUpdateFn&& onSkyTextureUpdate,
-		OnIBLUpdateFn&& onIBLUpdate);
+		std::shared_ptr<SkyOperator> skyOperator = nullptr,
+		OnSkyTextureUpdateFn&& onSkyTextureUpdate = nullptr,
+		ISkyTextureProcessor::OnIBLUpdateFn&& onIBLUpdate = nullptr);
 
 	void SkyTextureProcessorPrerender(ISkyTextureProcessor&);
 

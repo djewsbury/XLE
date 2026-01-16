@@ -221,7 +221,6 @@ namespace ToolsRig
 				if (context._lightScene) forwardLightScene = (LightingEngine::ForwardPlusLightScene*)context._lightScene->QueryInterface(TypeHashCode<LightingEngine::ForwardPlusLightScene>);
 				if (!forwardLightScene) Throw(std::runtime_error("Missing light scene, or incorrect type in BindIBL"));
 
-				LightingEngine::SkyOperatorDesc opDesc;
 				LightingEngine::SkyTextureProcessorDesc processorDesc;
 
 				StringSection<> kn;
@@ -233,18 +232,8 @@ namespace ToolsRig
 						formatter.SkipValueOrElement();
 				}
 				
-				auto opStep = std::make_shared<LightingEngine::SkyOperator>(context._drawingApparatus->_graphicsPipelinePool, opDesc);
-				auto processor = LightingEngine::CreateSkyTextureProcessor(
-					processorDesc, opStep,
-					[](std::shared_ptr<IResourceView>, BufferUploads::CommandListID) {},
-					[forwardLightScene](std::shared_ptr<IResourceView> specularResource, BufferUploads::CommandListID completionCmdList, LightingEngine::SHCoefficients& shCoefficients) {
-						forwardLightScene->SetDiffuseSHCoefficients(shCoefficients);
-						forwardLightScene->SetDistantSpecularIBL(std::move(specularResource), completionCmdList);
-					});
-
-				sequence->CreateStep_CallFunction(
-					[processor](auto& iterator) {});		// just keeping the processor alive
-
+				auto processor = LightingEngine::CreateSkyTextureProcessor(processorDesc);
+				forwardLightScene->_ambientResourcesScheduler->BindSkyTextureProcessor(std::move(processor));
 			});
 	}
 

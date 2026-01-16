@@ -32,6 +32,8 @@ namespace RenderCore { namespace LightingEngine
 	class Sequence;
 	class IProbeRenderingInstance;
 	class RasterizationLightTileOperator;
+	class ISkyTextureProcessor;
+	class SHCoefficients;
 }}
 namespace RenderCore { class IThreadContext; class IDevice; class IResourceView; }
 namespace RenderCore { namespace Assets { class PredefinedDescriptorSetLayout; }}
@@ -315,6 +317,37 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		std::shared_ptr<RenderCore::IResource> _unmapLightList;
 		std::shared_ptr<RenderCore::IResource> _unmapDepthTable;
 		unsigned _pingPongCounter = 0;
+	};
+
+	class AmbientResourcesScheduler : public ILightSceneComponent
+	{
+	public:
+		void BindSkyTextureProcessor(std::shared_ptr<ISkyTextureProcessor>);
+		void Prerender();
+		bool AmbientLightEnabled() const { return _boundLight != ~0u; }
+
+		AmbientResourcesScheduler(unsigned operatorId);
+		~AmbientResourcesScheduler();
+
+		void SetDiffuseSHCoefficients(const SHCoefficients&);
+		void SetDistantSpecularIBL(std::shared_ptr<IResourceView>, BufferUploads::CommandListID);
+
+		Float4 _diffuseSHCoefficients[25];
+		std::shared_ptr<IResourceView> _distantSpecularIBL;
+		BufferUploads::CommandListID _distantSpecularIBLCompletion = 0;
+
+		// ILightSceneComponent
+		void RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
+		void DeregisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, LightSetId setIdx, QueryInterfaceFunction&&) override;
+		void* QueryInterface(LightSetId setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
+
+	private:
+		unsigned _operatorId;
+		LightSetId _boundSet = ~0u;
+		ILightScene::LightSourceId _boundLight = ~0u;
+		std::shared_ptr<ISkyTextureProcessor> _processor;
+		unsigned _processorBinding = ~0u;
 	};
 
 	class ShaderResourceSplitter : public RenderCore::Techniques::IShaderResourceDelegate
