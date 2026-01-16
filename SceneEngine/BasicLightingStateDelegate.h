@@ -22,6 +22,10 @@ namespace SceneEngine
     /// Derived classes should implement the accessor GetEnvSettings().
     ::Assets::PtrToMarkerPtr<ILightingStateDelegate> CreateBasicLightingStateDelegate(StringSection<> envSettings);
 
+    std::future<std::shared_ptr<ILightingStateDelegate>> SplitLightingStateDelegate(
+        std::shared_future<std::shared_ptr<ILightingStateDelegate>> zero,
+        std::shared_future<std::shared_ptr<ILightingStateDelegate>> one);
+
     std::shared_ptr<ILightingStateDelegate> CreateUtilityLightingStateDelegate(RenderCore::Techniques::UtilityDelegateType);
 
     RenderCore::LightingEngine::SunSourceFrustumSettings    DefaultSunSourceFrustumSettings();

@@ -9,6 +9,7 @@
 #include "../RenderCore/LightingEngine/SunSourceConfiguration.h"
 #include "../RenderCore/LightingEngine/ShadowPreparer.h"
 #include "../RenderCore/LightingEngine/SkyOperator.h"
+#include "../RenderCore/LightingEngine/ShadowProbes.h"
 #include "../RenderCore/Techniques/TechniqueDelegates.h"        // for Techniques::UtilityDelegateType
 #include "../Formatters/IDynamicFormatter.h"
 #include "../Tools/EntityInterface/EntityInterface.h"
@@ -26,6 +27,8 @@ using namespace Utility::Literals;
  
 namespace SceneEngine
 {
+    using namespace RenderCore;
+
     static float PowerForHalfRadius(float halfRadius, float powerFraction)
 	{
 		const float attenuationScalar = 1.f;
@@ -35,8 +38,8 @@ namespace SceneEngine
     class SwirlingPointLights
     {
     public:
-        std::vector<RenderCore::LightingEngine::ILightScene::LightSourceId> _lightSources;
-        void UpdateLights(RenderCore::LightingEngine::ILightScene& lightScene)
+        std::vector<LightingEngine::ILightScene::LightSourceId> _lightSources;
+        void UpdateLights(LightingEngine::ILightScene& lightScene)
         {
             const float cutoffRadius = _desc._cutoffRadius;
             const float swirlingRadius = _desc._swirlingRadius;
@@ -49,7 +52,7 @@ namespace SceneEngine
 				const float Y = 3.7397f * startingAngle + .7234f * c / float(tileLightCount) * gPI * 2.f;
 				// const float Z = 13.8267f * startingAngle + 0.27234f * c / float(tileLightCount) * gPI * 2.f;
 
-                auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(lightId);
+                auto* positional = lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(lightId);
                 if (positional) {
                     Float4x4 temp = AsFloat4x4(RotationY(2.f * gPI * c/float(tileLightCount) + _time));
                     Combine_IntoLHS(temp, RotationX(IntegerHash32(c) / 10000.0f));
@@ -57,14 +60,14 @@ namespace SceneEngine
                     positional->SetLocalToWorld(AsFloat4x4(ScaleTranslation { Float3(0.1f, 0.1f, 1.0f), TransformPoint(temp, Float3(0,0,std::sin(IntegerHash32(-(signed)c)+_time)*swirlingRadius)) }));
                 }
 
-                auto* emittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(lightId);
+                auto* emittance = lightScene.TryGetLightSourceInterface<LightingEngine::IUniformEmittance>(lightId);
                 if (emittance) {
                     auto power = PowerForHalfRadius(0.5f*cutoffRadius, 0.05f);
                     auto brightness = power * Float3{.65f + .35f * XlSin(Y), .65f + .35f * XlCos(Y), .65f + .35f * XlCos(X)};
                     emittance->SetBrightness(brightness);
                 }
 
-                auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(lightId);
+                auto* finite = lightScene.TryGetLightSourceInterface<LightingEngine::IFiniteLightSource>(lightId);
                 if (finite) {
                     finite->SetCutoffBrightness(0.05f);
                 }
@@ -72,7 +75,7 @@ namespace SceneEngine
             _time += 1.0f/60.f;
         }
 
-        void BindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+        void BindScene(LightingEngine::ILightScene& lightScene)
         {
             if (!_desc._lightCount) return;
             assert(_operatorId != ~0u);
@@ -83,7 +86,7 @@ namespace SceneEngine
             }
         }
 
-        void UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+        void UnbindScene(LightingEngine::ILightScene& lightScene)
         {
             for (auto l:_lightSources)
                 lightScene.DestroyLightSource(l);
@@ -93,8 +96,8 @@ namespace SceneEngine
         void        BindCfg(MergedLightingEngineCfg& cfg)
         {
             if (_desc._lightCount) {
-                RenderCore::LightingEngine::PositionalLightOperatorDesc opDesc;
-                opDesc._shape = RenderCore::LightingEngine::LightSourceShape::Sphere;
+                LightingEngine::PositionalLightOperatorDesc opDesc;
+                opDesc._shape = LightingEngine::LightSourceShape::Sphere;
                 _operatorId = cfg.Register(opDesc);
             }
         }
@@ -113,11 +116,11 @@ namespace SceneEngine
     class BasicLightingStateDelegate : public ILightingStateDelegate
     {
     public:
-        void        PreRender(const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, RenderCore::LightingEngine::ILightScene& lightScene) override;
-        void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene) override;
-        void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>) override;
-        void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene) override;
-        auto        BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext) -> std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> override;
+        void        PreRender(const Techniques::ProjectionDesc& mainSceneCameraDesc, LightingEngine::ILightScene& lightScene) override;
+        void        PostRender(LightingEngine::ILightScene& lightScene) override;
+        void        BindScene(LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>) override;
+        void        UnbindScene(LightingEngine::ILightScene& lightScene) override;
+        auto        BeginPrepareStep(LightingEngine::ILightScene& lightScene, IThreadContext& threadContext) -> std::shared_ptr<LightingEngine::IProbeRenderingInstance> override;
 
         void        BindCfg(MergedLightingEngineCfg& cfg) override;
 
@@ -132,7 +135,7 @@ namespace SceneEngine
 
     protected:
         LightingEngineOperatorSet _operatorResolveContext;
-        ObjectTable<RenderCore::LightingEngine::SunSourceFrustumSettings> _sunSourceFrustumSettingsInCfgFile;
+        ObjectTable<LightingEngine::SunSourceFrustumSettings> _sunSourceFrustumSettingsInCfgFile;
         std::vector<std::pair<uint64_t, uint64_t>> _shadowToAssociatedLight;
 
         struct PendingLightSource
@@ -147,7 +150,7 @@ namespace SceneEngine
 
         std::vector<unsigned> _lightSourcesInBoundScene;
 
-        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightOperatorId>> _lightOperatorHashToId;
+        std::vector<std::pair<uint64_t, LightingEngine::ILightScene::LightOperatorId>> _lightOperatorHashToId;
         uint64_t _ambientOperator = ~0ull;
 
         ::Assets::DependencyValidation _depVal;
@@ -158,21 +161,21 @@ namespace SceneEngine
     };
 
     void BasicLightingStateDelegate::PreRender(
-        const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc,
-        RenderCore::LightingEngine::ILightScene& lightScene)
+        const Techniques::ProjectionDesc& mainSceneCameraDesc,
+        LightingEngine::ILightScene& lightScene)
     {
         _swirlingLights.UpdateLights(lightScene);
     }
 
-    void        BasicLightingStateDelegate::PostRender(RenderCore::LightingEngine::ILightScene& lightScene)
+    void        BasicLightingStateDelegate::PostRender(LightingEngine::ILightScene& lightScene)
     {
     }
 
     void        BasicLightingStateDelegate::BindScene(
-        RenderCore::LightingEngine::ILightScene& lightScene,
+        LightingEngine::ILightScene& lightScene,
         std::shared_ptr<::Assets::OperationContext> operationContext)
     {
-        std::vector<std::pair<uint64_t, RenderCore::LightingEngine::ILightScene::LightSourceId>> lightNameToId;
+        std::vector<std::pair<uint64_t, LightingEngine::ILightScene::LightSourceId>> lightNameToId;
 
         for (const auto&light:_lightSourcesInCfgFile) {
             if (!light._operatorHash) continue;
@@ -186,7 +189,7 @@ namespace SceneEngine
                 lightNameToId.emplace_back(Hash64(light._name), newLight);
 
                 if (light._operatorHash == _ambientOperator) {
-                    auto* distanceIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(newLight);
+                    auto* distanceIBL = lightScene.TryGetLightSourceInterface<LightingEngine::ISkyTextureProcessor>(newLight);
                     if (distanceIBL)
                         distanceIBL->SetEquirectangularSource(operationContext, light._parameters.GetParameterAsString("EquirectangularSource"_h).value());
                 }
@@ -206,24 +209,24 @@ namespace SceneEngine
                 [lightAssociation](const auto& c) { return c.first == lightAssociation->second; });
             if (lightId == lightNameToId.end()) continue;        // couldn't find the associated light
             
-            RenderCore::LightingEngine::SetupSunSourceShadows(
+            LightingEngine::SetupSunSourceShadows(
                 lightScene, lightId->second, sunSource.second);
         }
 
         if (_bloomPropertiesInCfgFile.GetCount() != 0)
-            if (auto* bloom = query_interface_cast<RenderCore::LightingEngine::IBloom*>(&lightScene))
+            if (auto* bloom = query_interface_cast<LightingEngine::IBloom*>(&lightScene))
                 for (auto p:_bloomPropertiesInCfgFile)
                     SetProperty(*bloom, p.HashName(), p.RawValue(), p.Type());
 
         if (_exposurePropertiesInCfgFile.GetCount() != 0)
-            if (auto* exposure = query_interface_cast<RenderCore::LightingEngine::IExposure*>(&lightScene))
+            if (auto* exposure = query_interface_cast<LightingEngine::IExposure*>(&lightScene))
                 for (auto p:_exposurePropertiesInCfgFile)
                     SetProperty(*exposure, p.HashName(), p.RawValue(), p.Type());
 
         _swirlingLights.BindScene(lightScene);
     }
 
-    void        BasicLightingStateDelegate::UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+    void        BasicLightingStateDelegate::UnbindScene(LightingEngine::ILightScene& lightScene)
     {
         _swirlingLights.UnbindScene(lightScene);
         for (auto lightSource:_lightSourcesInBoundScene)
@@ -231,7 +234,7 @@ namespace SceneEngine
         _lightSourcesInBoundScene.clear();
     }
 
-    std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BasicLightingStateDelegate::BeginPrepareStep(RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext)
+    std::shared_ptr<LightingEngine::IProbeRenderingInstance> BasicLightingStateDelegate::BeginPrepareStep(LightingEngine::ILightScene& lightScene, IThreadContext& threadContext)
     {
         return nullptr;
     }
@@ -254,7 +257,7 @@ namespace SceneEngine
             if (associatedShadow != _shadowToAssociatedLight.end()) {
                 auto shadow2 = std::find_if(b2e(_sunSourceFrustumSettingsInCfgFile._objects), [n=associatedShadow->first](const auto& q) { return q.first == n; });
                 if (shadow2 != _sunSourceFrustumSettingsInCfgFile._objects.end()) {
-                    auto shadowOperator = RenderCore::LightingEngine::CalculateShadowOperatorDesc(shadow2->second);
+                    auto shadowOperator = LightingEngine::CalculateShadowOperatorDesc(shadow2->second);
                     _lightOperatorHashToId.emplace_back(c.first, cfg.Register(c.second, shadowOperator));
                     continue;
                 }
@@ -396,7 +399,7 @@ namespace SceneEngine
             } else if (XlEqString(keyname, "SunSourceShadow")) {
                 RequireBeginElement(formatter);
 
-                RenderCore::LightingEngine::SunSourceFrustumSettings sunSourceShadows;
+                LightingEngine::SunSourceFrustumSettings sunSourceShadows;
                 StringSection<> name, associatedLight;
                 
                 std::vector<decltype(_sunSourceFrustumSettingsInCfgFile)::PendingProperty> properties; 
@@ -495,19 +498,118 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+	class LightingStateDelegateSplitter : public ILightingStateDelegate
+	{
+	public:
+		void PreRender(
+			const Techniques::ProjectionDesc& mainSceneCameraDesc, 
+			LightingEngine::ILightScene& lightScene) override
+		{
+			_children[0]->PreRender(mainSceneCameraDesc, lightScene);
+			_children[1]->PreRender(mainSceneCameraDesc, lightScene);
+		}
+		
+		void PostRender(LightingEngine::ILightScene& lightScene) override
+		{
+			_children[0]->PostRender(lightScene);
+			_children[1]->PostRender(lightScene);
+		}
+
+		void BindScene(LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext> opContext) override
+		{
+			_children[0]->BindScene(lightScene, opContext);
+			_children[1]->BindScene(lightScene, opContext);
+		}
+
+		void UnbindScene(LightingEngine::ILightScene& lightScene) override
+		{
+			_children[0]->UnbindScene(lightScene);
+			_children[1]->UnbindScene(lightScene);
+		}
+
+		void BindCfg(MergedLightingEngineCfg& cfg) override
+		{
+			_children[0]->BindCfg(cfg);
+			_children[1]->BindCfg(cfg);
+		}
+
+		class SplitProbeRenderingInstance : public LightingEngine::IProbeRenderingInstance
+		{
+		public:
+			LightingEngine::SequencePlayback::Step GetNextStep() override
+			{
+				auto res = _children[_iterationProgress]->GetNextStep();
+				if (res._type == LightingEngine::StepType::None && _iterationProgress == 0) {
+					++_iterationProgress;
+					res = _children[_iterationProgress]->GetNextStep();
+				}
+				return res;
+			}
+
+			BufferUploads::CommandListID GetRequiredBufferUploadsCommandList() override
+			{
+				return std::max(_children[0]->GetRequiredBufferUploadsCommandList(), _children[1]->GetRequiredBufferUploadsCommandList());
+			}
+
+			SplitProbeRenderingInstance(std::shared_ptr<LightingEngine::IProbeRenderingInstance> zero, std::shared_ptr<LightingEngine::IProbeRenderingInstance> one)
+			{
+				_children[0] = std::move(zero);
+				_children[1] = std::move(one);
+			}
+
+			std::shared_ptr<LightingEngine::IProbeRenderingInstance> _children[2];
+			unsigned _iterationProgress = 0;
+		};
+
+		std::shared_ptr<LightingEngine::IProbeRenderingInstance> BeginPrepareStep(
+			LightingEngine::ILightScene& lightScene, IThreadContext& threadContext) override
+		{
+			auto zero = _children[0]->BeginPrepareStep(lightScene, threadContext);
+			auto one = _children[1]->BeginPrepareStep(lightScene, threadContext);
+			if (!one) return zero;
+			if (!zero) return one;
+			return std::make_shared<SplitProbeRenderingInstance>(std::move(zero), std::move(one));
+		}
+
+		LightingStateDelegateSplitter(std::shared_ptr<ILightingStateDelegate> zero, std::shared_ptr<ILightingStateDelegate> one)
+		{
+			_children[0] = std::move(zero);
+			_children[1] = std::move(one);
+		}
+
+		std::shared_ptr<ILightingStateDelegate> _children[2];
+	};
+
+	std::future<std::shared_ptr<ILightingStateDelegate>> SplitLightingStateDelegate(
+		std::shared_future<std::shared_ptr<ILightingStateDelegate>> zero,
+		std::shared_future<std::shared_ptr<ILightingStateDelegate>> one)
+	{
+		assert(zero.valid() && one.valid());
+		std::promise<std::shared_ptr<ILightingStateDelegate>> p;
+		auto result = p.get_future();
+		::Assets::WhenAll(std::move(zero), std::move(one)).ThenConstructToPromise(
+			std::move(p),
+			[](auto&& zero, auto&& one) -> std::shared_ptr<ILightingStateDelegate> {
+				return std::make_shared<LightingStateDelegateSplitter>(std::move(zero), std::move(one));
+			});
+		return result;
+	}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
     class UtilityLightingStateDelegate : public ILightingStateDelegate
     {
     public:
         void        PreRender(
-            const RenderCore::Techniques::ProjectionDesc& mainSceneCameraDesc, 
-            RenderCore::LightingEngine::ILightScene& lightScene)
+            const Techniques::ProjectionDesc& mainSceneCameraDesc, 
+            LightingEngine::ILightScene& lightScene)
         {}
-        void        PostRender(RenderCore::LightingEngine::ILightScene& lightScene)
+        void        PostRender(LightingEngine::ILightScene& lightScene)
         {}
 
-        void        BindScene(RenderCore::LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>)
+        void        BindScene(LightingEngine::ILightScene& lightScene, std::shared_ptr<::Assets::OperationContext>)
         {}
-        void        UnbindScene(RenderCore::LightingEngine::ILightScene& lightScene)
+        void        UnbindScene(LightingEngine::ILightScene& lightScene)
         {}
 
         void        BindCfg(MergedLightingEngineCfg& cfg)
@@ -515,31 +617,31 @@ namespace SceneEngine
             cfg.SetOperator(_techDesc);
         }
 
-        std::shared_ptr<RenderCore::LightingEngine::IProbeRenderingInstance> BeginPrepareStep(
-            RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::IThreadContext& threadContext)
+        std::shared_ptr<LightingEngine::IProbeRenderingInstance> BeginPrepareStep(
+            LightingEngine::ILightScene& lightScene, IThreadContext& threadContext)
         {
             return nullptr;
         }
 
-        UtilityLightingStateDelegate(RenderCore::Techniques::UtilityDelegateType utilType)
+        UtilityLightingStateDelegate(Techniques::UtilityDelegateType utilType)
         {
             _techDesc._type = utilType;
         }
 
     private:
-        RenderCore::LightingEngine::UtilityLightingTechniqueDesc _techDesc;
+        LightingEngine::UtilityLightingTechniqueDesc _techDesc;
     };
 
-    std::shared_ptr<ILightingStateDelegate> CreateUtilityLightingStateDelegate(RenderCore::Techniques::UtilityDelegateType utilType)
+    std::shared_ptr<ILightingStateDelegate> CreateUtilityLightingStateDelegate(Techniques::UtilityDelegateType utilType)
     {
         return std::make_shared<UtilityLightingStateDelegate>(utilType);
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    RenderCore::LightingEngine::SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
+    LightingEngine::SunSourceFrustumSettings DefaultSunSourceFrustumSettings()
     {
-        RenderCore::LightingEngine::SunSourceFrustumSettings result;
+        LightingEngine::SunSourceFrustumSettings result;
         result._maxFrustumCount = 3;
         result._maxDistanceFromCamera = 2000.f;
         result._focusDistance = 5.0f;
@@ -550,7 +652,7 @@ namespace SceneEngine
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    MergedLightingEngineCfg::LightOperatorId MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::PositionalLightOperatorDesc& pos, const RenderCore::LightingEngine::ShadowOperatorDesc& shadow)
+    MergedLightingEngineCfg::LightOperatorId MergedLightingEngineCfg::Register(const LightingEngine::PositionalLightOperatorDesc& pos, const LightingEngine::ShadowOperatorDesc& shadow)
     {
         auto hash = pos.GetHash(shadow.GetHash());
         auto i = std::find(b2e(_lightOperatorHashes), hash);
@@ -565,7 +667,7 @@ namespace SceneEngine
             AddToOperatorList(_reservedLightOperators[_reservedLightOperatorCount]);
             ++_reservedLightOperatorCount;
         } else {
-            SetOperator<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::PositionalLightOperatorDesc>>({result, pos});
+            SetOperator<LightingEngine::LightOperatorAssignment<LightingEngine::PositionalLightOperatorDesc>>({result, pos});
         }
 
         if (_reservedShadowOperatorCount < dimof(_reservedShadowOperators)) {
@@ -573,13 +675,13 @@ namespace SceneEngine
             AddToOperatorList(_reservedShadowOperators[_reservedShadowOperatorCount]);
             ++_reservedShadowOperatorCount;
         } else {
-            SetOperator<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::ShadowOperatorDesc>>({result, shadow});
+            SetOperator<LightingEngine::LightOperatorAssignment<LightingEngine::ShadowOperatorDesc>>({result, shadow});
         }
 
         return result;
     }
 
-    unsigned MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::PositionalLightOperatorDesc& pos)
+    unsigned MergedLightingEngineCfg::Register(const LightingEngine::PositionalLightOperatorDesc& pos)
     {
         auto hash = pos.GetHash();
         auto i = std::find(b2e(_lightOperatorHashes), hash);
@@ -594,25 +696,25 @@ namespace SceneEngine
             AddToOperatorList(_reservedLightOperators[_reservedLightOperatorCount]);
             ++_reservedLightOperatorCount;
         } else {
-            SetOperator<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::PositionalLightOperatorDesc>>({result, pos});
+            SetOperator<LightingEngine::LightOperatorAssignment<LightingEngine::PositionalLightOperatorDesc>>({result, pos});
         }
 
         return result;
     }
 
-    auto MergedLightingEngineCfg::Register(const RenderCore::LightingEngine::AmbientLightOperatorDesc& ambient) -> LightOperatorId
+    auto MergedLightingEngineCfg::Register(const LightingEngine::AmbientLightOperatorDesc& ambient) -> LightOperatorId
     {
         auto result = unsigned(_lightOperatorHashes.size());
         _lightOperatorHashes.push_back(~0ull);
-        SetOperator<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::AmbientLightOperatorDesc>>({result, ambient});
+        SetOperator<LightingEngine::LightOperatorAssignment<LightingEngine::AmbientLightOperatorDesc>>({result, ambient});
         return result;
     }
 
-    void MergedLightingEngineCfg::AddToOperatorList(RenderCore::LightingEngine::ChainedOperatorDesc& op)
+    void MergedLightingEngineCfg::AddToOperatorList(LightingEngine::ChainedOperatorDesc& op)
     {
         if (_firstChainedOperator) {
             auto* o = _firstChainedOperator;
-            while (o != &op && o->_next) o = const_cast<RenderCore::LightingEngine::ChainedOperatorDesc*>(o->_next);
+            while (o != &op && o->_next) o = const_cast<LightingEngine::ChainedOperatorDesc*>(o->_next);
             if (o != &op) {
                 assert(!o->_next);
                 assert(!op._next);
@@ -623,73 +725,73 @@ namespace SceneEngine
         }
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::ForwardLightingTechniqueDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::ForwardLightingTechniqueDesc& operatorDesc)
     {
         _forwardLightingOperator._desc = operatorDesc;
         AddToOperatorList(_forwardLightingOperator);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::DeferredLightingTechniqueDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::DeferredLightingTechniqueDesc& operatorDesc)
     {
         _deferredLightingOperator._desc = operatorDesc;
         AddToOperatorList(_deferredLightingOperator);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::UtilityLightingTechniqueDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::UtilityLightingTechniqueDesc& operatorDesc)
     {
         _utilityLightingOperator._desc = operatorDesc;
         AddToOperatorList(_utilityLightingOperator);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::ToneMapAcesOperatorDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::ToneMapAcesOperatorDesc& operatorDesc)
     {
         _toneMapAcesOperator._desc = operatorDesc;
         AddToOperatorList(_toneMapAcesOperator);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::MultiSampleOperatorDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::MultiSampleOperatorDesc& operatorDesc)
     {
         _msaaOperator._desc = operatorDesc;
         AddToOperatorList(_msaaOperator);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::TAAOperatorDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::TAAOperatorDesc& operatorDesc)
     {
         _taaOperator._desc = operatorDesc;
         AddToOperatorList(_taaOperator);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::SharpenOperatorDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::SharpenOperatorDesc& operatorDesc)
     {
         _sharpenOperator._desc = operatorDesc;
         AddToOperatorList(_sharpenOperator);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::FilmGrainDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::FilmGrainDesc& operatorDesc)
     {
         _filmGrainOperator._desc = operatorDesc;
         AddToOperatorList(_filmGrainOperator);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::SkyOperatorDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::SkyOperatorDesc& operatorDesc)
     {
         _skyOperator._desc = operatorDesc;
         AddToOperatorList(_skyOperator);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::SkyTextureProcessorDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::SkyTextureProcessorDesc& operatorDesc)
     {
         _skyTextureProcessor._desc = operatorDesc;
         AddToOperatorList(_skyTextureProcessor);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::ScreenSpaceReflectionsOperatorDesc& operatorDesc)
     {
         _ssr._desc = operatorDesc;
         AddToOperatorList(_ssr);
     }
 
-    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::AmbientOcclusionOperatorDesc& operatorDesc)
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::AmbientOcclusionOperatorDesc& operatorDesc)
     {
         _ssao._desc = operatorDesc;
         AddToOperatorList(_ssao);
@@ -716,11 +818,11 @@ namespace SceneEngine
     constexpr auto EquirectangularSource = "EquirectangularSource"_h;
 
     void InitializeLight(
-        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
+        LightingEngine::ILightScene& lightScene, LightingEngine::ILightScene::LightSourceId sourceId,
         const ParameterBox& parameters,
         const Float3& offsetLocalToWorld)
     {
-        auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId);
+        auto* positional = lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(sourceId);
         if (positional) {
             auto transformValue = parameters.GetParameter<Float3x4>(LocalToWorld);
             if (transformValue) {
@@ -745,7 +847,7 @@ namespace SceneEngine
             }
         }
 
-        auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId);
+        auto* uniformEmittance = lightScene.TryGetLightSourceInterface<LightingEngine::IUniformEmittance>(sourceId);
         if (uniformEmittance) {
             if (auto brightness = parameters.GetParameter<Float3>(Brightness))
                 uniformEmittance->SetBrightness(*brightness);
@@ -756,7 +858,7 @@ namespace SceneEngine
                 uniformEmittance->SetDiffuseWideningFactors({wideningMin.value(), wideningMax.value()});
         }
 
-        auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId);
+        auto* finite = lightScene.TryGetLightSourceInterface<LightingEngine::IFiniteLightSource>(sourceId);
         if (finite) {
             if (auto cutoffBrightness = parameters.GetParameter<float>(CutoffBrightness))
                 finite->SetCutoffBrightness(*cutoffBrightness);
@@ -764,13 +866,13 @@ namespace SceneEngine
                 finite->SetCutoffRange(*cutoffRange);
         }
 
-        auto* cone = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IConeSource>(sourceId);
+        auto* cone = lightScene.TryGetLightSourceInterface<LightingEngine::IConeSource>(sourceId);
         if (cone) {
              if (auto coneAngle = parameters.GetParameter<float>(ConeAngle))
                 cone->SetConeAngle(*coneAngle);
         }
 
-        auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(sourceId);
+        auto* distantIBL = lightScene.TryGetLightSourceInterface<LightingEngine::ISkyTextureProcessor>(sourceId);
         if (distantIBL) {
             auto src = parameters.GetParameterAsString(EquirectangularSource);
             if (src)
@@ -791,12 +893,12 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::ILightScene& lightScene, RenderCore::LightingEngine::ILightScene::LightSourceId sourceId,
+        LightingEngine::ILightScene& lightScene, LightingEngine::ILightScene::LightSourceId sourceId,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
         case LocalToWorld:
-            if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
+            if (auto* positional = lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto localToWorld = ConvertOrCast<Float3x4>(data, type)) {
                     positional->SetLocalToWorld(AsFloat4x4(localToWorld.value()));
                     return true;
@@ -804,7 +906,7 @@ namespace SceneEngine
             }
             break;
         case Position:
-            if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
+            if (auto* positional = lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto position = ConvertOrCast<Float3>(data, type)) {
                     Float4x4 localToWorld = positional->GetLocalToWorld();
                     SetTranslation(localToWorld, position.value());
@@ -814,7 +916,7 @@ namespace SceneEngine
             }
             break;
         case Forward:
-            if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
+            if (auto* positional = lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto forward = ConvertOrCast<Float3>(data, type)) {
                     ScaleRotationTranslationM srt{positional->GetLocalToWorld()};
                     srt._rotation = Truncate3x3(MakeObjectToWorld(Normalize(*forward), Float3{0,0,1}, Float3{0,0,0}));
@@ -824,7 +926,7 @@ namespace SceneEngine
             }
             break;
         case Radius:
-            if (auto* positional = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IPositionalLightSource>(sourceId)) {
+            if (auto* positional = lightScene.TryGetLightSourceInterface<LightingEngine::IPositionalLightSource>(sourceId)) {
                 if (auto radius = ConvertOrCast<Float3>(data, type)) {
                     ScaleRotationTranslationM srt{positional->GetLocalToWorld()};
                     srt._scale = radius.value();
@@ -834,7 +936,7 @@ namespace SceneEngine
             }
             break;
         case Brightness:
-            if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId)) {
+            if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<LightingEngine::IUniformEmittance>(sourceId)) {
                 if (auto brightness = ConvertOrCast<Float3>(data, type)) {
                     uniformEmittance->SetBrightness(brightness.value());
                     return true;
@@ -842,7 +944,7 @@ namespace SceneEngine
             }
             break;
         case DiffuseWideningMin:
-            if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId)) {
+            if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<LightingEngine::IUniformEmittance>(sourceId)) {
                 if (auto wideningMin = ConvertOrCast<float>(data, type)) {
                     uniformEmittance->SetDiffuseWideningFactors({wideningMin.value(), uniformEmittance->GetDiffuseWideningFactors()[1]});
                     return true;
@@ -850,7 +952,7 @@ namespace SceneEngine
             }
             break;
         case DiffuseWideningMax:
-            if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IUniformEmittance>(sourceId)) {
+            if (auto* uniformEmittance = lightScene.TryGetLightSourceInterface<LightingEngine::IUniformEmittance>(sourceId)) {
                 if (auto wideningMax = ConvertOrCast<float>(data, type)) {
                     uniformEmittance->SetDiffuseWideningFactors({uniformEmittance->GetDiffuseWideningFactors()[0], wideningMax.value()});
                     return true;
@@ -858,7 +960,7 @@ namespace SceneEngine
             }
             break;
         case CutoffBrightness:
-            if (auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId)) {
+            if (auto* finite = lightScene.TryGetLightSourceInterface<LightingEngine::IFiniteLightSource>(sourceId)) {
                 if (auto cutoffBrightness = ConvertOrCast<float>(data, type)) {
                     finite->SetCutoffBrightness(cutoffBrightness.value());
                     return true;
@@ -866,7 +968,7 @@ namespace SceneEngine
             }
             break;
         case CutoffRange:
-            if (auto* finite = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IFiniteLightSource>(sourceId)) {
+            if (auto* finite = lightScene.TryGetLightSourceInterface<LightingEngine::IFiniteLightSource>(sourceId)) {
                 if (auto cutoffRange = ConvertOrCast<float>(data, type)) {
                     finite->SetCutoffRange(cutoffRange.value());
                     return true;
@@ -874,7 +976,7 @@ namespace SceneEngine
             }
             break;
          case ConeAngle:
-            if (auto* cone = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::IConeSource>(sourceId)) {
+            if (auto* cone = lightScene.TryGetLightSourceInterface<LightingEngine::IConeSource>(sourceId)) {
                 if (auto angle = ConvertOrCast<float>(data, type)) {
                     cone->SetConeAngle(angle.value());
                     return true;
@@ -882,7 +984,7 @@ namespace SceneEngine
             }
             break;
         case EquirectangularSource:
-            if (auto* distantIBL = lightScene.TryGetLightSourceInterface<RenderCore::LightingEngine::ISkyTextureProcessor>(sourceId)) {
+            if (auto* distantIBL = lightScene.TryGetLightSourceInterface<LightingEngine::ISkyTextureProcessor>(sourceId)) {
                 auto src = ImpliedTyping::AsString(data, type);
                 distantIBL->SetEquirectangularSource(nullptr, src);     // todo -- Assets::OperationContext
             }
@@ -893,7 +995,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::IBloom& bloom,
+        LightingEngine::IBloom& bloom,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
@@ -943,7 +1045,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::IExposure& exposure,
+        LightingEngine::IExposure& exposure,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
@@ -973,23 +1075,23 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::PositionalLightOperatorDesc& desc,
+        LightingEngine::PositionalLightOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
-        using namespace RenderCore::LightingEngine;
+        using namespace LightingEngine;
         switch (propertyNameHash) {
         case "Shape"_h:
             SetViaEnumFn<LightSourceShape, AsLightSourceShape>(desc, &PositionalLightOperatorDesc::_shape, data, type);
             return true;
         case "DiffuseModel"_h:
-            SetViaEnumFn<RenderCore::LightingEngine::DiffuseModel, AsDiffuseModel>(desc, &PositionalLightOperatorDesc::_diffuseModel, data, type);
+            SetViaEnumFn<LightingEngine::DiffuseModel, AsDiffuseModel>(desc, &PositionalLightOperatorDesc::_diffuseModel, data, type);
             return true;
         case "DominantLight"_h:
             if (auto value = ConvertOrCast<unsigned>(data, type)) {
                 if (value.value()) {
-                    desc._flags |= RenderCore::LightingEngine::PositionalLightOperatorDesc::Flags::DominantLight;
+                    desc._flags |= LightingEngine::PositionalLightOperatorDesc::Flags::DominantLight;
                 } else {
-                    desc._flags &= ~RenderCore::LightingEngine::PositionalLightOperatorDesc::Flags::DominantLight;
+                    desc._flags &= ~LightingEngine::PositionalLightOperatorDesc::Flags::DominantLight;
                 }
                 return true;
             }
@@ -999,13 +1101,13 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::ShadowOperatorDesc& desc,
+        LightingEngine::ShadowOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
-        using namespace RenderCore::LightingEngine;
+        using namespace LightingEngine;
         switch (propertyNameHash) {
         case "Format"_h:
-            SetViaEnumFn<RenderCore::Format, RenderCore::AsFormat>(desc, &ShadowOperatorDesc::_format, data, type);
+            SetViaEnumFn<Format, AsFormat>(desc, &ShadowOperatorDesc::_format, data, type);
             return true;
         case "ResolveType"_h:
             SetViaEnumFn<ShadowResolveType, AsShadowResolveType>(desc, &ShadowOperatorDesc::_resolveType, data, type);
@@ -1017,7 +1119,7 @@ namespace SceneEngine
             SetViaEnumFn<ShadowFilterModel, AsShadowFilterModel>(desc, &ShadowOperatorDesc::_filterModel, data, type);
             return true;
         case "CullMode"_h:
-            SetViaEnumFn<RenderCore::CullMode, RenderCore::AsCullMode>(desc, &ShadowOperatorDesc::_cullMode, data, type);
+            SetViaEnumFn<CullMode, AsCullMode>(desc, &ShadowOperatorDesc::_cullMode, data, type);
             return true;
         case "Dims"_h:
             if (auto dims = ConvertOrCast<uint32_t>(data, type)) {
@@ -1055,14 +1157,14 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::AmbientLightOperatorDesc& desc,
+        LightingEngine::AmbientLightOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
         return false;
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::SunSourceFrustumSettings& desc,
+        LightingEngine::SunSourceFrustumSettings& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         static const unsigned s_staticMaxSubProjections = 6;
@@ -1130,7 +1232,7 @@ namespace SceneEngine
             break;
         case "HighPrecisionDepths"_h:
             if (auto value = ConvertOrCast<uint32_t>(data, type)) {
-                using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
+                using Obj = LightingEngine::SunSourceFrustumSettings;
                 if (value.value()) desc._flags |= Obj::Flags::HighPrecisionDepths; 
                 else desc._flags &= ~Obj::Flags::HighPrecisionDepths; 
                 return true;
@@ -1167,13 +1269,13 @@ namespace SceneEngine
             }
             break;
         case "FilterModel"_h:
-            using namespace RenderCore::LightingEngine;
-            using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
+            using namespace LightingEngine;
+            using Obj = LightingEngine::SunSourceFrustumSettings;
             SetViaEnumFn<ShadowFilterModel, AsShadowFilterModel>(desc, &Obj::_filterModel, data, type);
             return true;
         case "CullMode"_h:
-            using Obj = RenderCore::LightingEngine::SunSourceFrustumSettings;
-            SetViaEnumFn<RenderCore::CullMode, RenderCore::AsCullMode>(desc, &Obj::_cullMode, data, type);
+            using Obj = LightingEngine::SunSourceFrustumSettings;
+            SetViaEnumFn<CullMode, AsCullMode>(desc, &Obj::_cullMode, data, type);
             return true;
         }
 
@@ -1181,7 +1283,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::ForwardLightingTechniqueDesc& desc,
+        LightingEngine::ForwardLightingTechniqueDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         // no properties yet
@@ -1189,7 +1291,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::DeferredLightingTechniqueDesc& desc,
+        LightingEngine::DeferredLightingTechniqueDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         // no properties yet
@@ -1197,19 +1299,19 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::UtilityLightingTechniqueDesc& desc,
+        LightingEngine::UtilityLightingTechniqueDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
         case "Type"_h:
-            SetViaEnumFn<RenderCore::Techniques::UtilityDelegateType, RenderCore::Techniques::AsUtilityDelegateType>(desc, &RenderCore::LightingEngine::UtilityLightingTechniqueDesc::_type, data, type);
+            SetViaEnumFn<Techniques::UtilityDelegateType, Techniques::AsUtilityDelegateType>(desc, &LightingEngine::UtilityLightingTechniqueDesc::_type, data, type);
             return true;
         }
         return false;
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::ToneMapAcesOperatorDesc& desc,
+        LightingEngine::ToneMapAcesOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
@@ -1238,7 +1340,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::MultiSampleOperatorDesc& desc,
+        LightingEngine::MultiSampleOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
@@ -1260,7 +1362,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::TAAOperatorDesc& desc,
+        LightingEngine::TAAOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
@@ -1296,7 +1398,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::SharpenOperatorDesc& desc,
+        LightingEngine::SharpenOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
@@ -1311,7 +1413,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::FilmGrainDesc& desc,
+        LightingEngine::FilmGrainDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
@@ -1326,22 +1428,22 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::SkyOperatorDesc& desc,
+        LightingEngine::SkyOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         // no useful properties yet
         return false;
     }
 
-    std::optional<RenderCore::LightingEngine::SkyTextureProcessorDesc::CoordinateSystem> AsCoordinateSystem(StringSection<> name)
+    std::optional<LightingEngine::SkyTextureProcessorDesc::CoordinateSystem> AsCoordinateSystem(StringSection<> name)
 	{
-		if (XlEqString(name, "YUp")) return RenderCore::LightingEngine::SkyTextureProcessorDesc::CoordinateSystem::YUp;
-		if (XlEqString(name, "ZUp")) return RenderCore::LightingEngine::SkyTextureProcessorDesc::CoordinateSystem::ZUp;
+		if (XlEqString(name, "YUp")) return LightingEngine::SkyTextureProcessorDesc::CoordinateSystem::YUp;
+		if (XlEqString(name, "ZUp")) return LightingEngine::SkyTextureProcessorDesc::CoordinateSystem::ZUp;
 		return {};
 	}
 
     bool SetProperty(
-        RenderCore::LightingEngine::SkyTextureProcessorDesc& desc,
+        LightingEngine::SkyTextureProcessorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
@@ -1353,7 +1455,7 @@ namespace SceneEngine
             break;
 
         case "CubeMapFormat"_h:
-            SetViaEnumFn<RenderCore::Format, RenderCore::AsFormat>(desc, &RenderCore::LightingEngine::SkyTextureProcessorDesc::_cubemapFormat, data, type);
+            SetViaEnumFn<Format, AsFormat>(desc, &LightingEngine::SkyTextureProcessorDesc::_cubemapFormat, data, type);
             break;
 
         case "SpecularCubeMapFaceDimension"_h:
@@ -1364,7 +1466,7 @@ namespace SceneEngine
             break;
 
         case "SpecularCubeMapFormat"_h:
-            SetViaEnumFn<RenderCore::Format, RenderCore::AsFormat>(desc, &RenderCore::LightingEngine::SkyTextureProcessorDesc::_specularCubemapFormat, data, type);
+            SetViaEnumFn<Format, AsFormat>(desc, &LightingEngine::SkyTextureProcessorDesc::_specularCubemapFormat, data, type);
             break;
 
         case "ProgressiveCompilation"_h:
@@ -1389,7 +1491,7 @@ namespace SceneEngine
             break;
 
         case "CoordinateSystem"_h:
-            SetViaEnumFn<RenderCore::LightingEngine::SkyTextureProcessorDesc::CoordinateSystem, AsCoordinateSystem>(desc, &RenderCore::LightingEngine::SkyTextureProcessorDesc::_coordinateSystem, data, type);
+            SetViaEnumFn<LightingEngine::SkyTextureProcessorDesc::CoordinateSystem, AsCoordinateSystem>(desc, &LightingEngine::SkyTextureProcessorDesc::_coordinateSystem, data, type);
             break;
         }
         return false;
@@ -1421,7 +1523,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::ScreenSpaceReflectionsOperatorDesc& desc,
+        LightingEngine::ScreenSpaceReflectionsOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
@@ -1442,7 +1544,7 @@ namespace SceneEngine
     }
 
     bool SetProperty(
-        RenderCore::LightingEngine::AmbientOcclusionOperatorDesc& desc,
+        LightingEngine::AmbientOcclusionOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
     {
         switch (propertyNameHash) {
