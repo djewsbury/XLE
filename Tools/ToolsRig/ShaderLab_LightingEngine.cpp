@@ -220,6 +220,7 @@ namespace ToolsRig
 				LightingEngine::ForwardPlusLightScene* forwardLightScene = nullptr;
 				if (context._lightScene) forwardLightScene = (LightingEngine::ForwardPlusLightScene*)context._lightScene->QueryInterface(TypeHashCode<LightingEngine::ForwardPlusLightScene>);
 				if (!forwardLightScene) Throw(std::runtime_error("Missing light scene, or incorrect type in BindIBL"));
+				if (!forwardLightScene->_ambientResourcesScheduler) return;		// silent fail if we're not actually configured for ambient light
 
 				LightingEngine::SkyTextureProcessorDesc processorDesc;
 
