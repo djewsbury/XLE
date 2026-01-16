@@ -819,22 +819,26 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<SharedTechniqueDelegateBox>& techDelBox,
 		const ChainedOperatorDesc* globalOperators)
 	{
-		OperatorDigest digest { globalOperators };
+		TRY {
+			OperatorDigest digest { globalOperators };
 
-		std::promise<std::shared_ptr<ForwardPlusLightScene>> specializedPromise;
-		auto specializedFuture = specializedPromise.get_future();
-		ForwardPlusLightScene::IntegrationParams integrationParams;
-		integrationParams._specularIBLEnabled = digest._skyTextureProcessor.has_value();
-		ForwardPlusLightScene::ConstructToPromise(
-			std::move(specializedPromise),
-			ForwardPlusLightScene::ConstructionServices{pipelineAccelerators, pipelinePool, techDelBox},
-			std::move(digest._lightOperatorsMapping),
-			digest._tilingConfig, integrationParams);
+			std::promise<std::shared_ptr<ForwardPlusLightScene>> specializedPromise;
+			auto specializedFuture = specializedPromise.get_future();
+			ForwardPlusLightScene::IntegrationParams integrationParams;
+			integrationParams._specularIBLEnabled = digest._skyTextureProcessor.has_value();
+			ForwardPlusLightScene::ConstructToPromise(
+				std::move(specializedPromise),
+				ForwardPlusLightScene::ConstructionServices{pipelineAccelerators, pipelinePool, techDelBox},
+				std::move(digest._lightOperatorsMapping),
+				digest._tilingConfig, integrationParams);
 
-		// awkwardly convert promise types
-		::Assets::WhenAll(std::move(specializedFuture)).ThenConstructToPromise(
-			std::move(promise),
-			[](auto&& input) { return std::move(input); });
+			// awkwardly convert promise types
+			::Assets::WhenAll(std::move(specializedFuture)).ThenConstructToPromise(
+				std::move(promise),
+				[](auto&& input) { return std::move(input); });
+		} CATCH (...) {
+			promise.set_exception(std::current_exception());
+		} CATCH_END
 	}
 
 }}

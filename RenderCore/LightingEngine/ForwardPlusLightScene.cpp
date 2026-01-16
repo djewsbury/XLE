@@ -89,8 +89,10 @@ namespace RenderCore { namespace LightingEngine
 			RegisterComponent(_priorityShadowScheduler);
 		}
 
-		_ambientResourcesScheduler = std::make_shared<Internal::AmbientResourcesScheduler>(_lightOperatorsMapping._ambientLightOperator);
-		RegisterComponent(_ambientResourcesScheduler);
+		if (_lightOperatorsMapping._ambientLightOperator != ~0u) {
+			_ambientResourcesScheduler = std::make_shared<Internal::AmbientResourcesScheduler>(_lightOperatorsMapping._ambientLightOperator);
+			RegisterComponent(_ambientResourcesScheduler);
+		}
 	}
 
 	void* ForwardPlusLightScene::QueryInterface(uint64_t typeCode)
@@ -143,7 +145,10 @@ namespace RenderCore { namespace LightingEngine
 				_tiledLightScheduler->WriteEnvProps(*i);
 			
 			i->_enableSSR = enableSSR;
-			std::memcpy(i->_diffuseSHCoefficients, _ambientResourcesScheduler->_diffuseSHCoefficients, sizeof(_ambientResourcesScheduler->_diffuseSHCoefficients));
+			if (_ambientResourcesScheduler) {
+				std::memcpy(i->_diffuseSHCoefficients, _ambientResourcesScheduler->_diffuseSHCoefficients, sizeof(_ambientResourcesScheduler->_diffuseSHCoefficients));
+			} else
+				std::memset(i->_diffuseSHCoefficients, 0, sizeof(_ambientResourcesScheduler->_diffuseSHCoefficients));
 			map.FlushCache();
 		}
 
