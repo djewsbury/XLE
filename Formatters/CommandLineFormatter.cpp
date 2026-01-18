@@ -153,8 +153,11 @@ namespace Formatters
 			while (!str.IsEmpty() && (*str.begin() == ' ' || *str.begin() == '\t')) ++str._start;
 			if (str.IsEmpty()) break;
 
-			if (*str.begin() != '"') break;		// oddly formatted, let's just bail
-			++str._start;
+			bool openedWithQuote = false;
+			if (*str.begin() == '"') {
+				openedWithQuote = true;
+				++str._start;
+			}
 
 			auto start = str._start;
 			bool requiresProcessing = false;
@@ -179,7 +182,7 @@ namespace Formatters
 				} else
 					data.emplace_back(start, str._start);
 			}
-			if (!str.IsEmpty()) ++str._start;
+			if (openedWithQuote && !str.IsEmpty()) ++str._start;
 		}
 
 		workingSpaceRes = workingSpace;
