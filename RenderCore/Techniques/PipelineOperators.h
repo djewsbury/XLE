@@ -118,7 +118,8 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const PixelOutputStates& fbTarget);
+		const PixelOutputStates& fbTarget,
+		Topology topology);
 
 	::Assets::PtrToMarkerPtr<IShaderOperator> CreateVertexGeneratorOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
@@ -126,7 +127,8 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAsset,
-		const PixelOutputStates& fbTarget);
+		const PixelOutputStates& fbTarget,
+		Topology topology);
 
 	::Assets::PtrToMarkerPtr<IComputeShaderOperator> CreateComputeOperator(
 		const std::shared_ptr<PipelineCollection>& pool,

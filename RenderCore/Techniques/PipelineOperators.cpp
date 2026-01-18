@@ -96,10 +96,11 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
 			const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+			Topology topology,
 			const FrameBufferTarget& fbTarget)
 		{
 			assert(pool);
-			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
+			VertexInputStates vInputStates { {}, {}, topology };
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
 			pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), pipelineLayout, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
@@ -120,10 +121,11 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<PipelineCollection>& pool,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
+			Topology topology,
 			const FrameBufferTarget& fbTarget)
 		{
 			assert(pool);
-			VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
+			VertexInputStates vInputStates { {}, {}, topology };
 			const ParameterBox* selectorList[] { &selectors };
 			auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
 			pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), {}, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, fbTarget);
@@ -145,17 +147,18 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
 			StringSection<> pipelineLayoutAssetName,
+			Topology topology,
 			const FrameBufferTarget& fbTarget)
 		{
 			assert(pool);
 			auto futurePipelineLayout = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutAssetName);
 			::Assets::WhenAll(std::move(futurePipelineLayout)).ThenConstructToPromise(
 				std::move(promise),
-				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), pipelineDesc, fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](auto&& promise, const auto& predefinedPipelineLayout) {
+				[pool, selectors, plname=pipelineLayoutAssetName.AsString(), pipelineDesc, topology, fbDesc=*fbTarget._fbDesc, spIdx=fbTarget._subpassIdx](auto&& promise, const auto& predefinedPipelineLayout) {
 					
 					auto pipelineFuture = std::make_shared<::Assets::Marker<Techniques::GraphicsPipelineAndLayout>>();
 					const ParameterBox* selectorList[] { &selectors };
-					VertexInputStates vInputStates { {}, {}, Topology::TriangleStrip };
+					VertexInputStates vInputStates { {}, {}, topology };
 					pool->CreateGraphicsPipeline(pipelineFuture->AdoptPromise(), {predefinedPipelineLayout, Hash64(plname), std::string{plname}}, pipelineDesc, MakeIteratorRange(selectorList), vInputStates, FrameBufferTarget{&fbDesc, spIdx});
 
 					::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
@@ -211,7 +214,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(subType, MakeShaderCompileResourceName(pixelShader), po);
-		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx});
+		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayout, Topology::TriangleStrip, FrameBufferTarget{po._fbDesc, po._subpassIdx});
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -225,7 +228,7 @@ namespace RenderCore { namespace Techniques
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(subType, MakeShaderCompileResourceName(pixelShader), po);
-		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx});
+		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, Topology::TriangleStrip, FrameBufferTarget{po._fbDesc, po._subpassIdx});
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -235,11 +238,12 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
-		const PixelOutputStates& po)
+		const PixelOutputStates& po,
+		Topology topology)
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(MakeShaderCompileResourceName(vertexShader), MakeShaderCompileResourceName(pixelShader), po);
-		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx});
+		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayout, topology, FrameBufferTarget{po._fbDesc, po._subpassIdx});
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -249,11 +253,12 @@ namespace RenderCore { namespace Techniques
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAssetName,
-		const PixelOutputStates& po)
+		const PixelOutputStates& po,
+		Topology topology)
 	{
 		assert(!pixelShader.IsEmpty());
 		auto pipelineDesc = CreatePipelineDesc(MakeShaderCompileResourceName(vertexShader), MakeShaderCompileResourceName(pixelShader), po);
-		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx});
+		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, topology, FrameBufferTarget{po._fbDesc, po._subpassIdx});
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
