@@ -201,7 +201,7 @@ namespace RenderCore { namespace Techniques
 			vs = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector_deep"};
 		}
 
-		return CreatePipelineDesc(std::move(pixelShader), std::move(vs), po);
+		return CreatePipelineDesc(std::move(vs), std::move(pixelShader), po);
 	}
 
 	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
