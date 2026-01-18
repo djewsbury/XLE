@@ -27,8 +27,12 @@ namespace RenderCore { namespace Techniques
 	class IShaderOperator
 	{
 	public:
-		virtual void Draw(ParsingContext&, const UniformsStreamInterface* =nullptr, const UniformsStream& = {}, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
-		virtual void Draw(IThreadContext&, const UniformsStreamInterface* =nullptr, const UniformsStream& = {}, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual void Draw(ParsingContext&, unsigned vertexCount, const UniformsStreamInterface* =nullptr, const UniformsStream& = {}, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+		virtual void Draw(IThreadContext&, unsigned vertexCount, const UniformsStreamInterface* =nullptr, const UniformsStream& = {}, IteratorRange<const IDescriptorSet* const*> = {}) = 0;
+
+		inline void Draw(ParsingContext& c, const UniformsStreamInterface* usi=nullptr, const UniformsStream& us= {}, IteratorRange<const IDescriptorSet* const*> ds= {}) { Draw(c, 4, usi, us, ds); }
+		inline void Draw(IThreadContext& c, const UniformsStreamInterface* usi=nullptr, const UniformsStream& us= {}, IteratorRange<const IDescriptorSet* const*> ds= {}) { Draw(c, 4, usi, us, ds); }
+
 		virtual const Assets::PredefinedPipelineLayout& GetPredefinedPipelineLayout() const = 0;
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
 		virtual ~IShaderOperator();
@@ -103,6 +107,22 @@ namespace RenderCore { namespace Techniques
 	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
 		const std::shared_ptr<PipelineCollection>& pool,
 		FullViewportOperatorSubType subType,
+		StringSection<> pixelShader,
+		const ParameterBox& selectors,
+		StringSection<> pipelineLayoutAsset,
+		const PixelOutputStates& fbTarget);
+
+	::Assets::PtrToMarkerPtr<IShaderOperator> CreateVertexGeneratorOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		StringSection<> vertexShader,
+		StringSection<> pixelShader,
+		const ParameterBox& selectors,
+		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+		const PixelOutputStates& fbTarget);
+
+	::Assets::PtrToMarkerPtr<IShaderOperator> CreateVertexGeneratorOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		StringSection<> vertexShader,
 		StringSection<> pixelShader,
 		const ParameterBox& selectors,
 		StringSection<> pipelineLayoutAsset,

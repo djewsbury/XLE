@@ -142,7 +142,7 @@ namespace UnitTests
 			Techniques::RenderPassInstance rpi{parsingContext, stitch};
 			parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(std::make_shared<Techniques::SystemUniformsDelegate>(*testHelper->_device));
 			parsingContext.GetUniformDelegateManager()->BringUpToDateGraphics(parsingContext);
-			operator0->Draw(parsingContext, {});
+			operator0->Draw(parsingContext);
 			rpi.NextSubpass();
 			UniformsStreamInterface usi;
 			usi.BindResourceView(0, "SubpassInputAttachment"_h);

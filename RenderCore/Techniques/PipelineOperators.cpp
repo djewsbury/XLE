@@ -24,7 +24,7 @@ namespace RenderCore { namespace Techniques
 {
 	static const UniformsStreamInterface s_usiNull;
 
-	class FullViewportOperator : public IShaderOperator
+	class VertexGeneratorOperator : public IShaderOperator
 	{
 	public:
 		std::shared_ptr<Metal::GraphicsPipeline> _pipeline;
@@ -37,6 +37,7 @@ namespace RenderCore { namespace Techniques
 
 		virtual void Draw(
 			ParsingContext& parsingContext,
+			unsigned vertexCount,
 			const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			auto& sysUsi = parsingContext.GetUniformDelegateManager()->GetInterfaceGraphics();
@@ -57,11 +58,12 @@ namespace RenderCore { namespace Techniques
 				boundUniforms.ApplyDescriptorSets(metalContext, encoder, descSets, 1);
 			boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 1);
 			
-			encoder.Draw(*_pipeline, 4);
+			encoder.Draw(*_pipeline, vertexCount);
 		}
 
 		virtual void Draw(
 			IThreadContext& threadContext,
+			unsigned vertexCount,
 			const UniformsStreamInterface* usi, const UniformsStream& us, IteratorRange<const IDescriptorSet* const*> descSets) override
 		{
 			auto& metalContext = *Metal::DeviceContext::Get(threadContext);
@@ -77,7 +79,7 @@ namespace RenderCore { namespace Techniques
 				boundUniforms.ApplyLooseUniforms(metalContext, encoder, us, 0);
 			}
 			
-			encoder.Draw(*_pipeline, 4);
+			encoder.Draw(*_pipeline, vertexCount);
 		}
 
 		virtual const Assets::PredefinedPipelineLayout& GetPredefinedPipelineLayout() const override
@@ -89,7 +91,7 @@ namespace RenderCore { namespace Techniques
 
 		// ICompiledPipelineLayout
 		static void ConstructToPromise(
-			std::promise<std::shared_ptr<FullViewportOperator>>&& promise,
+			std::promise<std::shared_ptr<VertexGeneratorOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
@@ -104,7 +106,7 @@ namespace RenderCore { namespace Techniques
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[pipelineLayout=pipelineLayout](auto pipelineAndLayout) {
-					auto op = std::make_shared<FullViewportOperator>();
+					auto op = std::make_shared<VertexGeneratorOperator>();
 					op->_depVal = pipelineAndLayout.GetDependencyValidation();
 					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
 					op->_pipeline = std::move(pipelineAndLayout._pipeline);
@@ -114,7 +116,7 @@ namespace RenderCore { namespace Techniques
 
 		// just auto pipeline layout
 		static void ConstructToPromise(
-			std::promise<std::shared_ptr<FullViewportOperator>>&& promise,
+			std::promise<std::shared_ptr<VertexGeneratorOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
@@ -128,7 +130,7 @@ namespace RenderCore { namespace Techniques
 			::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 				std::move(promise),
 				[](auto pipelineAndLayout) {
-					auto op = std::make_shared<FullViewportOperator>();
+					auto op = std::make_shared<VertexGeneratorOperator>();
 					op->_depVal = pipelineAndLayout.GetDependencyValidation();
 					op->_pipelineLayout = std::move(pipelineAndLayout._layout);
 					op->_pipeline = std::move(pipelineAndLayout._pipeline);
@@ -138,7 +140,7 @@ namespace RenderCore { namespace Techniques
 
 		// pipeline layout asset (by name)
 		static void ConstructToPromise(
-			std::promise<std::shared_ptr<FullViewportOperator>>&& promise,
+			std::promise<std::shared_ptr<VertexGeneratorOperator>>&& promise,
 			const std::shared_ptr<PipelineCollection>& pool,
 			const std::shared_ptr<GraphicsPipelineDesc>& pipelineDesc,
 			const ParameterBox& selectors,
@@ -159,7 +161,7 @@ namespace RenderCore { namespace Techniques
 					::Assets::WhenAll(pipelineFuture).ThenConstructToPromise(
 						std::move(promise),
 						[predefinedPipelineLayout](auto pipelineAndLayout) {
-							auto op = std::make_shared<FullViewportOperator>();
+							auto op = std::make_shared<VertexGeneratorOperator>();
 							::Assets::DependencyValidationMarker depVals[] { pipelineAndLayout.GetDependencyValidation(), predefinedPipelineLayout->GetDependencyValidation() };
 							op->_depVal = ::Assets::GetDepValSys().MakeOrReuse(MakeIteratorRange(depVals));
 							op->_pipelineLayout = std::move(pipelineAndLayout._layout);
@@ -171,25 +173,32 @@ namespace RenderCore { namespace Techniques
 		}
 	};
 
-	static std::shared_ptr<GraphicsPipelineDesc> CreatePipelineDesc(StringSection<> pixelShader, FullViewportOperatorSubType subType, const PixelOutputStates& po)
+	static std::shared_ptr<GraphicsPipelineDesc> CreatePipelineDesc(ShaderCompileResourceName&& vertexShader, ShaderCompileResourceName&& pixelShader, const PixelOutputStates& po)
 	{
 		auto pipelineDesc = std::make_shared<GraphicsPipelineDesc>();
-		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = MakeShaderCompileResourceName(pixelShader);
-		if (subType == FullViewportOperatorSubType::DisableDepth) {
-			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector"};
-		} else if (subType == FullViewportOperatorSubType::Flip) {
-			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_flip_viewfrustumvector"};
-		} else {
-			assert(subType == FullViewportOperatorSubType::MaxDepth);
-			pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector_deep"};
-		}
-
+		pipelineDesc->_shaders[(unsigned)ShaderStage::Vertex] = std::move(vertexShader);
+		pipelineDesc->_shaders[(unsigned)ShaderStage::Pixel] = std::move(pixelShader);
 		pipelineDesc->_depthStencil = po._depthStencilState;
 		pipelineDesc->_rasterization = po._rasterizationState;
 		pipelineDesc->_blend = {po._attachmentBlendStates.begin(), po._attachmentBlendStates.end()};
 		while (pipelineDesc->_blend.size() < po._fbDesc->GetSubpasses()[po._subpassIdx].GetOutputs().size())
 			pipelineDesc->_blend.push_back(AttachmentBlendDesc{});		// fill in remaining with defaults
 		return pipelineDesc;
+	}
+
+	static std::shared_ptr<GraphicsPipelineDesc> CreatePipelineDesc(FullViewportOperatorSubType subType, ShaderCompileResourceName&& pixelShader, const PixelOutputStates& po)
+	{
+		ShaderCompileResourceName vs;
+		if (subType == FullViewportOperatorSubType::DisableDepth) {
+			vs = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector"};
+		} else if (subType == FullViewportOperatorSubType::Flip) {
+			vs = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_flip_viewfrustumvector"};
+		} else {
+			assert(subType == FullViewportOperatorSubType::MaxDepth);
+			vs = ShaderCompileResourceName{BASIC2D_VERTEX_HLSL, "fullscreen_viewfrustumvector_deep"};
+		}
+
+		return CreatePipelineDesc(std::move(pixelShader), std::move(vs), po);
 	}
 
 	::Assets::PtrToMarkerPtr<IShaderOperator> CreateFullViewportOperator(
@@ -201,8 +210,8 @@ namespace RenderCore { namespace Techniques
 		const PixelOutputStates& po)
 	{
 		assert(!pixelShader.IsEmpty());
-		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
-		auto op = ::Assets::GetAssetMarkerPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx});
+		auto pipelineDesc = CreatePipelineDesc(subType, MakeShaderCompileResourceName(pixelShader), po);
+		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx});
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
@@ -215,8 +224,36 @@ namespace RenderCore { namespace Techniques
 		const PixelOutputStates& po)
 	{
 		assert(!pixelShader.IsEmpty());
-		auto pipelineDesc = CreatePipelineDesc(pixelShader, subType, po);
-		auto op = ::Assets::GetAssetMarkerPtr<FullViewportOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx});
+		auto pipelineDesc = CreatePipelineDesc(subType, MakeShaderCompileResourceName(pixelShader), po);
+		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx});
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
+	}
+
+	::Assets::PtrToMarkerPtr<IShaderOperator> CreateVertexGeneratorOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		StringSection<> vertexShader,
+		StringSection<> pixelShader,
+		const ParameterBox& selectors,
+		const std::shared_ptr<ICompiledPipelineLayout>& pipelineLayout,
+		const PixelOutputStates& po)
+	{
+		assert(!pixelShader.IsEmpty());
+		auto pipelineDesc = CreatePipelineDesc(MakeShaderCompileResourceName(vertexShader), MakeShaderCompileResourceName(pixelShader), po);
+		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayout, FrameBufferTarget{po._fbDesc, po._subpassIdx});
+		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
+	}
+
+	::Assets::PtrToMarkerPtr<IShaderOperator> CreateVertexGeneratorOperator(
+		const std::shared_ptr<PipelineCollection>& pool,
+		StringSection<> vertexShader,
+		StringSection<> pixelShader,
+		const ParameterBox& selectors,
+		StringSection<> pipelineLayoutAssetName,
+		const PixelOutputStates& po)
+	{
+		assert(!pixelShader.IsEmpty());
+		auto pipelineDesc = CreatePipelineDesc(MakeShaderCompileResourceName(vertexShader), MakeShaderCompileResourceName(pixelShader), po);
+		auto op = ::Assets::GetAssetMarkerPtr<VertexGeneratorOperator>(pool, pipelineDesc, selectors, pipelineLayoutAssetName, FrameBufferTarget{po._fbDesc, po._subpassIdx});
 		return *reinterpret_cast<::Assets::PtrToMarkerPtr<IShaderOperator>*>(&op);
 	}
 
