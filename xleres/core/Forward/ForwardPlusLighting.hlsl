@@ -122,6 +122,8 @@ float3 CalculateIllumination(
 						shadowing = ResolveShadows_Cascade(shadowResolveContext, cascade, screenDest.pixelCoords, screenDest.sampleIndex, ShadowResolveConfig_Default());
 				#endif
 
+				shadowing = min(shadowing, sample.cookedLightOcclusion);
+
 				#if (DOMINANT_LIGHT_SHAPE & 0x7) == LIGHT_SHAPE_DIRECTIONAL
 					result += shadowing * DirectionalLightResolve(sample, sampleExtra, DominantLight, worldPosition, directionToEye, screenDest);
 				#elif (DOMINANT_LIGHT_SHAPE & 0x7) == LIGHT_SHAPE_SPHERE
@@ -186,8 +188,8 @@ float3 CalculateIllumination(
 		#endif
 	}
 
-	// result += LightResolve_Ambient(sample, directionToEye, sampleExtra.screenSpaceOcclusion, screenDest);
-	// result += sample.emissive;
+	result += 0.15f * LightResolve_Ambient(sample, directionToEye, sampleExtra.screenSpaceOcclusion, screenDest);
+	result += sample.emissive;
 
 	return result;
 }
