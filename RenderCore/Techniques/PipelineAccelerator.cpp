@@ -1503,18 +1503,21 @@ namespace RenderCore { namespace Techniques
 				accelerator->_hasCompletedPipelineConstructionLock[seqIdx] = true;
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 				// we've gone invalid
+				Log(Warning) << "PipelineAccelerator invalidation: " << e.what() << std::endl;
 				accelerator->_completedPipelines[seqIdx]._depVal = e.GetDependencyValidation();
 				accelerator->_completedPipelines[seqIdx]._pipeline = {};
 				accelerator->_completedPipelines[seqIdx]._visibilityMarker = ~VisibilityMarkerId(0);
 				accelerator->_hasCompletedPipelineConstructionLock[seqIdx] = false;
 			} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
 				// we've gone invalid
+				Log(Warning) << "PipelineAccelerator invalidation: " << e.what() << std::endl;
 				accelerator->_completedPipelines[seqIdx]._depVal = e.GetDependencyValidation();
 				accelerator->_completedPipelines[seqIdx]._pipeline = {};
 				accelerator->_completedPipelines[seqIdx]._visibilityMarker = ~VisibilityMarkerId(0);
 				accelerator->_hasCompletedPipelineConstructionLock[seqIdx] = false;
-			} CATCH(const std::exception&) {
+			} CATCH(const std::exception& e) {
 				// we've gone invalid (no dep val)
+				Log(Warning) << "PipelineAccelerator invalidation: " << e.what() << std::endl;
 				accelerator->_completedPipelines[seqIdx]._depVal = {};
 				accelerator->_completedPipelines[seqIdx]._pipeline = {};
 				accelerator->_completedPipelines[seqIdx]._visibilityMarker = ~VisibilityMarkerId(0);
