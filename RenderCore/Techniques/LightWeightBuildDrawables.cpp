@@ -92,6 +92,7 @@ namespace RenderCore { namespace Techniques
 		auto& cmdStream = constructor.GetCmdStream();
 		VLA(Internal::InstancedFixedSkeleton_Drawable*, drawables, cmdStream._drawCallCounts.size());
 		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
+		assert(pkts.size() >= cmdStream._drawCallCounts.size());
 		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c) {
 			if (cmdStream._drawCallCounts[c] && pkts[c]) {
 				drawables[c] = pkts[c]->_drawables.Allocate<Internal::InstancedFixedSkeleton_Drawable>(cmdStream._drawCallCounts[c]);
@@ -210,6 +211,7 @@ namespace RenderCore { namespace Techniques
 		auto& cmdStream = constructor.GetCmdStream();
 		VLA(Internal::InstancedFixedSkeletonViewMask_Drawable*, drawables, cmdStream._drawCallCounts.size());
 		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
+		assert(pkts.size() >= cmdStream._drawCallCounts.size());
 		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c) {
 			if (cmdStream._drawCallCounts[c] && pkts[c]) {
 				drawables[c] = pkts[c]->_drawables.Allocate<Internal::InstancedFixedSkeletonViewMask_Drawable>(cmdStream._drawCallCounts[c]);
@@ -326,6 +328,7 @@ namespace RenderCore { namespace Techniques
 		assert(viewMask);
 		auto& cmdStream = constructor.GetCmdStream();
 		VLA(Internal::SingleInstanceViewMask_Drawable*, drawables, cmdStream._drawCallCounts.size());
+		assert(pkts.size() >= cmdStream._drawCallCounts.size());
 		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c)
 			drawables[c] = (cmdStream._drawCallCounts[c] && pkts[c]) ? pkts[c]->_drawables.Allocate<Internal::SingleInstanceViewMask_Drawable>(cmdStream._drawCallCounts[c]) : nullptr;
 
@@ -390,6 +393,7 @@ namespace RenderCore { namespace Techniques
 		assert(viewMask);
 		auto& cmdStream = constructor.GetCmdStream();
 		VLA(Internal::SingleInstanceViewMask_Drawable*, drawables, cmdStream._drawCallCounts.size());
+		assert(pkts.size() >= cmdStream._drawCallCounts.size());
 		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c)
 			drawables[c] = (cmdStream._drawCallCounts[c] && pkts[c]) ? pkts[c]->_drawables.Allocate<Internal::SingleInstanceViewMask_Drawable>(cmdStream._drawCallCounts[c]) : nullptr;
 

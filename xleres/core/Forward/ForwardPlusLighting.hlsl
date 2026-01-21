@@ -188,7 +188,7 @@ float3 CalculateIllumination(
 		#endif
 	}
 
-	result += 0.15f * LightResolve_Ambient(sample, directionToEye, sampleExtra.screenSpaceOcclusion, screenDest);
+	result += LightResolve_Ambient(sample, directionToEye, sampleExtra.screenSpaceOcclusion, screenDest);
 	result += sample.emissive;
 
 	return result;
