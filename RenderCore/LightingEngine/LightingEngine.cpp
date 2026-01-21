@@ -630,7 +630,10 @@ namespace RenderCore { namespace LightingEngine
 			_parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(uniformDelegate);
 
 		TRY {
-			VLA(Techniques::DrawablesPacket*, pkts, _drawablePktsPerParse);
+			Techniques::DrawablesPacket* pktsBuffer[16];
+			auto pkts = pktsBuffer;
+			if (_drawablePktsPerParse > dimof(pktsBuffer))
+				pkts = (Techniques::DrawablesPacket**)_alloca(_drawablePktsPerParse*sizeof(Techniques::DrawablesPacket*));
 			GetPkts(MakeIteratorRange(pkts, pkts+_drawablePktsPerParse), parseId);
 			for (unsigned c=0; c<_drawablePktsPerParse; ++c) {
 				if (!pkts[c] || pkts[c]->_drawables.empty()) continue;
