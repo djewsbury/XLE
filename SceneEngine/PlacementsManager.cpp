@@ -1709,8 +1709,7 @@ namespace SceneEngine
         unsigned AddString(StringSection<> str);
         unsigned AddSupplements(SupplementRange supplements);
 
-        void Write(IRigidModelScene& cache, const Assets::ResChar destinationFile[]) const;
-		::Assets::Blob Serialize(IRigidModelScene& cache) const;
+		std::vector<NascentPlacement> AsNascentPlacements(IRigidModelScene& cache) const;
         std::vector<std::pair<Float3, Float3>> StallAndCalculateCellSpaceBoundaries(IRigidModelScene& cache) const override;
         CapturedCellMetadata GetMetadata(uint64_t objectGuid) const override;
 
@@ -1883,7 +1882,7 @@ namespace SceneEngine
         return (i != _objects.end() && i->_guid == guid);
     }
 
-    ::Assets::Blob EditorOverlayCellRenderer::Serialize(IRigidModelScene& cache) const
+    std::vector<NascentPlacement> EditorOverlayCellRenderer::AsNascentPlacements(IRigidModelScene& cache) const
     {
         auto cellSpaceBoundaries = StallAndCalculateCellSpaceBoundaries(cache);
 
@@ -1904,21 +1903,7 @@ namespace SceneEngine
             nascentPlacements.push_back(p);
         }
 
-        return SerializePlacements(nascentPlacements);
-    }
-
-    void EditorOverlayCellRenderer::Write(IRigidModelScene& cache, const Assets::ResChar destinationFile[]) const
-    {
-		auto libVersion = ConsoleRig::GetLibVersionDesc();
-        ::Assets::SimpleChunkFileWriter fileWriter(
-			::Assets::MainFileSystem::OpenBasicFile(destinationFile, "wb", 0),
-            1, libVersion._versionString, libVersion._buildDateString);
-        fileWriter.BeginChunk(ChunkType_Placements, s_PlacementsChunkVersionNumber, "Placements");
-
-        auto blob = Serialize(cache);
-        auto writeResult0 = fileWriter.Write(AsPointer(blob->begin()), 1, blob->size());
-        if (writeResult0 != blob->size())
-            Throw(::Exceptions::BasicLabel("Failure in file write while saving placements"));
+        return nascentPlacements;
     }
 
     std::vector<std::pair<Float3, Float3>> EditorOverlayCellRenderer::StallAndCalculateCellSpaceBoundaries(IRigidModelScene& cache) const
@@ -3033,6 +3018,20 @@ namespace SceneEngine
         return result;
     }
 
+    static void Write(const Assets::ResChar destinationFile[], IteratorRange<const NascentPlacement*> placements)
+    {
+		auto libVersion = ConsoleRig::GetLibVersionDesc();
+        ::Assets::SimpleChunkFileWriter fileWriter(
+			::Assets::MainFileSystem::OpenBasicFile(destinationFile, "wb", 0),
+            1, libVersion._versionString, libVersion._buildDateString);
+        fileWriter.BeginChunk(ChunkType_Placements, s_PlacementsChunkVersionNumber, "Placements");
+
+        auto blob = SerializePlacements(placements);
+        auto writeResult0 = fileWriter.Write(AsPointer(blob->begin()), 1, blob->size());
+        if (writeResult0 != blob->size())
+            Throw(::Exceptions::BasicLabel("Failure in file write while saving placements"));
+    }
+
     void PlacementsEditor::WriteAllCells()
     {
             //  Save all of the placement files that have changed. 
@@ -3050,7 +3049,7 @@ namespace SceneEngine
 
             const auto* cell = _pimpl->GetCell(cellGuid);
             if (cell) {
-                i->second->Write(_pimpl->_placementsCache->GetRigidModelScene(), cell->_filename);
+                Write(cell->_filename, i->second->AsNascentPlacements(_pimpl->_placementsCache->GetRigidModelScene()));
 
                     // clear the renderer links
                 _pimpl->_cellSet->_pimpl->SetOverride(cellGuid, nullptr);
@@ -3069,7 +3068,7 @@ namespace SceneEngine
             if (i->first != cellId)
                 continue;
 
-            i->second->Write(_pimpl->_placementsCache->GetRigidModelScene(), destinationFile);
+            Write(destinationFile, i->second->AsNascentPlacements(_pimpl->_placementsCache->GetRigidModelScene()));
             return;
         }
 
@@ -3093,12 +3092,8 @@ namespace SceneEngine
             // note that GetDynPlacements will create the dynamic placements if it doesn't already exist
             if (auto dynPlacement = _pimpl->GetDynPlacements(cell._filenameHash)) {
                 auto e = fmttr.BeginKeyedElement("Placements");
-                auto fns = (const char*)dynPlacement->GetFilenamesBuffer();
-                for (auto& o:dynPlacement->GetObjectReferences()) {
-                    fmttr.FormatSequencedValue(StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(o._localToCell));
-                    fmttr.WriteSequencedValue(fns+o._modelFilenameOffset+sizeof(uint64_t));
-                    fmttr.WriteSequencedValue(fns+o._materialFilenameOffset+sizeof(uint64_t));
-                }
+                auto placements = dynPlacement->AsNascentPlacements(_pimpl->_placementsCache->GetRigidModelScene());
+                SerializePlacements(fmttr, placements);
                 fmttr.EndElement(e);
             }
 
@@ -3134,23 +3129,26 @@ namespace SceneEngine
                     newCell._captureMaxs = Formatters::RequireCastValue<decltype(newCell._captureMaxs)>(fmttr);
                 } else if (XlEqString(kn, "Placements")) {
                     auto dynPlacements = _pimpl->GetDynPlacements(newCell._filenameHash);
-
                     Formatters::RequireBeginElement(fmttr);
-                    while (!fmttr.TryEndElement()) {
-                        auto localToCell = Formatters::RequireCastValue<PlacementsTransform>(fmttr);
-                        auto model = Formatters::RequireStringValue(fmttr);
-                        auto material = Formatters::RequireStringValue(fmttr);
+                    auto placements = DeserializePlacements(fmttr);
+                    Formatters::RequireEndElement(fmttr);
 
-                        uint64_t id, idTopPart = ObjectIdTopPart(model, material);
-                        for (;;) {
-                            auto id32 = BuildGuid32();
-                            id = idTopPart | uint64_t(id32);
-                            if (!dynPlacements->HasObject(id)) { break; }
-                        }
+                    for (auto& p:placements) {
+                        uint64_t id;
+                        
+                        if (!p._preassignedGuid) {
+                            uint64_t idTopPart = ObjectIdTopPart(p._resource._name, p._resource._material);
+                            for (;;) {
+                                auto id32 = BuildGuid32();
+                                id = idTopPart | uint64_t(id32);
+                                if (!dynPlacements->HasObject(id)) { break; }
+                            }
+                        } else
+                            id = *p._preassignedGuid;
 
                         dynPlacements->AddPlacement(
                             _pimpl->_placementsCache->GetRigidModelScene(),
-                            localToCell, model, material, {}, id);
+                            p._localToCell, p._resource._name, p._resource._material, {}, id);
                     }
                 } else {
                     Formatters::SkipValueOrElement(fmttr);
@@ -3409,6 +3407,50 @@ namespace SceneEngine
         result->insert(result->end(), (const uint8_t*)AsPointer(cellSpaceBoundaries.begin()), (const uint8_t*)AsPointer(cellSpaceBoundaries.begin() + hdr._objectRefCount));
         result->insert(result->end(), (const uint8_t*)AsPointer(filenamesBuffer.begin()), (const uint8_t*)AsPointer(filenamesBuffer.begin() + hdr._filenamesBufferSize));
         result->insert(result->end(), (const uint8_t*)AsPointer(supplementsBuffer.begin()), (const uint8_t*)PtrAdd(AsPointer(supplementsBuffer.begin()), hdr._supplementsBufferSize));
+        return result;
+    }
+
+    void SerializePlacements(Formatters::TextOutputFormatter& fmttr, IteratorRange<const NascentPlacement*> placements)
+    {
+        char buffer[256];
+        for (auto& p:placements) {
+            fmttr.WriteSequencedValue(StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(p._localToCell));
+            fmttr.WriteSequencedValue(p._resource._name);
+            fmttr.WriteSequencedValue(p._resource._material);
+        }
+    }
+
+    std::vector<NascentPlacement> DeserializePlacements(Formatters::TextInputFormatter<char>& fmttr)
+    {
+        std::vector<NascentPlacement> result;
+        while (fmttr.PeekNext() != Formatters::FormatterBlob::EndElement) {
+            NascentPlacement p;
+            p._localToCell = Formatters::RequireCastValue<decltype(p._localToCell)>(fmttr);
+            p._resource._name = Formatters::RequireStringValue(fmttr).AsString();
+            p._resource._material = Formatters::RequireStringValue(fmttr).AsString();
+            result.emplace_back(std::move(p));
+        }
+        return result;
+    }
+
+    std::vector<NascentPlacement> AsNascentPlacements(const PlacementsScaffold& placements)
+    {
+        std::vector<NascentPlacement> result;
+        result.reserve(placements.GetObjectReferences().size());
+
+        auto os = placements.GetObjectReferences();
+        auto bs = placements.GetCellSpaceBoundaries();
+        auto fns = placements.GetFilenamesBuffer();
+        for (const auto& o:os) {
+            NascentPlacement p;
+            p._localToCell = o._localToCell;
+            p._preassignedGuid = o._guid;
+            p._resource._name = (const char*)PtrAdd(fns, sizeof(uint64_t)+o._modelFilenameOffset);
+            p._resource._material = (const char*)PtrAdd(fns, sizeof(uint64_t)+o._materialFilenameOffset);
+            p._resource._cellSpaceBoundary = bs[&o-os.begin()];
+            result.emplace_back(p);
+        }
+
         return result;
     }
 

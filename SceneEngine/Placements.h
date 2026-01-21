@@ -8,6 +8,8 @@
 #include "../Math/Matrix.h"
 #include <vector>
 
+namespace Formatters { template<typename T> class TextInputFormatter; class TextOutputFormatter; }
+
 namespace SceneEngine
 {
 	static const uint64_t ChunkType_Placements = ConstHash64Legacy<'Plac','emen','ts'>::Value;
@@ -73,5 +75,9 @@ namespace SceneEngine
 		std::optional<uint64_t> _preassignedGuid;
 	};
 	::Assets::Blob SerializePlacements(IteratorRange<const NascentPlacement*>);
+	void SerializePlacements(Formatters::TextOutputFormatter&, IteratorRange<const NascentPlacement*>);
+	std::vector<NascentPlacement> DeserializePlacements(Formatters::TextInputFormatter<char>&);
+
+	std::vector<NascentPlacement> AsNascentPlacements(const PlacementsScaffold&);
 
 }
