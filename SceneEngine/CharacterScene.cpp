@@ -126,6 +126,7 @@ namespace SceneEngine
 		void CancelConstructions() override;
 
 		std::shared_future<RenderCore::Assets::SkeletonBinding> CreateSkeletonBinding(OpaquePtr renderer, IteratorRange<const uint64_t*> inputInterface) override;
+		std::shared_future<SkeletonMachine> GetSkeletonMachine(OpaquePtr renderer) override;
 		RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) override;
 
 		std::shared_ptr<Assets::OperationContext> GetLoadingContext() override;
@@ -488,6 +489,34 @@ namespace SceneEngine
 		return result;
 	}
 
+	static CharacterScene::SkeletonMachine MakeCharacterSceneSkeletonMachine(const RenderCore::Assets::SkeletonMachine& skm)
+	{
+		CharacterScene::SkeletonMachine result;
+		result._outputInterface.insert(result._outputInterface.end(), skm.GetOutputInterface()._outputMatrixNames, skm.GetOutputInterface()._outputMatrixNames+skm.GetOutputInterface()._outputMatrixNameCount);
+		result._cmdStream.insert(result._cmdStream.end(), skm.GetCommandStream().begin(),skm.GetCommandStream().end());
+		return result;
+	}
+
+	auto CharacterScene::GetSkeletonMachine(OpaquePtr renderer) -> std::shared_future<SkeletonMachine>
+	{
+		assert(renderer);
+		ScopedLock(_poolLock);
+
+		std::promise<SkeletonMachine> promise;
+		auto result = promise.get_future();
+
+		auto& rendererEntry = *((const CharacterSceneInternal::RendererEntry*)renderer.get());
+		if (rendererEntry._pendingRenderer.valid()) {
+			::Assets::WhenAll(rendererEntry._pendingRenderer).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[](const auto& renderer) -> SkeletonMachine {
+					return MakeCharacterSceneSkeletonMachine(renderer.GetSkeletonMachine());
+				});
+		} else
+			promise.set_value(MakeCharacterSceneSkeletonMachine(rendererEntry._renderer.GetSkeletonMachine()));
+		return result;
+	}
+
 	RenderCore::BufferUploads::CommandListID CharacterScene::GetCompletionCommandList(void* renderer)
 	{
 		return ((const CharacterSceneInternal::RendererEntry*)renderer)->_renderer._completionCmdList;
@@ -682,6 +711,16 @@ namespace SceneEngine
 		// set the skeleton machine output to the deformer
 		_activeAnimator->_deformerSkeletonInterface->FeedInSkeletonMachineResults(
 			instanceIdx, MakeIteratorRange(_activeAnimator->_skeletonMachineOutput));
+	}
+
+	void ICharacterScene::AnimationConfigureHelper::ApplyAnimation(unsigned instanceIdx, IteratorRange<const Float4x4*> skeletonMachineOutput)
+	{
+		assert(_activeAnimator);
+		assert(_activeAnimator->_deformerSkeletonInterface);
+
+		// set the skeleton machine output to the deformer
+		_activeAnimator->_deformerSkeletonInterface->FeedInSkeletonMachineResults(
+			instanceIdx, skeletonMachineOutput);
 	}
 
 	IteratorRange<const Float4x4*> ICharacterScene::AnimationConfigureHelper::GetSkeletonMachineOutput()

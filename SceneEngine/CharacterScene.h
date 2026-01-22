@@ -45,6 +45,9 @@ namespace SceneEngine
 
 		virtual std::shared_future<RenderCore::Assets::SkeletonBinding> CreateSkeletonBinding(OpaquePtr renderer, IteratorRange<const uint64_t*> inputInterface) = 0;
 
+		struct SkeletonMachine { std::vector<uint64_t> _outputInterface; std::vector<uint32_t> _cmdStream; };
+		virtual std::shared_future<SkeletonMachine> GetSkeletonMachine(OpaquePtr renderer) = 0;
+
 		virtual void OnFrameBarrier() = 0;
 		virtual void CancelConstructions() = 0;
 		virtual std::shared_ptr<Assets::OperationContext> GetLoadingContext() = 0;
@@ -102,6 +105,7 @@ namespace SceneEngine
 		bool SetRenderer(void* renderer);
 		void ApplySingleAnimation(unsigned instanceIdx, uint64_t id, float time);
 		void ApplyAnimation(unsigned instanceIdx, const uint64_t ids[], const float times[], const float weights[], unsigned animationCount);		// weights must be pre-normalized
+		void ApplyAnimation(unsigned instanceIdx, IteratorRange<const Float4x4*> skeletonMachineOutput);
 		IteratorRange<const Float4x4*> GetSkeletonMachineOutput();
 
 		AnimationConfigureHelper(ICharacterScene& scene);
