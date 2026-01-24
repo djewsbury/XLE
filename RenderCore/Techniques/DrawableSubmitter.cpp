@@ -569,6 +569,49 @@ namespace RenderCore { namespace Techniques
 		return vertexStorage._data;
 	}
 
+	VerticesAndIndices QueueDraw(
+		DrawablesPacket& pkt,
+		size_t vertexCount, size_t vStride,
+		unsigned indexCount,
+		PipelineAccelerator& pipeline,
+		DescriptorSetAccelerator& prebuiltDescriptorSet,
+		const UniformsStreamInterface* uniformStreamInterface,
+		RetainedUniformsStream&& uniforms,
+		Topology topology)
+	{
+		auto vertexDataSize = vertexCount * vStride;
+		assert(indexCount);
+
+		auto* drawable = pkt._drawables.Allocate<DrawableWithVertexCount>();
+		drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
+		auto* geo = pkt.CreateTemporaryGeo();
+		DrawablesPacket::AllocateStorageResult vertexStorage;
+		if (vertexDataSize) {
+			vertexStorage = pkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
+			geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+			geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
+			geo->_vertexStreamCount = 1;
+		}
+		auto indexStorage = pkt.AllocateStorage(DrawablesPacket::Storage::Index, indexCount*sizeof(uint16_t));
+		geo->_ibStreamType = DrawableGeo::StreamType::PacketStorage;
+		geo->_ibOffset = indexStorage._startOffset;
+		geo->_ibFormat = Format::R16_UINT;
+
+		drawable->_geo = geo;
+		drawable->_pipeline = &pipeline;
+		drawable->_descriptorSet = &prebuiltDescriptorSet;
+		drawable->_vertexCount = (unsigned)vertexCount;
+		drawable->_vertexStride = (unsigned)vStride;
+		drawable->_bytesAllocated = (unsigned)vertexDataSize;
+		drawable->_deformInstanceIdx = 0;
+		drawable->_matHash = "do-not-combine"_h;
+		if (uniformStreamInterface) {
+			drawable->_looseUniformsInterface = uniformStreamInterface;		// note lifetime must be preserved by the caller
+			drawable->_uniforms = std::move(uniforms);
+		}
+		return { vertexStorage._data, indexStorage._data.Cast<uint16_t*>() };
+	}
+
 	IteratorRange<void*> QueueDrawMany(
 		DrawablesPacket& pkt,
 		size_t vertexCount, size_t vStride,

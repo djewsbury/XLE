@@ -161,6 +161,17 @@ namespace RenderCore { namespace Techniques
 		RetainedUniformsStream&& uniforms = {},
 		Topology topology = Topology::TriangleList);
 
+	struct VerticesAndIndices { IteratorRange<void*> _vertices; IteratorRange<uint16_t*> _indices; };
+	VerticesAndIndices QueueDraw(
+		DrawablesPacket& pkt,
+		size_t vertexCount, size_t vertexStride,
+		unsigned indexCount,
+		PipelineAccelerator& pipelineAccelerator,
+		DescriptorSetAccelerator& prebuiltDescriptorSet,
+		const UniformsStreamInterface* uniformStreamInterface = nullptr,
+		RetainedUniformsStream&& uniforms = {},
+		Topology topology = Topology::TriangleList);
+
 	IteratorRange<void*> QueueDrawMany(
 		DrawablesPacket& pkt,
 		size_t vertexCount, size_t vertexStride,
