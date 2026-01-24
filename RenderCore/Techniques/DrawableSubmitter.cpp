@@ -583,7 +583,7 @@ namespace RenderCore { namespace Techniques
 		assert(indexCount);
 
 		auto* drawable = pkt._drawables.Allocate<DrawableWithVertexCount>();
-		drawable->_drawFn = &DrawableWithVertexCount::ExecuteFn;
+		drawable->_drawFn = &DrawableWithVertexCount::IndexedExecuteFn;
 		auto* geo = pkt.CreateTemporaryGeo();
 		DrawablesPacket::AllocateStorageResult vertexStorage;
 		if (vertexDataSize) {
@@ -600,7 +600,7 @@ namespace RenderCore { namespace Techniques
 		drawable->_geo = geo;
 		drawable->_pipeline = &pipeline;
 		drawable->_descriptorSet = &prebuiltDescriptorSet;
-		drawable->_vertexCount = (unsigned)vertexCount;
+		drawable->_vertexCount = (unsigned)indexCount;
 		drawable->_vertexStride = (unsigned)vStride;
 		drawable->_bytesAllocated = (unsigned)vertexDataSize;
 		drawable->_deformInstanceIdx = 0;

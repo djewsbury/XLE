@@ -1550,6 +1550,7 @@ namespace RenderCore { namespace Techniques
 				descSet->_pending = {};
 			} CATCH(const ::Assets::Exceptions::ConstructionError& e) {
 				// we've gone invalid
+				Log(Warning) << "DescriptorSetAccelerator invalidation: " << e.what() << std::endl;
 				descSet->_invalidUnreliable = true;
 				descSet->_depVal = e.GetDependencyValidation();
 				descSet->_completed = {};
@@ -1557,13 +1558,15 @@ namespace RenderCore { namespace Techniques
 				descSet->_pending = {};
 			} CATCH(const ::Assets::Exceptions::InvalidAsset& e) {
 				// we've gone invalid
+				Log(Warning) << "DescriptorSetAccelerator invalidation: " << e.what() << std::endl;
 				descSet->_invalidUnreliable = true;
 				descSet->_depVal = e.GetDependencyValidation();
 				descSet->_completed = {};
 				descSet->_visibilityMarker = ~VisibilityMarkerId(0);
 				descSet->_pending = {};
-			} CATCH(const std::exception&) {
+			} CATCH(const std::exception& e) {
 				// we've gone invalid (no dep val)
+				Log(Warning) << "DescriptorSetAccelerator invalidation: " << e.what() << std::endl;
 				descSet->_invalidUnreliable = true;
 				descSet->_depVal = {};
 				descSet->_completed = {};
