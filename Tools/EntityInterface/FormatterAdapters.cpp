@@ -99,7 +99,7 @@ namespace EntityInterface
 			auto result = promise.get_future();
 			::Assets::WhenAll(_srcFile).ThenConstructToPromise(
 				std::move(promise),
-				[ip=internalPoint.AsString()](auto cfgFileContainer) {
+				[ip=Concatenate(_internalPointPrefix, internalPoint)](auto cfgFileContainer) {
 					return EntityInterface::CreateDynamicFormatter(std::move(cfgFileContainer), ip);
 				});
 			return result;
@@ -123,16 +123,19 @@ namespace EntityInterface
 		}
 		virtual void Unlock() override { _lock = {}; }
 
-		TextEntityDocument(std::string src) 
-		: _src(src)
+		TextEntityDocument(StringSection<> src) 
 		{
+			auto split = MakeFileNameSplitter(src);
+			_src = split.AllExceptParameters().AsString();
+			if (!split.Parameters().IsEmpty())
+				_internalPointPrefix = Concatenate(split.Parameters(), "//");
 			_directorySearchRules.SetBaseFile(_src);
 		}
 
 	private:
 		Threading::Mutex _readMutex;
 		std::unique_lock<Threading::Mutex> _lock;
-		std::string _src;
+		std::string _src, _internalPointPrefix;
 		::Assets::PtrToMarkerPtr<::Assets::ConfigFileContainer<>> _srcFile;
 		::Assets::DirectorySearchRules _directorySearchRules;
 	};
