@@ -550,7 +550,7 @@ bool OpenAppDataFolder(StringSection<> subFolder)
 
 void SetThreadName(StringSection<> text)
 {
-#if 0
+#if defined(_DEBUG)     // disabled in release to prevent complications from paranoid virus checkers
     SetThreadDescription(GetCurrentThread(), Conversion::Convert<std::wstring>(text).c_str());
 #endif
 }

@@ -11,6 +11,10 @@
 #include "../../Core/Exceptions.h"
 #include <functional>
 
+#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
+    #include "../../OSServices/WinAPI/System_WinAPI.h"
+#endif
+
 namespace Utility
 {
     namespace Internal
@@ -223,8 +227,15 @@ namespace Utility
         }
     }
 
-    ThreadPool::ThreadPool(unsigned threadCount)
-    : _requestedWorkerCount(threadCount)
+    static void NameThreadPoolThread(StringSection<> name)
+    {
+        #if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
+            OSServices::SetThreadName(name);
+        #endif
+    }
+
+    ThreadPool::ThreadPool(unsigned threadCount, std::string name)
+    : _requestedWorkerCount(threadCount), _name(std::move(name))
     {
         _workerQuit = false;
         _workersOwningABlockCount.store(0);
@@ -234,7 +245,7 @@ namespace Utility
         if (!_yieldToPoolHelper)
             _yieldToPoolHelper = std::make_shared<Internal::YieldToPoolHelper>();
         for (unsigned i = 0; i<threadCount; ++i)
-            _workerThreads.emplace_back([this] { this->RunBlocks(); });
+            _workerThreads.emplace_back([this] { NameThreadPoolThread(this->_name); this->RunBlocks(); });
     }
 
     bool ThreadPool::StallAndDrainQueue(std::optional<std::chrono::steady_clock::duration> stallDuration)
@@ -279,7 +290,7 @@ namespace Utility
         auto prevWorkersNonFrozenCount = _pool->_workersNonFrozenCount.fetch_add(-1);
         if ((prevWorkersNonFrozenCount-1) < int(_pool->_requestedWorkerCount)) {
             ScopedLock(_pool->_pendingTaskLock);
-            _pool->_workerThreads.emplace_back([pool=_pool] { pool->RunBlocks(); });
+            _pool->_workerThreads.emplace_back([pool=_pool] { NameThreadPoolThread(pool->_name); pool->RunBlocks(); });
         }
         auto resultStatus = yieldingFunction();
         // unfreeze this thread; which should encourage the new thread we spun up to shut itself down

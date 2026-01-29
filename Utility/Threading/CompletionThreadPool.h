@@ -80,7 +80,7 @@ namespace Utility
         bool StallAndDrainQueue(std::optional<std::chrono::steady_clock::duration> stallDuration = {});
         unsigned GetThreadContext() const { return _requestedWorkerCount; }
 
-        ThreadPool(unsigned threadCount);
+        ThreadPool(unsigned threadCount, std::string name);
         ~ThreadPool();
 
         ThreadPool(const ThreadPool&) = delete;
@@ -122,6 +122,7 @@ namespace Utility
         std::atomic<signed> _workersNonFrozenCount;
         std::atomic<signed> _workersTotalCount;
         unsigned _requestedWorkerCount;
+        std::string _name;
 
         ConsoleRig::AttachablePtr<Internal::IYieldToPoolHelper> _yieldToPoolHelper;
 

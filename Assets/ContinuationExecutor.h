@@ -12,6 +12,10 @@
 #include "thousandeyes/futures/detail/InvokerWithNewThread.h"
 #include "thousandeyes/futures/detail/InvokerWithSingleThread.h"
 
+#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
+    #include "../../OSServices/WinAPI/System_WinAPI.h"
+#endif
+
 namespace Assets
 {
 	struct InvokerToThreadPool
@@ -102,6 +106,10 @@ namespace Assets
 			}
 
 			(*pollFunc_)([this, page, keep=this->shared_from_this()]() {
+				#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
+					OSServices::SetThreadName("XLEContinuation");
+				#endif
+
 				while (true) {
 					std::unique_ptr<thousandeyes::futures::Waitable> w;
 					{
