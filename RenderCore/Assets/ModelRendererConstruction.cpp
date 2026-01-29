@@ -474,6 +474,10 @@ namespace RenderCore { namespace Assets
 	{
 		_internal->_opContext = std::move(opContext);
 	}
+	std::shared_ptr<::Assets::OperationContext> ModelRendererConstruction::GetOperationContext()
+	{
+		return _internal->_opContext;
+	}
 
 	template<typename Marker, typename Time>
 		static bool MarkerTimesOut(Marker& marker, Time timeoutTime)

@@ -76,6 +76,7 @@ namespace RenderCore { namespace Assets
 		std::shared_ptr<Assets::SkeletonScaffold> GetSkeletonScaffold() const;
 
 		void SetOperationContext(std::shared_ptr<::Assets::OperationContext>);
+		std::shared_ptr<::Assets::OperationContext> GetOperationContext();
 
 		uint64_t GetHash() const;
 		bool CanBeHashed() const;
