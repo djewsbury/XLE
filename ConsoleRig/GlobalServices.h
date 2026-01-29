@@ -26,8 +26,7 @@ namespace ConsoleRig
         bool _inMemoryOnlyIntermediates;
         bool _enableDPIAwareness;
         bool _registerTemporaryIntermediates;
-        unsigned _longTaskThreadPoolCount;
-        unsigned _shortTaskThreadPoolCount;
+        unsigned _threadPoolCount;
 
         StartupConfig();
         StartupConfig(const char applicationName[]);

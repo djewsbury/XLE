@@ -186,8 +186,7 @@ namespace ConsoleRig
             CrossModule _crossModule;
         #endif
 		AttachablePtr<LogCentralConfiguration> _logCfg;
-        std::unique_ptr<ThreadPool> _shortTaskPool;
-        std::unique_ptr<ThreadPool> _longTaskPool;
+        std::unique_ptr<ThreadPool> _taskPool;
         std::shared_ptr<OSServices::PollingThread> _pollingThread;
 		StartupConfig _cfg;
 		std::shared_ptr<PluginSet> _pluginSet;
@@ -210,8 +209,7 @@ namespace ConsoleRig
             CrossModule::GetInstance().EnsureReady();   // if we called CrossModule::GetInstance().Shutdown() previously, we can balance it with this
         #endif
 		_pimpl = std::make_unique<Pimpl>();
-        _pimpl->_shortTaskPool = std::make_unique<ThreadPool>(cfg._shortTaskThreadPoolCount);
-        _pimpl->_longTaskPool = std::make_unique<ThreadPool>(cfg._longTaskThreadPoolCount);
+        _pimpl->_taskPool = std::make_unique<ThreadPool>(cfg._threadPoolCount, "XLEWorker");
         _pimpl->_pollingThread = std::make_shared<OSServices::PollingThread>();
 		_pimpl->_cfg = cfg;
 
@@ -220,7 +218,7 @@ namespace ConsoleRig
         _pimpl->_continuationExecutor = std::make_shared<::Assets::ContinuationExecutor>(
             std::chrono::microseconds(500),
 			thousandeyes::futures::detail::InvokerWithNewThread{},
-			::Assets::InvokerToThreadPool{*_pimpl->_shortTaskPool});
+			::Assets::InvokerToThreadPool{*_pimpl->_taskPool});
 
         if (!_pimpl->_depValSys)
             _pimpl->_depValSys = ::Assets::CreateDepValSys();
@@ -272,13 +270,11 @@ namespace ConsoleRig
     GlobalServices::~GlobalServices() 
     {
         assert(s_instance == nullptr);  // (should already have been detached in the Withhold() call)
-        _pimpl->_shortTaskPool->StallAndDrainQueue();
-        _pimpl->_longTaskPool->StallAndDrainQueue();
+        _pimpl->_taskPool->StallAndDrainQueue();
         _pimpl->_cachedBoxManager = nullptr;
         _pimpl->_assetsSetsManager->Clear();
         _pimpl->_pluginSet = nullptr;
-        _pimpl->_shortTaskPool = nullptr;
-        _pimpl->_longTaskPool = nullptr;
+        _pimpl->_taskPool = nullptr;
         _pimpl->_logCfg = nullptr;
         _pimpl->_intermediatesCompilers = nullptr;
         _pimpl->_intermediatesStore = nullptr;
@@ -324,10 +320,8 @@ namespace ConsoleRig
     {
         if (_pimpl->_continuationExecutor)
             _pimpl->_continuationExecutor->stop();
-        if (_pimpl->_shortTaskPool)
-            _pimpl->_shortTaskPool->StallAndDrainQueue();
-        if (_pimpl->_longTaskPool)
-            _pimpl->_longTaskPool->StallAndDrainQueue();
+        if (_pimpl->_taskPool)
+            _pimpl->_taskPool->StallAndDrainQueue();
         if (_pimpl->_intermediatesStore)
             _pimpl->_intermediatesStore->FlushToDisk();
         if (_pimpl->_cachedBoxManager)
@@ -366,8 +360,8 @@ namespace ConsoleRig
         #endif
     }
 
-	ThreadPool& GlobalServices::GetShortTaskThreadPool() { return *_pimpl->_shortTaskPool; }
-    ThreadPool& GlobalServices::GetLongTaskThreadPool() { return *_pimpl->_longTaskPool; }
+	ThreadPool& GlobalServices::GetShortTaskThreadPool() { return *_pimpl->_taskPool; }
+    ThreadPool& GlobalServices::GetLongTaskThreadPool() { return *_pimpl->_taskPool; }
     const std::shared_ptr<OSServices::PollingThread>& GlobalServices::GetPollingThread() { return _pimpl->_pollingThread; }
     PluginSet& GlobalServices::GetPluginSet() { return *_pimpl->_pluginSet; }
 
@@ -395,8 +389,7 @@ namespace ConsoleRig
         _inMemoryOnlyIntermediates = false;
         _enableDPIAwareness = true;
         _registerTemporaryIntermediates = false;
-        _longTaskThreadPoolCount = 4;
-        _shortTaskThreadPoolCount = 2;
+        _threadPoolCount = 6;
     }
 
     StartupConfig::StartupConfig(const char applicationName[]) : StartupConfig()
