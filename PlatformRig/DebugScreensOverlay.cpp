@@ -73,14 +73,15 @@ namespace PlatformRig
                     topBarManager->RenderFrame(*overlayContext);
 
                 RenderCore::Techniques::RenderPassInstance rpi;
-                auto i = std::find_if(
-                    parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().begin(), parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().end(),
-                    [](const auto& c) { return c._semantic == RenderCore::Techniques::AttachmentSemantics::MultisampleDepth; });
-                if (i != parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments().end()) {
+                auto prereg = parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments();
+                namespace AS = RenderCore::Techniques::AttachmentSemantics;
+                if (auto i = std::find_if(b2e(prereg), [](const auto& c) { return c._semantic == AS::ColorLDR; }); i==prereg.end() || i->_state == RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized) {
+                    rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
+                } else if (std::find_if(b2e(prereg), [](const auto& c) { return c._semantic == AS::MultisampleDepth; }) != prereg.end()) {
                     rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithDepthStencil(parserContext);
-                } else {
+                } else
                     rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext);
-                }
+
                 parserContext.RequireCommandList(overlayContext->GetRequiredBufferUploadsCommandList());
                 _immediateDrawables->ExecuteDraws(parserContext, _sequencerConfigSet->GetTechniqueDelegate(), rpi);
             } CATCH (...) {
