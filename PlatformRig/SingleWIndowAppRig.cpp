@@ -438,8 +438,7 @@ namespace PlatformRig
 			globals._displayRegistrations.emplace_back(dd.first, std::move(dd.second));
 
 		if (_installHotKeysHandler)
-			if (::Assets::MainFileSystem::DoesFileExist("rawos/hotkey.dat"))
-				globals._windowApparatus->_mainInputHandler->AddListener(MakeHotKeysHandler("rawos/hotkey.dat"));
+			globals._windowApparatus->_mainInputHandler->AddListener(MakeHotKeysHandler("cfg/hotkeys"));
 		globals._windowApparatus->_mainInputHandler->AddListener(CreateInputListener(globals._debugOverlaysApparatus->_debugScreensOverlaySystem));
 
 		if (_installLuaConsoleInterface)
