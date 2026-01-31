@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../RenderCore/FrameBufferDesc.h"      // for FrameBufferProperties
+#include "../RenderCore/IDevice_Forward.h"
 #include "../RenderOverlays/DebuggingDisplay.h"
 #include <memory>
 #include <vector>

@@ -7,6 +7,7 @@
 #include "TechniqueUtils.h"
 #include "../FrameBufferDesc.h"
 #include "../StateDesc.h"
+#include "../IDevice_Forward.h"
 #include <vector>
 #include <memory>
 #include <functional>

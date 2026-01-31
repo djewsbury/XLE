@@ -7,10 +7,12 @@
 #include "../FrameBufferDesc.h"
 #include "../StateDesc.h"
 #include "../Types.h"
+#include "../IDevice_Forward.h"
 #include "../Metal/Forward.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Assets/DepVal.h"
 #include <future>
+#include <memory>
 
 namespace RenderCore::Assets { class PredefinedPipelineLayout; }
 namespace Utility { class ParameterBox; }

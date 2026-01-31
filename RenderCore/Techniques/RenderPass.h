@@ -11,6 +11,7 @@
 #include "../FrameBufferDesc.h"
 #include "../ResourceUtils.h"           // for ViewPool
 #include "../Metal/Forward.h"
+#include "../IDevice_Forward.h"
 #include "../../Utility/IteratorUtils.h"
 #include "../../Utility/MemoryUtils.h"
 #include <memory>
