@@ -67,7 +67,7 @@ namespace SceneEngine
 				[](const BufferUploads::ResourceLocator& gradLocator, const BufferUploads::ResourceLocator& permLocator) -> std::shared_ptr<IShaderResourceDelegate> {
 					auto result = std::make_shared<PerlinNoiseResources>();
 					result->_gradView = gradLocator.CreateTextureView(BindFlag::ShaderResource, {Format::R32G32B32A32_FLOAT});
-					result->_permView = permLocator.CreateTextureView(BindFlag::ShaderResource, {Format::R8_UNORM});
+					result->_permView = permLocator.CreateTextureView(BindFlag::ShaderResource, {Format::R8_UINT});
 					result->_interface.BindResourceView(0, Hash64("GradTexture"));
 					result->_interface.BindResourceView(1, Hash64("PermTexture"));
 					result->_completionCmdList = std::max(gradLocator.GetCompletionCommandList(), permLocator.GetCompletionCommandList());

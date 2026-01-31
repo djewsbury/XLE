@@ -10,7 +10,7 @@
 #include "../Framework/CommonResources.hlsl"
 
 Texture1D<float3>       GradTexture;
-Texture1D<float>        PermTexture;
+Texture1D<uint>         PermTexture;
 
     //
     //      Improved Perlin noise calculation
@@ -38,21 +38,30 @@ float2 fade(float2 t)
 //  return t * t * (3 - 2 * t);                 // old curve
 }
 
-float perm(float x)
+uint perm(float x)
 {
         // nvidia implementation always uses wrapping point sampler lookups for perm & grad
-    // return PermTexture.SampleLevel(DefaultSampler, x / 256.f, 0) * 256.f;
-    return PermTexture[uint(x)&0xff] * 256.f;
+        // using an integer texture type here, to avoid further confusion around unorm packing
+    return PermTexture[uint(floor(x))&0xff];
 }
 
 float3 sampleGrad(float x)
 {
-        // DavidJ -- there might be a problem here. try "frac(x/16.f)*16.f"
-    // float t = frac(x)*16.f;
-    float t = frac(x/16.f)*16.f;
-    uint i = uint(t);
-    return GradTexture[i];
-    // return GradTexture.SampleLevel(DefaultSampler, x, 0);
+    // Note... there's a potential error in the original nvidia solution here... though I haven't explored it
+    // all the way to the bottom.
+    //
+    // The original GPU Gems code would be: GradTexture[uint(floor(x*16.f))&0xf]
+    // However, the input value (typically from perm()) is often an integer value between 0 and 255
+    //      (there's a further error in the nvidia implementation in that a multiply by 256 might need to be 255)
+    // If we get an integer input, the multiply 16 makes no sense. It doesn't appear to be right.
+    // To verify this, I'll need to track down the original Ken Perlin noise header and check the math there...
+    //  (but Google's so useless lately, I've not been able to track it down)
+    //
+    // I'm going to keep the version that feels right (and corresponds with one of the simplex noise implementations floating
+    // around) -- despite the fact that it contradicts the nvidia gpu gems implementation
+    //
+    // return GradTexture[uint(floor(x*16.f))&0xf];
+    return GradTexture[uint(floor(x))&0xf];
 }
 
 float grad(float x, float3 p)
