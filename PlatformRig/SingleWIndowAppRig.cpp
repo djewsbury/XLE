@@ -6,7 +6,7 @@
 #include "FrameRig.h"
 #include "PlatformApparatuses.h"
 #include "DebugScreenRegistry.h"
-#include "OverlaySystem.h"
+#include "IOverlay.h"
 #include "DebugHotKeys.h"
 #include "MainInputHandler.h"
 #include "LuaInterface.h"

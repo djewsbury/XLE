@@ -3,7 +3,7 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "DebugScreensOverlay.h"
-#include "OverlaySystem.h"
+#include "IOverlay.h"
 #include "MainInputHandler.h"
 #include "TopBar.h"
 #include "../RenderOverlays/DebuggingDisplay.h"

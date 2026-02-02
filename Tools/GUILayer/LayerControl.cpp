@@ -21,7 +21,7 @@
 #include "../ToolsRig/BasicManipulators.h"
 #include "../ToolsRig/VisualisationUtils.h"
 #include "../../PlatformRig/FrameRig.h"
-#include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/IOverlay.h"
 #include "../../PlatformRig/PlatformApparatuses.h"
 #include "../../RenderOverlays/SimpleVisualization.h"
 #include "../../Assets/OperationContext.h"

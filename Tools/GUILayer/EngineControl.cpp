@@ -13,7 +13,7 @@
 #include "DelayedDeleteQueue.h"
 #include "ExportedNativeTypes.h"
 #include "../../PlatformRig/FrameRig.h"
-#include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/IOverlay.h"
 #include "../../OSServices/WinAPI/InputTranslator.h"
 #include "../../RenderOverlays/DebuggingDisplay.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"

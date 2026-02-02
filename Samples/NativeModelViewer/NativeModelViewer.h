@@ -5,7 +5,7 @@
 #pragma once
 
 #include "../Shared/SampleRig.h"
-#include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/IOverlay.h"
 #include <memory>
 #include <vector>
 

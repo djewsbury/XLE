@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/IOverlay.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/StringUtils.h"

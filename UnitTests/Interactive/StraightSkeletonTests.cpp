@@ -5,7 +5,7 @@
 #include "InteractiveTestHelper.h"
 #include "HexGridUtils.h"
 #include "../RenderCore/Metal/MetalTestHelper.h"
-#include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/IOverlay.h"
 #include "../../PlatformRig/InputContext.h"
 #include "../../RenderCore/Techniques/TechniqueUtils.h"
 #include "../../RenderCore/Techniques/Apparatuses.h"

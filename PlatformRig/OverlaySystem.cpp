@@ -4,7 +4,7 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
-#include "OverlaySystem.h"
+#include "IOverlay.h"
 #include "../PlatformRig/DebuggingDisplays/ConsoleDisplay.h"
 #include "../RenderOverlays/OverlayApparatus.h"
 #include "../RenderOverlays/OverlayContext.h"

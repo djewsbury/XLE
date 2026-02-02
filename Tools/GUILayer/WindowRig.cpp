@@ -7,7 +7,7 @@
 #include "WindowRig.h"
 #include "ExportedNativeTypes.h"
 #include "../../PlatformRig/FrameRig.h"
-#include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/IOverlay.h"
 #include "../../PlatformRig/MainInputHandler.h"
 #include "../../PlatformRig/InputContext.h"
 #include "../../RenderCore/IDevice.h"

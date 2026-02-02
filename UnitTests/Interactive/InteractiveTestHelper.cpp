@@ -8,7 +8,7 @@
 #include "../../PlatformRig/PlatformApparatuses.h"
 #include "../../OSServices/OverlappedWindow.h"
 #include "../../PlatformRig/MainInputHandler.h"
-#include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/IOverlay.h"
 
 #include "../../RenderOverlays/OverlayApparatus.h"
 #include "../../RenderOverlays/SimpleVisualization.h"		// for DrawBottomOfScreenErrorMsg

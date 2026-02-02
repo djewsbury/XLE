@@ -5,7 +5,7 @@
 #include "PlatformApparatuses.h"
 #include "FrameRig.h"
 #include "PlatformRigUtil.h"
-#include "OverlaySystem.h"
+#include "IOverlay.h"
 #include "MainInputHandler.h"
 #include "DebugScreensOverlay.h"
 #include "DebugScreenRegistry.h"

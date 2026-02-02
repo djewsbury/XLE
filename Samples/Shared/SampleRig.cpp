@@ -6,7 +6,7 @@
 #include "../../PlatformRig/PlatformApparatuses.h"
 #include "../../PlatformRig/SingleWindowAppRig.h"
 #include "../../PlatformRig/DebugScreenRegistry.h"
-#include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/IOverlay.h"
 #include "../../PlatformRig/MainInputHandler.h"
 #include "../../PlatformRig/DebuggingDisplays/HelpDisplay.h"
 #include "../../RenderOverlays/SimpleVisualization.h"       // for DrawBottomOfScreenErrorMsg

@@ -4,7 +4,7 @@
 
 #include "FrameRig.h"
 #include "AllocationProfiler.h"
-#include "OverlaySystem.h"
+#include "IOverlay.h"
 #include "PlatformApparatuses.h"
 #include "TopBar.h"
 

@@ -5,7 +5,7 @@
 #include "InteractiveTestHelper.h"
 #include "../../Tools/ToolsRig/DrawablesWriter.h"
 #include "../../Tools/ToolsRig/VisualisationGeo.h"
-#include "../../PlatformRig/OverlaySystem.h"
+#include "../../PlatformRig/IOverlay.h"
 #include "../../PlatformRig/InputContext.h"
 #include "../../RenderCore/LightingEngine/LightingEngine.h"
 #include "../../RenderCore/LightingEngine/LightingEngineApparatus.h"
