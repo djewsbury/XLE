@@ -439,7 +439,7 @@ namespace PlatformRig
 
 		if (_installHotKeysHandler)
 			globals._windowApparatus->_mainInputHandler->AddListener(MakeHotKeysHandler("cfg/hotkeys"));
-		globals._windowApparatus->_mainInputHandler->AddListener(CreateInputListener(globals._debugOverlaysApparatus->_debugScreensOverlaySystem));
+		globals._windowApparatus->_mainInputHandler->AddListener(CreateInputListenerBridge(globals._debugOverlaysApparatus->_debugScreensOverlaySystem));
 
 		if (_installLuaConsoleInterface)
 			if (auto interf = PlatformRig::CreateLuaScripting(ConsoleRig::Console::GetInstance().GetCVarsPtr()))

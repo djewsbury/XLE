@@ -27,32 +27,44 @@ namespace PlatformRig
 {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    struct OverlaySystemSwitch::Pimpl
+    {
+        signed _activeChildIndex, _defaultChildIndex;
+        std::vector<std::pair<uint32_t,std::shared_ptr<IOverlay>>> _childSystems;
+
+        std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregisteredAttachments;
+        RenderCore::FrameBufferProperties _fbProps;
+        std::vector<RenderCore::Format> _systemAttachmentFormats;
+    };
+
     ProcessInputResult    OverlaySystemSwitch::ProcessInput(const InputContext& context, const OSServices::InputSnapshot& evnt)
     {
         using namespace RenderOverlays::DebuggingDisplay;
         constexpr auto shiftKey = "shift"_key;
         if (evnt.IsHeld(shiftKey)) {
-            for (auto i=_childSystems.cbegin(); i!=_childSystems.cend(); ++i) {
+            for (auto i=_pimpl->_childSystems.cbegin(); i!=_pimpl->_childSystems.cend(); ++i) {
                 if (evnt.IsPress(i->first)) {
-                    auto newIndex = std::distance(_childSystems.cbegin(), i);
+                    auto newIndex = std::distance(_pimpl->_childSystems.cbegin(), i);
 
-                    if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size()))
-                        _childSystems[_activeChildIndex].second->SetActivationState(false);
+                    if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size()))
+                        if (auto ext=dynamic_cast<IOverlayExtended*>(_pimpl->_childSystems[_pimpl->_activeChildIndex].second.get()))
+                            ext->SetActivationState(false);
 
-                    _activeChildIndex = (signed(newIndex) != _activeChildIndex) ? signed(newIndex) : _defaultChildIndex;
-                    if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size()))
-                            _childSystems[_activeChildIndex].second->SetActivationState(true);
+                    _pimpl->_activeChildIndex = (signed(newIndex) != _pimpl->_activeChildIndex) ? signed(newIndex) : _pimpl->_defaultChildIndex;
+                    if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size()))
+                        if (auto ext=dynamic_cast<IOverlayExtended*>(_pimpl->_childSystems[_pimpl->_activeChildIndex].second.get()))
+                            ext->SetActivationState(true);
 
                     return ProcessInputResult::Consumed;
                 }
             }
         }
 
-        if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size())) {
+        if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size())) {
 
                 //  if we have an active overlay system, we always consume all input!
                 //  Nothing gets through to the next level
-            return _childSystems[_activeChildIndex].second->ProcessInput(context, evnt);
+            return _pimpl->_childSystems[_pimpl->_activeChildIndex].second->ProcessInput(context, evnt);
         }
 
         return ProcessInputResult::Passthrough;
@@ -61,49 +73,51 @@ namespace PlatformRig
     void OverlaySystemSwitch::Render(
         RenderCore::Techniques::ParsingContext& parserContext) 
     {
-        if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size())) {
-            _childSystems[_activeChildIndex].second->Render(parserContext);
-        }
+        if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size()))
+            _pimpl->_childSystems[_pimpl->_activeChildIndex].second->Render(parserContext);
     }
 
     void OverlaySystemSwitch::SetActivationState(bool newState) 
     {
         if (!newState) {
-            if (_activeChildIndex != _defaultChildIndex) {
-                if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size()))
-                    _childSystems[_activeChildIndex].second->SetActivationState(false);
-                _activeChildIndex = _defaultChildIndex;
+            if (_pimpl->_activeChildIndex != _pimpl->_defaultChildIndex) {
+                if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size()))
+                    if (auto ext=dynamic_cast<IOverlayExtended*>(_pimpl->_childSystems[_pimpl->_activeChildIndex].second.get()))
+                        ext->SetActivationState(false);
+                _pimpl->_activeChildIndex = _pimpl->_defaultChildIndex;
             }
         } else {
-            if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size()))
-                _childSystems[_activeChildIndex].second->SetActivationState(true);
+            if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size()))
+                if (auto ext=dynamic_cast<IOverlayExtended*>(_pimpl->_childSystems[_pimpl->_activeChildIndex].second.get()))
+                    ext->SetActivationState(true);
         }
     }
 
 	auto OverlaySystemSwitch::GetOverlayState() const -> OverlayState
 	{
-		if (_activeChildIndex >= 0 && _activeChildIndex < signed(_childSystems.size()))
-            return _childSystems[_activeChildIndex].second->GetOverlayState();
+		if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size()))
+            if (auto ext=dynamic_cast<IOverlayExtended*>(_pimpl->_childSystems[_pimpl->_activeChildIndex].second.get()))
+                return ext->GetOverlayState();
         return {};
 	}
 
-    void OverlaySystemSwitch::AddSystem(uint32_t activator, std::shared_ptr<IOverlaySystem> system)
+    void OverlaySystemSwitch::AddSystem(uint32_t activator, std::shared_ptr<IOverlay> system)
     {
         auto* sys = system.get();
-        _childSystems.push_back(std::make_pair(activator, std::move(system)));
+        _pimpl->_childSystems.push_back(std::make_pair(activator, std::move(system)));
 
-        if (!_preregisteredAttachments.empty())
-            sys->OnRenderTargetUpdate(_preregisteredAttachments, _fbProps, _systemAttachmentFormats);
+        if (!_pimpl->_preregisteredAttachments.empty())
+            sys->OnRenderTargetUpdate(_pimpl->_preregisteredAttachments, _pimpl->_fbProps, _pimpl->_systemAttachmentFormats);
     }
 
-    void OverlaySystemSwitch::SetDefaultSystem(std::shared_ptr<IOverlaySystem> system)
+    void OverlaySystemSwitch::SetDefaultSystem(std::shared_ptr<IOverlay> system)
     {
         auto* sys = system.get();
-        _childSystems.push_back(std::make_pair(0, std::move(system)));
-        _defaultChildIndex = int(_childSystems.size()-1);
+        _pimpl->_childSystems.push_back(std::make_pair(0, std::move(system)));
+        _pimpl->_defaultChildIndex = int(_pimpl->_childSystems.size()-1);
 
-        if (!_preregisteredAttachments.empty())
-            sys->OnRenderTargetUpdate(_preregisteredAttachments, _fbProps, _systemAttachmentFormats);
+        if (!_pimpl->_preregisteredAttachments.empty())
+            sys->OnRenderTargetUpdate(_pimpl->_preregisteredAttachments, _pimpl->_fbProps, _pimpl->_systemAttachmentFormats);
     }
 
     void OverlaySystemSwitch::OnRenderTargetUpdate(
@@ -113,27 +127,39 @@ namespace PlatformRig
     {
         // We could potentially avoid calling this on inactive children; but we would then have to 
         // call it when they become active
-        for (const auto&c:_childSystems)
+        for (const auto&c:_pimpl->_childSystems)
             c.second->OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
 
-        _preregisteredAttachments = {preregAttachments.begin(), preregAttachments.end()};
-        _fbProps = fbProps;
-        _systemAttachmentFormats = {systemAttachmentFormats.begin(), systemAttachmentFormats.end()};
+        _pimpl->_preregisteredAttachments = {preregAttachments.begin(), preregAttachments.end()};
+        _pimpl->_fbProps = fbProps;
+        _pimpl->_systemAttachmentFormats = {systemAttachmentFormats.begin(), systemAttachmentFormats.end()};
     }
 
     OverlaySystemSwitch::OverlaySystemSwitch() 
-    : _activeChildIndex(-1), _defaultChildIndex(-1)
-    {}
+    {
+        _pimpl = std::make_unique<Pimpl>();
+        _pimpl->_activeChildIndex = _pimpl->_defaultChildIndex = -1;
+    }
 
     OverlaySystemSwitch::~OverlaySystemSwitch() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+    struct OverlaySystemSet::Pimpl
+    {
+        signed _activeChildIndex;
+        std::vector<std::shared_ptr<IOverlay>> _childSystems;
+
+        std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregisteredAttachments;
+        RenderCore::FrameBufferProperties _fbProps;
+        std::vector<RenderCore::Format> _systemAttachmentFormats;
+    };
+
     ProcessInputResult OverlaySystemSet::ProcessInput(
         const InputContext& context,
         const OSServices::InputSnapshot& evnt)
     {
-        for (auto i=_childSystems.begin(); i!=_childSystems.end(); ++i) {
+        for (auto i=_pimpl->_childSystems.begin(); i!=_pimpl->_childSystems.end(); ++i) {
             auto c = (*i)->ProcessInput(context, evnt);
             if (c != ProcessInputResult::Passthrough)
                 return c;
@@ -145,44 +171,43 @@ namespace PlatformRig
     void OverlaySystemSet::Render(
         RenderCore::Techniques::ParsingContext& parsingContext) 
     {
-        for (auto i=_childSystems.begin(); i!=_childSystems.end(); ++i) {
+        for (auto i=_pimpl->_childSystems.begin(); i!=_pimpl->_childSystems.end(); ++i) {
             (*i)->Render(parsingContext);
         }
     }
 
     void OverlaySystemSet::SetActivationState(bool newState) 
     {
-        for (auto i=_childSystems.begin(); i!=_childSystems.end(); ++i) {
-            (*i)->SetActivationState(newState);
-        }
+        for (auto i=_pimpl->_childSystems.begin(); i!=_pimpl->_childSystems.end(); ++i)
+            if (auto ext=dynamic_cast<IOverlayExtended*>(i->get()))
+                ext->SetActivationState(newState);
     }
 
 	auto OverlaySystemSet::GetOverlayState() const -> OverlayState
 	{
 		OverlayState result;
-		for (auto i=_childSystems.begin(); i!=_childSystems.end(); ++i) {
-			auto childState = (*i)->GetOverlayState();
-			if (childState._refreshMode == RefreshMode::RegularAnimation)
-				result._refreshMode = RefreshMode::RegularAnimation;
-		}
+		for (auto i=_pimpl->_childSystems.begin(); i!=_pimpl->_childSystems.end(); ++i)
+            if (auto ext=dynamic_cast<IOverlayExtended*>(i->get()))
+                if (auto childState = ext->GetOverlayState(); childState._refreshMode == RefreshMode::RegularAnimation)
+                    result._refreshMode = RefreshMode::RegularAnimation;
 		return result;
 	}
 
-    void OverlaySystemSet::AddSystem(std::shared_ptr<IOverlaySystem> system)
+    void OverlaySystemSet::AddSystem(std::shared_ptr<IOverlay> system)
     {
         auto* sys = system.get();
-        _childSystems.push_back(std::move(system));
+        _pimpl->_childSystems.push_back(std::move(system));
             // todo -- do we need to call SetActivationState() here?
 
-        if (!_preregisteredAttachments.empty())
-            sys->OnRenderTargetUpdate(_preregisteredAttachments, _fbProps, _systemAttachmentFormats);
+        if (!_pimpl->_preregisteredAttachments.empty())
+            sys->OnRenderTargetUpdate(_pimpl->_preregisteredAttachments, _pimpl->_fbProps, _pimpl->_systemAttachmentFormats);
     }
 
-	void OverlaySystemSet::RemoveSystem(IOverlaySystem& system)
+	void OverlaySystemSet::RemoveSystem(IOverlay& system)
     {
-		for (auto i=_childSystems.begin(); i!=_childSystems.end(); ++i)
+		for (auto i=_pimpl->_childSystems.begin(); i!=_pimpl->_childSystems.end(); ++i)
 			if (i->get() == &system) {
-				_childSystems.erase(i);
+				_pimpl->_childSystems.erase(i);
 				return;
 			}
 	}
@@ -192,39 +217,40 @@ namespace PlatformRig
         const RenderCore::FrameBufferProperties& fbProps,
         IteratorRange<const RenderCore::Format*> systemAttachmentFormats)
     {
-        for (const auto&c:_childSystems)
+        for (const auto&c:_pimpl->_childSystems)
             c->OnRenderTargetUpdate(preregAttachments, fbProps, systemAttachmentFormats);
 
-        _preregisteredAttachments = {preregAttachments.begin(), preregAttachments.end()};
-        _fbProps = fbProps;
-        _systemAttachmentFormats = {systemAttachmentFormats.begin(), systemAttachmentFormats.end()};
+        _pimpl->_preregisteredAttachments = {preregAttachments.begin(), preregAttachments.end()};
+        _pimpl->_fbProps = fbProps;
+        _pimpl->_systemAttachmentFormats = {systemAttachmentFormats.begin(), systemAttachmentFormats.end()};
     }
 
     OverlaySystemSet::OverlaySystemSet() 
-    : _activeChildIndex(-1)
     {
+        _pimpl = std::make_unique<Pimpl>();
+        _pimpl->_activeChildIndex = -1;
     }
 
-    OverlaySystemSet::~OverlaySystemSet() 
-    {
-    }
+    OverlaySystemSet::~OverlaySystemSet() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void IOverlaySystem::SetActivationState(bool newState) {}
-	auto IOverlaySystem::GetOverlayState() const -> OverlayState { return {}; }
-    void IOverlaySystem::OnRenderTargetUpdate(
+    void IOverlay::Render(
+        RenderCore::Techniques::ParsingContext& parserContext) {}
+    void IOverlay::OnRenderTargetUpdate(
         IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
         const RenderCore::FrameBufferProperties& fbProps,
         IteratorRange<const RenderCore::Format*> systemAttachmentFormats) {}
-    ProcessInputResult IOverlaySystem::ProcessInput(
+    ProcessInputResult IOverlay::ProcessInput(
         const InputContext& context,
         const OSServices::InputSnapshot& evnt) { return ProcessInputResult::Passthrough; }
-    IOverlaySystem::~IOverlaySystem() {}
+    IOverlay::~IOverlay() {}
+	void IOverlayExtended::SetActivationState(bool newState) {}
+	auto IOverlayExtended::GetOverlayState() const -> OverlayState { return {}; }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class ConsoleOverlaySystem : public IOverlaySystem
+    class ConsoleOverlaySystem : public IOverlay
     {
     public:
         virtual ProcessInputResult ProcessInput(
@@ -232,7 +258,6 @@ namespace PlatformRig
 			const OSServices::InputSnapshot& evnt) override;
         void Render(
             RenderCore::Techniques::ParsingContext& parserContext) override;
-        void SetActivationState(bool) override;
 
         ConsoleOverlaySystem(
             std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
@@ -297,8 +322,6 @@ namespace PlatformRig
         _interfaceStateHelper.PostRender();
     }
 
-    void ConsoleOverlaySystem::SetActivationState(bool) {}
-
     ConsoleOverlaySystem::ConsoleOverlaySystem(
         std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
@@ -316,7 +339,7 @@ namespace PlatformRig
     {
     }
 
-    std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
+    std::shared_ptr<IOverlay> CreateConsoleOverlaySystem(
         std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,
         std::shared_ptr<RenderOverlays::FontRenderingManager> fontRenderer)
@@ -324,7 +347,7 @@ namespace PlatformRig
         return std::make_shared<ConsoleOverlaySystem>(std::move(immediateDrawables), std::move(sequencerConfigSet), std::move(fontRenderer));
     }
 
-    std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
+    std::shared_ptr<IOverlay> CreateConsoleOverlaySystem(
         RenderOverlays::OverlayApparatus& immediateDrawing)
     {
         return std::make_shared<ConsoleOverlaySystem>(immediateDrawing._immediateDrawables, immediateDrawing._shapeRenderingDelegate, immediateDrawing._fontRenderingManager);
@@ -341,12 +364,12 @@ namespace PlatformRig
         {
             return _overlays->ProcessInput(context, evnt);
         }
-        BridgingInputListener(std::shared_ptr<IOverlaySystem> overlays) : _overlays(std::move(overlays)) {}
+        BridgingInputListener(std::shared_ptr<IOverlay> overlays) : _overlays(std::move(overlays)) {}
     private:
-        std::shared_ptr<IOverlaySystem> _overlays;
+        std::shared_ptr<IOverlay> _overlays;
     };
 
-    std::shared_ptr<IInputListener> CreateInputListener(std::shared_ptr<IOverlaySystem> overlays)
+    std::shared_ptr<IInputListener> CreateInputListenerBridge(std::shared_ptr<IOverlay> overlays)
     {
         return std::make_shared<BridgingInputListener>(std::move(overlays));
     }

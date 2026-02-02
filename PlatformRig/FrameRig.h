@@ -19,7 +19,7 @@ namespace Assets { class OperationContext; }
 
 namespace PlatformRig
 {
-    class IOverlaySystem;
+    class IOverlay;
     class WindowApparatus;
     class IFrameRigDisplay;
 

@@ -6,14 +6,10 @@
 
 #pragma once
 
-#include "../../RenderCore/IDevice_Forward.h"
-#include "../../RenderCore/FrameBufferDesc.h"
-#include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
 #include <memory>
-#include <vector>
 
-namespace RenderCore { class IThreadContext; class FrameBufferProperties; }
+namespace RenderCore { class IThreadContext; class FrameBufferProperties; enum class Format; }
 namespace RenderCore { namespace Techniques 
 { 
     class ProjectionDesc; class ParsingContext; class IDrawableSubmitter;
@@ -28,16 +24,33 @@ namespace PlatformRig
     enum class ProcessInputResult;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-    class IOverlaySystem
+
+    class IOverlay
     {
     public:
 		virtual void Render(
-			RenderCore::Techniques::ParsingContext& parserContext) = 0; 
+			RenderCore::Techniques::ParsingContext& parserContext);
 
         virtual ProcessInputResult ProcessInput(
 			const InputContext& context,
 			const OSServices::InputSnapshot& evnt);
 
+        virtual void OnRenderTargetUpdate(
+            IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
+            const RenderCore::FrameBufferProperties& fbProps,
+            IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
+
+        virtual ~IOverlay();
+    };
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    class IInputListener;
+    std::shared_ptr<IInputListener> CreateInputListenerBridge(std::shared_ptr<IOverlay>);
+
+    class IOverlayExtended
+    {
+    public:
         virtual void SetActivationState(bool newState);
 
 		enum class RefreshMode { EventBased, RegularAnimation };
@@ -46,20 +59,9 @@ namespace PlatformRig
 			RefreshMode _refreshMode = RefreshMode::EventBased;
 		};
 		virtual OverlayState GetOverlayState() const;
-
-        virtual void OnRenderTargetUpdate(
-            IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
-            const RenderCore::FrameBufferProperties& fbProps,
-            IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
-
-        virtual ~IOverlaySystem();
     };
 
-    class IInputListener;
-    std::shared_ptr<IInputListener> CreateInputListener(std::shared_ptr<IOverlaySystem>);
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-    class OverlaySystemSwitch : public IOverlaySystem
+    class OverlaySystemSwitch : public IOverlay, public IOverlayExtended
     {
     public:
         virtual ProcessInputResult ProcessInput(
@@ -76,23 +78,20 @@ namespace PlatformRig
             const RenderCore::FrameBufferProperties& fbProps,
             IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
-        void AddSystem(uint32_t activator, std::shared_ptr<IOverlaySystem> system);
-        void SetDefaultSystem(std::shared_ptr<IOverlaySystem> system);
+        void AddSystem(uint32_t activator, std::shared_ptr<IOverlay> system);
+        void SetDefaultSystem(std::shared_ptr<IOverlay> system);
 
         OverlaySystemSwitch();
         ~OverlaySystemSwitch();
 
     private:
-        signed _activeChildIndex, _defaultChildIndex;
-        std::vector<std::pair<uint32_t,std::shared_ptr<IOverlaySystem>>> _childSystems;
-
-        std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregisteredAttachments;
-        RenderCore::FrameBufferProperties _fbProps;
-        std::vector<RenderCore::Format> _systemAttachmentFormats;
+        struct Pimpl;
+        std::unique_ptr<Pimpl> _pimpl;
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-    class OverlaySystemSet : public IOverlaySystem
+
+    class OverlaySystemSet : public IOverlay, public IOverlayExtended
     {
     public:
         virtual ProcessInputResult ProcessInput(
@@ -109,22 +108,18 @@ namespace PlatformRig
             const RenderCore::FrameBufferProperties& fbProps,
             IteratorRange<const RenderCore::Format*> systemAttachmentFormats) override;
 
-        void AddSystem(std::shared_ptr<IOverlaySystem> system);
-		void RemoveSystem(IOverlaySystem& system);
+        void AddSystem(std::shared_ptr<IOverlay> system);
+		void RemoveSystem(IOverlay& system);
 
         OverlaySystemSet();
         ~OverlaySystemSet();
 
     private:
-        signed _activeChildIndex;
-        std::vector<std::shared_ptr<IOverlaySystem>> _childSystems;
-
-        std::vector<RenderCore::Techniques::PreregisteredAttachment> _preregisteredAttachments;
-        RenderCore::FrameBufferProperties _fbProps;
-        std::vector<RenderCore::Format> _systemAttachmentFormats;
+        struct Pimpl;
+        std::unique_ptr<Pimpl> _pimpl;
     };
 
-    std::shared_ptr<IOverlaySystem> CreateConsoleOverlaySystem(
+    std::shared_ptr<IOverlay> CreateConsoleOverlaySystem(
         std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter>,
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate>,
         std::shared_ptr<RenderOverlays::FontRenderingManager>);

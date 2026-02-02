@@ -29,8 +29,8 @@ namespace Sample
 	static void InstallSampleDebuggingDisplays(PlatformRig::AppRigGlobals& globals);
 	static void LogRenderAPIInstanceStartup(RenderCore::IAPIInstance& apiInstance, const void* underlyingWindowHandle);
 	static void OnRenderTargetUpdate(
-		PlatformRig::IOverlaySystem* mainOverlay,
-		PlatformRig::IOverlaySystem& debuggingOverlay,
+		PlatformRig::IOverlay* mainOverlay,
+		PlatformRig::IOverlay& debuggingOverlay,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
 		const RenderCore::FrameBufferProperties& fbProps,
 		IteratorRange<const RenderCore::Format*> systemAttachmentFormats);
@@ -117,10 +117,10 @@ namespace Sample
 		devFeatures.Apply(globals);
 		InstallSampleDebuggingDisplays(globals);
 
-		auto sampleOverlayAsOverlay = std::dynamic_pointer_cast<PlatformRig::IOverlaySystem>(sampleOverlay);
+		auto sampleOverlayAsOverlay = std::dynamic_pointer_cast<PlatformRig::IOverlay>(sampleOverlay);
 
 		if (sampleOverlayAsOverlay)
-			globals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListener(sampleOverlayAsOverlay));
+			globals._windowApparatus->_mainInputHandler->AddListener(PlatformRig::CreateInputListenerBridge(sampleOverlayAsOverlay));
 		sampleOverlay->OnStartup(globals);
 
 			//  Finally, we execute the frame loop.
@@ -178,8 +178,8 @@ namespace Sample
 	}
 
 	static void OnRenderTargetUpdate(
-		PlatformRig::IOverlaySystem* mainOverlay,
-		PlatformRig::IOverlaySystem& debuggingOverlay,
+		PlatformRig::IOverlay* mainOverlay,
+		PlatformRig::IOverlay& debuggingOverlay,
 		IteratorRange<const RenderCore::Techniques::PreregisteredAttachment*> preregAttachments,
 		const RenderCore::FrameBufferProperties& fbProps,
 		IteratorRange<const RenderCore::Format*> systemAttachmentFormats)

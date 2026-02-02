@@ -22,7 +22,7 @@ using namespace OSServices::Literals;
 
 namespace PlatformRig
 {
-    class DebugScreensOverlay : public IOverlaySystem
+    class DebugScreensOverlay : public IOverlay
     {
     public:
         DebugScreensOverlay(
@@ -97,7 +97,7 @@ namespace PlatformRig
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> _sequencerConfigSet;
     };
 
-    std::shared_ptr<IOverlaySystem> CreateDebugScreensOverlay(
+    std::shared_ptr<IOverlay> CreateDebugScreensOverlay(
         std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreensSystem,
         std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
         std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,

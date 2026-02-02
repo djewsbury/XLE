@@ -45,7 +45,7 @@ using namespace std::chrono_literals;
 namespace UnitTests
 {
 	class InteractiveTestHelper;
-	static std::shared_ptr<PlatformRig::IOverlaySystem> CreateAdapter(std::shared_ptr<IInteractiveTestOverlay> overlaySystem, const RenderCore::Techniques::CameraDesc& camera, std::weak_ptr<InteractiveTestHelper> testHelper);
+	static std::shared_ptr<PlatformRig::IOverlay> CreateAdapter(std::shared_ptr<IInteractiveTestOverlay> overlaySystem, const RenderCore::Techniques::CameraDesc& camera, std::weak_ptr<InteractiveTestHelper> testHelper);
 
 	class InteractiveTestHelper : public IInteractiveTestHelper, public std::enable_shared_from_this<InteractiveTestHelper>
 	{
@@ -70,7 +70,7 @@ namespace UnitTests
 			overlaySystem->OnRenderTargetUpdate(overlayConfig._preregAttachments, overlayConfig._fbProps, overlayConfig._systemAttachmentFormats);
 			if (_drawingApparatus)
 				_drawingApparatus->_techniqueServices->GetSubFrameEvents()._onCheckCompleteInitialization.Invoke(*_windowApparatus->_immediateContext);
-			auto inputListener = PlatformRig::CreateInputListener(adapter);
+			auto inputListener = PlatformRig::CreateInputListenerBridge(adapter);
 			_windowApparatus->_mainInputHandler->AddListener(inputListener);
 			_windowApparatus->_osWindow->Show();
 
@@ -218,7 +218,7 @@ namespace UnitTests
 		const RenderCore::Techniques::CameraDesc* _activeCamera = nullptr;
 	};
 
-	class OverlayAdapter : public PlatformRig::IOverlaySystem
+	class OverlayAdapter : public PlatformRig::IOverlay
 	{
 	public:
 		virtual void Render(
@@ -278,7 +278,7 @@ namespace UnitTests
 		RenderCore::Techniques::CameraDesc _camera;
 	};
 
-	std::shared_ptr<PlatformRig::IOverlaySystem> CreateAdapter(std::shared_ptr<IInteractiveTestOverlay> overlaySystem, const RenderCore::Techniques::CameraDesc& camera, std::weak_ptr<InteractiveTestHelper> testHelper)
+	std::shared_ptr<PlatformRig::IOverlay> CreateAdapter(std::shared_ptr<IInteractiveTestOverlay> overlaySystem, const RenderCore::Techniques::CameraDesc& camera, std::weak_ptr<InteractiveTestHelper> testHelper)
 	{
 		return std::make_shared<OverlayAdapter>(overlaySystem, camera, testHelper);
 	}

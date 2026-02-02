@@ -12,9 +12,9 @@ namespace RenderCore { namespace Techniques { class IDrawableSubmitter;  }}
 
 namespace PlatformRig
 {
-	class IOverlaySystem;
+	class IOverlay;
 
-	std::shared_ptr<IOverlaySystem> CreateDebugScreensOverlay(
+	std::shared_ptr<IOverlay> CreateDebugScreensOverlay(
 		std::shared_ptr<RenderOverlays::DebuggingDisplay::DebugScreensSystem> debugScreensSystem,
 		std::shared_ptr<RenderCore::Techniques::IDrawableSubmitter> immediateDrawables,
 		std::shared_ptr<RenderOverlays::ShapesRenderingDelegate> sequencerConfigSet,

@@ -44,6 +44,7 @@
 #include "../../Assets/Continuation.h"
 #include "../../ConsoleRig/GlobalServices.h"
 #include "../../Math/Transformations.h"
+#include "../../OSServices/FileSystemMonitor.h"
 #include "../../Utility/FunctionUtils.h"
 #include <chrono>
 #include <iomanip>
@@ -180,7 +181,7 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class SimpleSceneOverlay : public ISimpleSceneOverlay
+	class SimpleSceneOverlay : public ISimpleSceneOverlay, public PlatformRig::IOverlayExtended
     {
     public:
         void Render(RenderCore::Techniques::ParsingContext& parserContext) override;
@@ -1324,7 +1325,7 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class InputLayer : public PlatformRig::IOverlaySystem
+	class InputLayer : public PlatformRig::IOverlay
     {
     public:
         virtual PlatformRig::ProcessInputResult ProcessInput(
@@ -1353,7 +1354,7 @@ namespace ToolsRig
     InputLayer::InputLayer(std::shared_ptr<PlatformRig::IInputListener> listener) : _listener(std::move(listener)) {}
     InputLayer::~InputLayer() {}
 
-	std::shared_ptr<PlatformRig::IOverlaySystem> MakeLayerForInput(std::shared_ptr<PlatformRig::IInputListener> listener)
+	std::shared_ptr<PlatformRig::IOverlay> MakeLayerForInput(std::shared_ptr<PlatformRig::IInputListener> listener)
 	{
 		return std::make_shared<InputLayer>(std::move(listener));
 	}

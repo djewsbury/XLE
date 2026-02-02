@@ -8,13 +8,14 @@
 
 #include "../../PlatformRig/OverlaySystem.h"
 #include "../../Assets/AssetsCore.h"
-#include "../../OSServices/FileSystemMonitor.h"
 #include "../../Math/Vector.h"
-#include "../../Utility/Optional.h"
+#include "../../Utility/StringUtils.h"
 #include <string>
 #include <chrono>
 #include <functional>
+#include <optional>
 
+namespace RenderCore { class IResource; }
 namespace RenderCore { namespace Techniques 
 {
 	class CameraDesc;
@@ -144,7 +145,7 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class ISimpleSceneOverlay : public PlatformRig::IOverlaySystem
+    class ISimpleSceneOverlay : public PlatformRig::IOverlay
     {
     public:
         virtual void Set(std::shared_ptr<SceneEngine::ILightingStateDelegate> envSettings) = 0;
@@ -213,7 +214,7 @@ namespace ToolsRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-	class VisualisationOverlay : public PlatformRig::IOverlaySystem, public VisOverlayController::IVisualisationOverlay
+	class VisualisationOverlay : public PlatformRig::IOverlay, public VisOverlayController::IVisualisationOverlay, PlatformRig::IOverlayExtended
     {
     public:
 		void Set(std::shared_ptr<SceneEngine::IScene> scene) override;
@@ -246,7 +247,7 @@ namespace ToolsRig
         std::unique_ptr<Pimpl> _pimpl;
     };
 
-	std::shared_ptr<PlatformRig::IOverlaySystem> MakeLayerForInput(
+	std::shared_ptr<PlatformRig::IOverlay> MakeLayerForInput(
 		std::shared_ptr<PlatformRig::IInputListener> listener);
 
     std::shared_ptr<PlatformRig::IInputListener> CreateMouseTrackingInputListener(
@@ -266,7 +267,7 @@ namespace ToolsRig
 
 	std::pair<DrawPreviewResult, std::string> DrawPreview(
         RenderCore::IThreadContext& context,
-		const RenderCore::IResourcePtr& renderTarget,
+		const std::shared_ptr<RenderCore::IResource>& renderTarget,
         RenderCore::Techniques::ParsingContext& parserContext,
 		const std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool>& pipelineAccelerators,
 		VisCameraSettings& cameraSettings,

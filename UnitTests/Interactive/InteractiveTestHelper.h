@@ -8,7 +8,7 @@
 #include <utility>
 
 namespace OSServices { class InputSnapshot; }
-namespace PlatformRig { class IOverlaySystem; class InputContext; class WindowApparatus; }
+namespace PlatformRig { class IOverlay; class InputContext; class WindowApparatus; }
 namespace RenderCore { namespace Techniques { class DrawingApparatus; class PrimaryResourcesApparatus; class ParsingContext; class CameraDesc; class TechniqueContext; struct PreregisteredAttachment; }}
 namespace RenderCore { namespace LightingEngine { class LightingEngineApparatus; }}
 namespace RenderCore { class IDevice; class IThreadContext; class FrameBufferProperties; enum class Format; }
