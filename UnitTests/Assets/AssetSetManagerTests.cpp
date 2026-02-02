@@ -59,7 +59,7 @@ namespace UnitTests
 		unsigned notCompletedImmediately = 0;
 		unsigned assetsAbandoned = 0;
 
-		ThreadPool bkThread(1);
+		ThreadPool bkThread(1, "test-thread-pool");
 		std::atomic<unsigned> bkCounter(0);
 
 		while (assetsCompleted<targetAssetsCompleted) {

@@ -349,7 +349,7 @@ namespace UnitTests
     TEST_CASE( "ThreadPool-DestructionRules", "[osservices]" )
     {
         // Ensure that functions queued in the thread pool are getting destructors called correctly
-        ThreadPool threadPool(4);
+        ThreadPool threadPool(4, "test-thread-pool");
 
         SECTION("captured smart ptr") 
         {
@@ -465,7 +465,7 @@ namespace UnitTests
         // dangerous because if all of the threads in the pool end up in this kind of waiting
         // state, nothing will complete
 
-        ThreadPool threadPool(4);
+        ThreadPool threadPool(4, "test-thread-pool");
 
         SECTION("Wait on condition variable")
         {
