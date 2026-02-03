@@ -7,19 +7,17 @@
 #pragma once
 
 #include "IteratorUtils.h"
-#include "PtrUtils.h"
-#include "../OSServices/RawFS.h"
 #include "../Core/Exceptions.h"
-#include "../Core/SelectConfiguration.h"
 #include <functional>
-#include <utility>
 #include <vector>
-#include <stdint.h>
+#include <cstdint>
 #include <stdexcept>
 
 #if !defined(__CLR_VER)	// cannot be included into CLR builds, for reasons known only to Microsoft
 #include "Threading/Mutex.h"
 #endif
+
+namespace OSServices { using ModuleId = size_t; ModuleId GetCurrentModuleId(); };
 
 namespace Utility
 {

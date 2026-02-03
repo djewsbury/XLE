@@ -10,15 +10,13 @@
 #include "../InputSnapshot.h"
 #include "../DisplaySettings.h"
 #include "../Log.h"
-#include "../../Utility/PtrUtils.h"
-#include "../../Utility/UTFUtils.h"
 #include "../../Utility/MemoryUtils.h"
-#include "../../Utility/IteratorUtils.h"
 #include "../../Utility/Conversion.h"
 #include "../../Utility/FunctionUtils.h"
 #include "../../Core/Exceptions.h"
-#include <queue>
 #include <windowsx.h>
+#include <optional>
+#include <deque>
 
 #include "WinAPIWrapper.h"
 
