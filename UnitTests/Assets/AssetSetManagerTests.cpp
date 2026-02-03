@@ -11,6 +11,8 @@
 #include "../../Assets/MemoryFile.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/MountingTree.h"
+#include "../../ConsoleRig/GlobalServices.h"
+#include "../../ConsoleRig/AttachablePtr.h"
 #include "../../OSServices/Log.h"
 #include <stdexcept>
 #include <random>

@@ -15,6 +15,7 @@
 #include "../../Assets/Assets.h"
 #include "../../Assets/ConfigFileContainer.h"
 #include "../../Assets/Continuation.h"
+#include "../../ConsoleRig/GlobalServices.h"
 #include "../../Utility/Threading/Mutex.h"
 #include "../../Utility/Streams/PathUtils.h"
 

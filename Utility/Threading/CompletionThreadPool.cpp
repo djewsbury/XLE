@@ -8,6 +8,7 @@
 #include "ThreadLocalPtr.h"
 #include "ThreadingUtils.h"
 #include "../../OSServices/Log.h"
+#include "../../ConsoleRig/AttachablePtr.h"
 #include "../../Core/Exceptions.h"
 #include <functional>
 
@@ -234,6 +235,11 @@ namespace Utility
         #endif
     }
 
+    struct ThreadPool::Pimpl
+    {
+        ConsoleRig::AttachablePtr<Internal::IYieldToPoolHelper> _yieldToPoolHelper;
+    };
+
     ThreadPool::ThreadPool(unsigned threadCount, std::string name)
     : _requestedWorkerCount(threadCount), _name(std::move(name))
     {
@@ -242,8 +248,9 @@ namespace Utility
         _workersFrozenCount.store(0);
         _workersNonFrozenCount.store(0);
         _workersTotalCount.store(0);
-        if (!_yieldToPoolHelper)
-            _yieldToPoolHelper = std::make_shared<Internal::YieldToPoolHelper>();
+        _pimpl = std::make_unique<Pimpl>();
+        if (!_pimpl->_yieldToPoolHelper)
+            _pimpl->_yieldToPoolHelper = std::make_shared<Internal::YieldToPoolHelper>();
         for (unsigned i = 0; i<threadCount; ++i)
             _workerThreads.emplace_back([this] { NameThreadPoolThread(this->_name); this->RunBlocks(); });
     }

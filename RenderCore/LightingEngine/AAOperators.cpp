@@ -13,6 +13,7 @@
 #include "../Metal/Resource.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/Marker.h"
 #include "../../Math/Transformations.h"
 #include "../../xleres/FileList.h"
 

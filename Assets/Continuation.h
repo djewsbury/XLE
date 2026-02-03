@@ -7,13 +7,13 @@
 #define _SILENCE_CXX17_RESULT_OF_DEPRECATION_WARNING	// warning generated inside of thousandeyes/futures/then.h
 
 #include "ContinuationInternal.h"
-#include "../ConsoleRig/GlobalServices.h"
-#include "thousandeyes/futures/Default.h"
 #include "thousandeyes/futures/Executor.h"
-#include <functional>
+#include <type_traits>
 
 namespace Assets
 {
+	namespace Internal { thousandeyes::futures::Executor* GetContinuationExecutor(); }
+
 	template<typename... FutureTypes>
 		class MultiAssetFuture
 	{
@@ -156,8 +156,8 @@ namespace Assets
 			std::promise<std::tuple<FutureTypes...>> mergedPromise;
 			auto mergedFuture = mergedPromise.get_future();
 
-			auto* executor = ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor().get();
-			if (!executor) {
+			auto* executor = Internal::GetContinuationExecutor();
+			if (expect_evaluation(!executor, false)) {
 				// might happen during shutdown
 				mergedPromise.set_exception(std::make_exception_ptr(std::runtime_error("Continuation executor has expired")));
 				return mergedFuture;
@@ -174,8 +174,8 @@ namespace Assets
 		template<typename PromisedType, typename ContinuationFn>
 			void MakeContinuation(std::promise<PromisedType>&& promise, ContinuationFn&& continuation)
 		{
-			auto* executor = ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor().get();
-			if (!executor) {
+			auto* executor = Internal::GetContinuationExecutor();
+			if (expect_evaluation(!executor, false)) {
 				// might happen during shutdown
 				promise.set_exception(std::make_exception_ptr(std::runtime_error("Continuation executor has expired")));
 				return;

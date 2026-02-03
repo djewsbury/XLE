@@ -5,9 +5,7 @@
 #pragma once
 
 #include "AssetsCore.h"
-#include "../Utility/Optional.h"
 #include "../Core/Prefix.h"     // (for DEBUG_ONLY)
-
 #include <chrono>
 
 namespace Assets
@@ -45,5 +43,17 @@ namespace Assets
 		AssetState _state;
 		DEBUG_ONLY(ResChar _initializer[MaxPath];)
     };
+
+	inline bool TimedWait(const IAsyncMarker& future, std::chrono::microseconds timeout)
+	{
+		auto stallResult = future.StallWhilePending(timeout);
+		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
+	}
+
+	inline bool TimedWaitUntil(const IAsyncMarker& future, std::chrono::steady_clock::time_point timeoutTime)
+	{
+		auto stallResult = future.StallWhilePending(std::chrono::microseconds(500));	// no StallUntil(), so just have to pick a timeout time
+		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
+	}
 
 }

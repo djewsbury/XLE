@@ -5,7 +5,9 @@
 #include "../../Assets/Continuation.h"
 #include "../../Assets/ContinuationUtil.h"
 #include "../../Assets/ContinuationExecutor.h"
+#include "../../Assets/Marker.h"
 #include "../../ConsoleRig/GlobalServices.h"
+#include "../../ConsoleRig/AttachablePtr.h"
 #include <stdexcept>
 #include <chrono>
 #include <random>

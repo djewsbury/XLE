@@ -15,12 +15,12 @@
 #include "IArtifact.h"
 #include "../OSServices/Log.h"
 #include "../Formatters/FormatterUtils.h"
+#include "../ConsoleRig/GlobalServices.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Utility/MemoryUtils.h"
 #include "../Utility/PtrUtils.h"
 #include "../Utility/Threading/Mutex.h"
-#include "../Utility/Threading/ThreadingUtils.h"
 #include "../Utility/Threading/CompletionThreadPool.h"
 #include "../Utility/Streams/PathUtils.h"
 #include "../OSServices/RawFS.h"
@@ -664,6 +664,13 @@ namespace Assets
 
 	IAsyncMarker::~IAsyncMarker() {}
 
+    namespace Internal
+    {
+        thousandeyes::futures::Executor* GetContinuationExecutor()
+        {
+            return ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor().get();
+        }
+    }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

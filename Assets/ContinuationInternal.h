@@ -5,10 +5,8 @@
 #pragma once
 
 #include "AssetsCore.h"
-#include "Marker.h"
-#include "IAsyncMarker.h"
-#include "AssetTraits.h"		// just for InvokeAssetConstructor
-#include "../OSServices/Log.h"
+#include "TryGetAssetFromFuture.h"
+#include "InvokeAssetConstructor.h"
 #include "thousandeyes/futures/TimedWaitable.h"
 #include <memory>
 #include <tuple>
@@ -17,43 +15,15 @@
 #include <utility>
 
 // #define CONTINUATION_DETAILED_LOGGING 1
+#if CONTINUATION_DETAILED_LOGGING
+	#include "../OSServices/Log.h"
+#endif
+
+namespace Assets { template<typename T> class Marker; }
 
 namespace Assets { namespace Internal
 {
 	::Assets::Blob FailedContinuationActualizeError(unsigned, ::Assets::Blob&&);
-
-	template<size_t I = 0, typename... Tp>
-		void CheckAssetState(
-			AssetState& currentState, 
-			Blob& actualizationBlob, 
-			DependencyValidation& exceptionDepVal,
-			std::tuple<Tp...>& actualized,
-			const std::tuple<std::shared_ptr<Marker<Tp>>...>& futures)
-	{
-		Blob queriedLog;
-		DependencyValidation queriedDepVal;
-		auto state = std::get<I>(futures)->CheckStatusBkgrnd(std::get<I>(actualized), queriedDepVal, queriedLog);
-		if (state != AssetState::Ready)
-			currentState = state;
-
-		if (state != AssetState::Invalid) {	// (on first invalid, stop looking any further)
-			if constexpr(I+1 != sizeof...(Tp))
-				CheckAssetState<I+1>(currentState, actualizationBlob, exceptionDepVal, actualized, futures);
-		} else {
-			actualizationBlob = FailedContinuationActualizeError(I, std::move(queriedLog));
-			exceptionDepVal = queriedDepVal;
-		}
-	}
-
-	template<size_t I = 0, typename... Tp>
-		bool AnyForegroundPendingAssets(const std::tuple<std::shared_ptr<Marker<Tp>>...>& futures)
-	{
-		if (std::get<I>(futures)->GetAssetState() == AssetState::Pending)
-			return true;
-		if constexpr(I+1 != sizeof...(Tp))
-			return AnyForegroundPendingAssets<I+1>(futures);
-		return false;
-	}
 
 	// Thanks to https://stackoverflow.com/questions/687490/how-do-i-expand-a-tuple-into-variadic-template-functions-arguments for this 
 	// pattern. Using std::make_index_sequence to expand out a sequence of integers in a parameter pack, and then using this to
@@ -78,12 +48,6 @@ namespace Assets { namespace Internal
 		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
 	}
 	
-	inline bool TimedWait(const IAsyncMarker& future, std::chrono::microseconds timeout)
-	{
-		auto stallResult = future.StallWhilePending(timeout);
-		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
-	}
-
 	template<typename PromisedType>
 		bool TimedWait(const std::future<PromisedType>& future, std::chrono::microseconds timeout)
 	{
@@ -100,12 +64,6 @@ namespace Assets { namespace Internal
 		bool TimedWaitUntil(const std::shared_ptr<Marker<PromisedType>>& future, std::chrono::steady_clock::time_point timeoutTime)
 	{
 		auto stallResult = future->StallWhilePendingUntil(timeoutTime);
-		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
-	}
-	
-	inline bool TimedWaitUntil(const IAsyncMarker& future, std::chrono::steady_clock::time_point timeoutTime)
-	{
-		auto stallResult = future.StallWhilePending(std::chrono::microseconds(500));	// no StallUntil(), so just have to pick a timeout time
 		return stallResult.value_or(AssetState::Pending) != AssetState::Pending;
 	}
 

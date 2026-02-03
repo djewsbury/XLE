@@ -13,6 +13,7 @@
 #include "../Metal/Resource.h"
 #include "../IAnnotator.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/Marker.h"
 #include "../../Utility/BitUtils.h"
 #include "../../xleres/FileList.h"
 

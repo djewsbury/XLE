@@ -14,6 +14,7 @@
 #include "../../../Assets/Continuation.h"
 #include "../../../Assets/Assets.h"
 #include "../../../ConsoleRig/GlobalServices.h"
+#include "../../../ConsoleRig/AttachablePtr.h"
 #include "../../../Formatters/FormatterUtils.h"
 #include <string>
 #include <sstream>

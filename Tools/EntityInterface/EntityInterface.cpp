@@ -10,6 +10,7 @@
 #include "../../Utility/Streams/PathUtils.h"
 #include "../../Utility/Threading/Mutex.h"
 #include <random>
+#include <sstream>
 
 namespace EntityInterface
 {

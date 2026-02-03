@@ -9,7 +9,7 @@
 #include "Mutex.h"
 #include "LockFree.h"
 #include "../HeapUtils.h"
-#include "../../ConsoleRig/AttachablePtr.h"
+#include "../FunctionUtils.h"
 #include <vector>
 #include <thread>
 #include <functional>
@@ -124,7 +124,8 @@ namespace Utility
         unsigned _requestedWorkerCount;
         std::string _name;
 
-        ConsoleRig::AttachablePtr<Internal::IYieldToPoolHelper> _yieldToPoolHelper;
+        struct Pimpl;
+        std::unique_ptr<Pimpl> _pimpl;
 
         void RunBlocks();
         void RunBlocksDrainThread();

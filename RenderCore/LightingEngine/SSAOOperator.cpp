@@ -15,6 +15,7 @@
 #include "../Format.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
+#include "../../Assets/Marker.h"
 #include "../../Math/Vector.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../xleres/FileList.h"

@@ -20,6 +20,7 @@
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/FormatterUtils.h"
 #include "../../Utility/ParameterBox.h"
+#include "thousandeyes/futures/then.h"
 #include <chrono>
 
 #include "../Metal/DeviceContext.h"
