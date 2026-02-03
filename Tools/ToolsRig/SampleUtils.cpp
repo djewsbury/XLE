@@ -65,7 +65,7 @@ namespace ToolsRig
 		std::shared_ptr<::Assets::OperationContext> opContext,
 		StringSection<> cfgLocation)
 	{
-		auto formatterFuture = ToolsRig::Services::GetEntityMountingTree().BeginFormatter("cfg/sample/Plugins");
+		auto formatterFuture = ToolsRig::BeginMountedFormatter("cfg/sample/Plugins");
 		::Assets::WhenAll(std::move(formatterFuture)).ThenConstructToPromise(
 			std::move(promise),
 			[opContext=std::move(opContext)](auto&& promise, const auto& formatter) mutable {

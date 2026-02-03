@@ -11,7 +11,7 @@
 namespace ToolsRig
 {
 	static ConsoleRig::WeakAttachablePtr<EntityInterface::IEntityMountingTree> s_entityMountingTree;
-    static ConsoleRig::WeakAttachablePtr<IPreviewSceneRegistry> s_previewSceneRegistry;
+	static ConsoleRig::WeakAttachablePtr<IPreviewSceneRegistry> s_previewSceneRegistry;
 
 	IPreviewSceneRegistry& Services::GetPreviewSceneRegistry()
 	{
@@ -33,9 +33,14 @@ namespace ToolsRig
 		return Services::GetEntityMountingTree().MountDocument(mntPoint, EntityInterface::CreateTextEntityDocument(srcFile));
 	}
 
-    void UnmountEntityDocument(EntityInterface::DocumentId docId)
+	void UnmountEntityDocument(EntityInterface::DocumentId docId)
 	{
 		Services::GetEntityMountingTree().UnmountDocument(docId);
+	}
+
+	std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginMountedFormatter(StringSection<> mntPoint)
+	{
+		return Services::GetEntityMountingTree().BeginFormatter(mntPoint);
 	}
 }
 

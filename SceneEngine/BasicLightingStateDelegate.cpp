@@ -12,7 +12,6 @@
 #include "../RenderCore/LightingEngine/ShadowProbes.h"
 #include "../RenderCore/Techniques/TechniqueDelegates.h"        // for Techniques::UtilityDelegateType
 #include "../Formatters/IDynamicFormatter.h"
-#include "../Tools/EntityInterface/EntityInterface.h"
 #include "../Tools/ToolsRig/ToolsRigServices.h"
 #include "../Assets/Assets.h"
 #include "../Assets/Continuation.h"
@@ -450,7 +449,7 @@ namespace SceneEngine
 		std::promise<std::shared_ptr<BasicLightingStateDelegate>>&& promise,
 		StringSection<> envSettingFileName)
 	{
-        auto fmttrFuture = ToolsRig::Services::GetEntityMountingTree().BeginFormatter(envSettingFileName);
+        auto fmttrFuture = ToolsRig::BeginMountedFormatter(envSettingFileName);
         ::Assets::WhenAll(std::move(fmttrFuture)).ThenConstructToPromise(
             std::move(promise),
             [](auto fmttr) { return std::make_shared<BasicLightingStateDelegate>(*fmttr); });

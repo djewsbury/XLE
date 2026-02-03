@@ -5,9 +5,11 @@
 #pragma once
 
 #include "../../Utility/StringUtils.h"
-#include <cinttypes>
+#include <cstdint>
+#include <future>
 
 namespace EntityInterface { class IEntityMountingTree; using DocumentId = uint64_t; }
+namespace Formatters { class IDynamicInputFormatter; }
 
 namespace ToolsRig
 {
@@ -22,5 +24,7 @@ namespace ToolsRig
 
     EntityInterface::DocumentId MountTextEntityDocument(StringSection<> mntPoint, StringSection<> srcFile);
     void UnmountEntityDocument(EntityInterface::DocumentId);
+
+    std::future<std::shared_ptr<Formatters::IDynamicInputFormatter>> BeginMountedFormatter(StringSection<> mntPoint);
 }
 
