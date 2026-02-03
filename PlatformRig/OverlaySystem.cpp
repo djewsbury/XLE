@@ -77,6 +77,13 @@ namespace PlatformRig
             _pimpl->_childSystems[_pimpl->_activeChildIndex].second->Render(parserContext);
     }
 
+    void OverlaySystemSwitch::Update(float deltaTime)
+    {
+        if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size()))
+            if (auto ut = dynamic_cast<IUpdateTick*>(_pimpl->_childSystems[_pimpl->_activeChildIndex].second.get()))
+                ut->Update(deltaTime);
+    }
+
     void OverlaySystemSwitch::SetActivationState(bool newState) 
     {
         if (!newState) {
@@ -176,6 +183,13 @@ namespace PlatformRig
         }
     }
 
+    void OverlaySystemSet::Update(float deltaTime)
+    {
+        for (auto i=_pimpl->_childSystems.begin(); i!=_pimpl->_childSystems.end(); ++i)
+            if (auto ut = dynamic_cast<IUpdateTick*>(i->get()))
+                ut->Update(deltaTime);
+    }
+
     void OverlaySystemSet::SetActivationState(bool newState) 
     {
         for (auto i=_pimpl->_childSystems.begin(); i!=_pimpl->_childSystems.end(); ++i)
@@ -245,8 +259,10 @@ namespace PlatformRig
         const InputContext& context,
         const OSServices::InputSnapshot& evnt) { return ProcessInputResult::Passthrough; }
     IOverlay::~IOverlay() {}
+    IUpdateTick::~IUpdateTick() {}
 	void IOverlayExtended::SetActivationState(bool newState) {}
 	auto IOverlayExtended::GetOverlayState() const -> OverlayState { return {}; }
+    IOverlayExtended::~IOverlayExtended() {}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

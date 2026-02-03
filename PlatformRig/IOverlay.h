@@ -43,6 +43,13 @@ namespace PlatformRig
         virtual ~IOverlay();
     };
 
+    class IUpdateTick
+    {
+    public:
+        virtual void Update(float deltaTime) = 0;
+        virtual ~IUpdateTick();
+    };
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     class IInputListener;
@@ -59,17 +66,18 @@ namespace PlatformRig
 			RefreshMode _refreshMode = RefreshMode::EventBased;
 		};
 		virtual OverlayState GetOverlayState() const;
+        virtual ~IOverlayExtended();
     };
 
-    class OverlaySystemSwitch : public IOverlay, public IOverlayExtended
+    class OverlaySystemSwitch : public IOverlay, public IOverlayExtended, public IUpdateTick
     {
     public:
         virtual ProcessInputResult ProcessInput(
 			const InputContext& context,
 			const OSServices::InputSnapshot& evnt) override;
 
-        void Render(
-            RenderCore::Techniques::ParsingContext& parserContext) override;
+        void Render(RenderCore::Techniques::ParsingContext& parserContext) override;
+        void Update(float deltaTime) override;
         void SetActivationState(bool newState) override;
 		OverlayState GetOverlayState() const override;
 
@@ -91,15 +99,15 @@ namespace PlatformRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class OverlaySystemSet : public IOverlay, public IOverlayExtended
+    class OverlaySystemSet : public IOverlay, public IOverlayExtended, public IUpdateTick
     {
     public:
         virtual ProcessInputResult ProcessInput(
 			const InputContext& context,
 			const OSServices::InputSnapshot& evnt) override;
 
-        void Render(
-            RenderCore::Techniques::ParsingContext& parserContext) override;
+        void Render(RenderCore::Techniques::ParsingContext& parserContext) override;
+        void Update(float deltaTime) override;
         void SetActivationState(bool newState) override;
 		virtual OverlayState GetOverlayState() const override;
 
