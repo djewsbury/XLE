@@ -3,23 +3,18 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "OverlayContext.h"
-#include "Font.h"
 #include "FontRendering.h"
 #include "../RenderCore/Techniques/Techniques.h"
 #include "../RenderCore/Techniques/DrawableSubmitter.h"
 #include "../RenderCore/Techniques/CommonBindings.h"
 #include "../RenderCore/Techniques/Apparatuses.h"
+#include "../RenderCore/Techniques/ParsingContext.h"
 #include "../RenderCore/Format.h"
 #include "../RenderCore/Types.h"
 #include "../RenderCore/StateDesc.h"
 #include "../RenderCore/UniformsStream.h"
 #include "../RenderOverlays/OverlayApparatus.h"
-#include "../Math/Transformations.h"
 #include "../Assets/Assets.h"
-#include "../OSServices/Log.h"
-#include "../ConsoleRig/ResourceBox.h"
-#include "../Utility/StringFormat.h"
-#include "../Utility/StringUtils.h"
 
 using namespace Utility::Literals;
 
@@ -291,4 +286,40 @@ namespace RenderOverlays
 	}
 
 	IOverlayContext::~IOverlayContext() {}
+
+    std::unique_ptr<ImmediateOverlayContext>
+		MakeImmediateOverlayContext(
+            RenderCore::Techniques::ParsingContext& parsingContext,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
+            FontRenderingManager* fontRenderingManager)
+	{
+		auto result = std::make_unique<ImmediateOverlayContext>(parsingContext.GetThreadContext(), immediateDrawables, fontRenderingManager);
+		result->AttachService2(parsingContext);
+		return result;
+	}
+
+    std::unique_ptr<ImmediateOverlayContext>
+		MakeImmediateOverlayContext(
+            RenderCore::Techniques::ParsingContext& parsingContext,
+			RenderOverlays::OverlayApparatus& apparatus)
+	{
+		auto result = std::make_unique<ImmediateOverlayContext>(parsingContext.GetThreadContext(), *apparatus._immediateDrawables, apparatus._fontRenderingManager.get());
+		result->AttachService2(parsingContext);
+		return result;
+	}
+
+    RenderOverlays::Rect AsRect(const RenderCore::ViewportDesc& viewport)
+	{
+		using Coord = RenderOverlays::Coord;
+		return { Coord(viewport._x), Coord(viewport._y), Coord(viewport._x+viewport._width), Coord(viewport._y+viewport._height) };
+	}
+
+    RenderOverlays::Rect GetViewportAsRect(IOverlayContext& overlayContext)
+	{
+		if (auto* parsingContext = overlayContext.GetService<Techniques::ParsingContext>())
+			return AsRect(parsingContext->GetViewport());
+		assert(0);
+		return RenderOverlays::Rect::Zero();
+	}
+
 }

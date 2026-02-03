@@ -13,7 +13,7 @@
 #pragma warning(disable:4324)
 
 namespace RenderCore { class IThreadContext; class UniformsStreamInterface; }
-namespace RenderCore { namespace Techniques { class IDrawableSubmitter; } }
+namespace RenderCore::Techniques { class IDrawableSubmitter; class ParsingContext; }
 namespace RenderOverlays { class OverlayApparatus; }
 
 namespace RenderOverlays
@@ -88,4 +88,18 @@ namespace RenderOverlays
 		MakeImmediateOverlayContext(
             RenderCore::IThreadContext& threadContext,
 			RenderOverlays::OverlayApparatus& apparatus);
+
+    std::unique_ptr<ImmediateOverlayContext>
+		MakeImmediateOverlayContext(
+            RenderCore::Techniques::ParsingContext&,
+			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
+            FontRenderingManager* fontRenderingManager = nullptr);
+
+    std::unique_ptr<ImmediateOverlayContext>
+		MakeImmediateOverlayContext(
+            RenderCore::Techniques::ParsingContext&,
+			RenderOverlays::OverlayApparatus& apparatus);
+
+    RenderOverlays::Rect AsRect(const RenderCore::ViewportDesc& viewport);
+    RenderOverlays::Rect GetViewportAsRect(IOverlayContext&);
 }
