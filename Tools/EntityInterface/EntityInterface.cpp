@@ -385,7 +385,7 @@ namespace EntityInterface
 				assert(mnti->_depth > inputSplit.GetSectionCount());
 				assert(mnti->_partialHashes.size() > inputSplit.GetSectionCount());
 				
-				if (mnti->_partialHashes[inputSplit.GetSectionCount()] != inputSplitHash) {
+				if (mnti->_partialHashes[inputSplit.GetSectionCount()] == inputSplitHash) {
 					std::string externalPosition { 
 						mnti->_mountPointSplit.GetSections()[inputSplit.GetSectionCount()].begin(), 
 						mnti->_mountPointSplit.GetSections()[mnti->_mountPointSplit.GetSectionCount()-1].end() };
