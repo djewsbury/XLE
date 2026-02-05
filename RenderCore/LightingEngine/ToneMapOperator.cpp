@@ -442,7 +442,7 @@ namespace RenderCore { namespace LightingEngine
 		_atomicCounterBufferView = atomicBuffer->CreateTextureView(BindFlag::UnorderedAccess, TextureViewDesc{TextureViewDesc::FormatFilter{Format::R32_UINT}});
 
 		_lookupTable = _pool->GetDevice()->CreateResource(
-			CreateDesc(BindFlag::ConstantBuffer, LinearBufferDesc::Create(256*sizeof(float))),
+			CreateDesc(BindFlag::ConstantBuffer | BindFlag::TransferDst, LinearBufferDesc::Create(256*sizeof(float))),
 			"aces-tonemap-fixed-curve")->CreateBufferView();
 		_lookupTableInitialized = false;
 	}

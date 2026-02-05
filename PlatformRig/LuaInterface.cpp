@@ -701,6 +701,7 @@ namespace PlatformRig
 #else
 
 	std::shared_ptr<ConsoleRig::IConsoleScriptingInterface> CreateLuaScripting(std::shared_ptr<ConsoleRig::ConsoleVariableStorage>) { return nullptr; }
+	std::shared_ptr<ConsoleRig::IConsoleScriptingInterface> CreateLuaScripting(lua_State*, std::shared_ptr<ConsoleRig::ConsoleVariableStorage>) { return nullptr; }
 
 #endif
 

@@ -400,7 +400,9 @@ namespace RenderCore { namespace Assets
 		sr._destination = MakeIteratorRange(tempBuffer);
 		sr._id = {0,0};
 		sr._pitches = MakeTexturePitches(inputDesc._textureDesc);
-		srcPkt.PrepareData(MakeIteratorRange(&sr, &sr+1)).get();
+		auto futureData = srcPkt.PrepareData(MakeIteratorRange(&sr, &sr+1));
+		YieldToPool(futureData);
+		futureData.get();
 
 		// Build mips needs to know if we're dealing with SRGB or linear data... If it's typeless, we have to assume SRGB, given that we have no specific direction on this
 		// todo -- we may have to make this a flag in the PostConvert object -- particularly given that normal maps may come through this path

@@ -32,8 +32,7 @@ float3 SampleSpecularIBL_Ref(
         // note -- "CalculateSpecular" has NdotL term built-in
     precise float3 brdf_costheta = CalculateSpecular(float3(0,0,1), viewTangentSpace, incidentTangentSpace, halfVectorTangentSpace, specParam); // (also contains NdotL term)
 
-    if (all(brdf_costheta <= 0))
-        return 0;
+    if (all(brdf_costheta <= 0)) { pdf = 0;  return 0; }
 
     pdf = SamplerHeitzGGXVNDF_PDFh(halfVectorTangentSpace, viewTangentSpace, alphad);
     // change-of-variables conversion for this (see notes in GenerateSplitTerm)

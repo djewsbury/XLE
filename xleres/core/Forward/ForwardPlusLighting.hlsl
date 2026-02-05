@@ -41,7 +41,7 @@ Texture2D<float> SSRConfidence : register(t5, space2);
 #endif
 Texture2D<float2> GlossLUT : register(t15, space2);			// this is the look up table used in the split-sum IBL glossy reflections
 
-Texture2D<float>			NoiseTexture 			: register(t13, space2);
+Texture2D<float>			FPNoiseTexture 			: register(t13, space2);
 SamplerComparisonState		ShadowSampler           : register(s16, space2);
 SamplerState				ShadowDepthSampler      : register(s17, space2);
 Texture2DArray<float> 		PriorityLightShadowTextures BIND_SHADOW_T3;
@@ -198,7 +198,7 @@ float2 GlossLUT_Sample(float2 tc) { return GlossLUT.SampleLevel(ClampingSampler,
 #if SPECULAR_IBL
 	float3 SpecularIBL_Sample(float3 cubemapCoords, float mipmapLevel) { return SpecularIBL.SampleLevel(DefaultSampler, cubemapCoords, mipmapLevel).rgb; }
 #endif
-Texture2D<float> GetNoiseTexture() { return NoiseTexture; }
+Texture2D<float> GetNoiseTexture() { return FPNoiseTexture; }
 SamplerComparisonState GetShadowSampler() { return ShadowSampler; }
 SamplerState GetShadowDepthSampler() { return ShadowDepthSampler; }
 
