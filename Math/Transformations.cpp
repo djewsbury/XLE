@@ -890,6 +890,11 @@ namespace XLEMath
         lhs(0,2) *= rhs[2]; lhs(1,2) *= rhs[2]; lhs(2,2) *= rhs[2];
     }
 
+    void            Combine_IntoLHS(Float3x4& lhs, const Float3x4& rhs) { lhs = Combine(lhs, rhs); }
+    void            Combine_IntoLHS(Float4x4& lhs, const Float4x4& rhs) { lhs = Combine(lhs, rhs); }
+    void            Combine_IntoRHS(const Float3x4& lhs, Float3x4& rhs) { rhs = Combine(lhs, rhs); }
+    void            Combine_IntoRHS(const Float4x4& lhs, Float4x4& rhs) { rhs = Combine(lhs, rhs); }
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     Float3          TransformPoint(const Float3x4& transform, Float3 pt)

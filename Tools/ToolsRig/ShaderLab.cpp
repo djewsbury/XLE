@@ -593,5 +593,22 @@ namespace ToolsRig
 			});
 	}
 
+	void RegisterPrimitiveSteps(ShaderLab& shaderLab)
+	{
+		shaderLab.RegisterOperation(
+			"InvalidateUniforms",
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used within sequence"));
+				sequence->CreateStep_InvalidateUniforms();
+			});
+
+		shaderLab.RegisterOperation(
+			"BringUpToDateUniforms",
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used within sequence"));
+				sequence->CreateStep_BringUpToDateUniforms();
+			});
+	}
+
 }
 

@@ -155,6 +155,7 @@ namespace ToolsRig
 	};
 
 	void RegisterVisualizeAttachment(ShaderLab&);
+	void RegisterPrimitiveSteps(ShaderLab&);
 
 	enum class VisualizeAttachmentShader { Color, Depth, Normal, Motion, Alpha, GreyScale, GBufferNormals };
 	const char* AsString(VisualizeAttachmentShader);

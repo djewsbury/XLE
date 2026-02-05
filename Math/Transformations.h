@@ -196,6 +196,11 @@ namespace XLEMath
 	void            Combine_IntoLHS(Float3x4& transform, ArbitraryRotation rotation);
     void            Combine_IntoLHS(Float3x4& transform, Quaternion rotation);
 
+    void            Combine_IntoLHS(Float3x4&, const Float3x4&);
+    void            Combine_IntoLHS(Float4x4&, const Float4x4&);
+    void            Combine_IntoRHS(const Float3x4&, Float3x4&);
+    void            Combine_IntoRHS(const Float4x4&, Float4x4&);
+
     Float4x4        Combine(const Float3x3& rotation, const Float4x4& transform);
 	Float4x4        Combine(const Float4x4& transform, const Float3x3& rotation);
     Float3x4        Combine(const Float3x3& rotation, const Float3x4& transform);
