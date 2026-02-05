@@ -207,6 +207,9 @@ namespace Utility
             template<typename I=Iterator>
                 auto data() const -> decltype(AsPointer(std::declval<const I>())) { return AsPointer(this->first); }
 
+            template<typename I=Iterator>
+                auto AsVector() const -> std::vector<std::remove_cvref_t<decltype(*std::declval<const I>())>> { return std::vector<std::remove_cvref_t<decltype(*std::declval<const I>())>>(this->first, this->second); }
+
             template<typename OtherIteratorType>
                 IteratorRange<OtherIteratorType> Cast() const { return IteratorRange<OtherIteratorType>(Internal::StaticIteratorCast<OtherIteratorType>(this->first), Internal::StaticIteratorCast<OtherIteratorType>(this->second)); }
 
