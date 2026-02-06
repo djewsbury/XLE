@@ -300,15 +300,19 @@ namespace RenderCore { namespace Techniques
         std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
         const Assets::TextureCompilationRequest& compileRequest)
     {
-        assert(compileRequest._subCompiler);
-        std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
-        auto containerFuture = containerPromise.get_future();
-        ::Assets::AutoConstructToPromise(std::move(containerPromise), compileRequest);
-        ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
-            std::move(promise),
-            [](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
-                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, {});
-            });
+        TRY {
+            assert(compileRequest._subCompiler);
+            std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
+            auto containerFuture = containerPromise.get_future();
+            ::Assets::AutoConstructToPromise(std::move(containerPromise), compileRequest);
+            ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
+                std::move(promise),
+                [](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
+                    ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, {});
+                });
+        } CATCH(...) {
+            promise.set_exception(std::current_exception());
+        } CATCH_END
     }
 
     void DeferredShaderResource::ConstructToPromise(
@@ -316,15 +320,19 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<::Assets::OperationContext> opContext,
         const Assets::TextureCompilationRequest& compileRequest)
     {
-        assert(compileRequest._subCompiler);
-        std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
-        auto containerFuture = containerPromise.get_future();
-        ::Assets::AutoConstructToPromise(std::move(containerPromise), opContext, compileRequest);
-        ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
-            std::move(promise),
-            [](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
-                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, {});
-            });
+        TRY {
+            assert(compileRequest._subCompiler);
+            std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
+            auto containerFuture = containerPromise.get_future();
+            ::Assets::AutoConstructToPromise(std::move(containerPromise), opContext, compileRequest);
+            ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
+                std::move(promise),
+                [](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
+                    ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, {});
+                });
+        } CATCH(...) {
+            promise.set_exception(std::current_exception());
+        } CATCH_END
     }
 
     void DeferredShaderResource::ConstructToPromise(
@@ -333,27 +341,35 @@ namespace RenderCore { namespace Techniques
         const Assets::TextureCompilationRequest& compileRequest,
         ProgressiveResultFn&& intermediateResultsFn)
     {
-        assert(compileRequest._subCompiler);
-        std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
-        auto containerFuture = containerPromise.get_future();
-        ::Assets::AutoConstructToPromise(std::move(containerPromise), opContext, compileRequest, std::move(intermediateResultsFn));
-        ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
-            std::move(promise),
-            [](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
-                ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, {});
-            });
+        TRY {
+            assert(compileRequest._subCompiler);
+            std::promise<std::shared_ptr<Assets::TextureArtifact>> containerPromise;
+            auto containerFuture = containerPromise.get_future();
+            ::Assets::AutoConstructToPromise(std::move(containerPromise), opContext, compileRequest, std::move(intermediateResultsFn));
+            ::Assets::WhenAll(std::move(containerFuture)).ThenConstructToPromise(
+                std::move(promise),
+                [](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, auto containerActual) mutable {
+                    ConstructToPromiseArtifact(std::move(thatPromise), *containerActual, {});
+                });
+        } CATCH(...) {
+            promise.set_exception(std::current_exception());
+        } CATCH_END
     }
 
     void DeferredShaderResource::ConstructToPromise(
 		std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
 		StringSection<> initializer)
     {
-        auto splitter = MakeFileNameSplitter(initializer);
-        if (XlEqStringI(splitter.Extension(), "compound") || XlEqStringI(splitter.Extension(), "hlsl")) {
-            ConstructToPromiseTextureCompile(std::move(promise), splitter);
-        } else {
-            ConstructToPromiseImageFile(std::move(promise), splitter);
-        }
+        TRY {
+            auto splitter = MakeFileNameSplitter(initializer);
+            if (XlEqStringI(splitter.Extension(), "compound") || XlEqStringI(splitter.Extension(), "hlsl")) {
+                ConstructToPromiseTextureCompile(std::move(promise), splitter);
+            } else {
+                ConstructToPromiseImageFile(std::move(promise), splitter);
+            }
+        } CATCH(...) {
+            promise.set_exception(std::current_exception());
+        } CATCH_END
     }
 
     void DeferredShaderResource::ConstructToPromise(
@@ -361,25 +377,33 @@ namespace RenderCore { namespace Techniques
         std::shared_ptr<::Assets::OperationContext> opContext,
 		StringSection<> initializer)
     {
-        auto splitter = MakeFileNameSplitter(initializer);
-        if (XlEqStringI(splitter.Extension(), "compound") || XlEqStringI(splitter.Extension(), "hlsl")) {
-            ConstructToPromiseTextureCompile(std::move(promise), std::move(opContext), splitter);
-        } else {
-            ConstructToPromiseImageFile(std::move(promise), splitter);
-        }
+        TRY {
+            auto splitter = MakeFileNameSplitter(initializer);
+            if (XlEqStringI(splitter.Extension(), "compound") || XlEqStringI(splitter.Extension(), "hlsl")) {
+                ConstructToPromiseTextureCompile(std::move(promise), std::move(opContext), splitter);
+            } else {
+                ConstructToPromiseImageFile(std::move(promise), splitter);
+            }
+        } CATCH(...) {
+            promise.set_exception(std::current_exception());
+        } CATCH_END
     }
 
     BufferUploads::TransactionID DeferredShaderResource::ConstructToTrackablePromise(
         std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
         StringSection<> initializer)
     {
-        auto splitter = MakeFileNameSplitter(initializer);
-        if (XlEqStringI(splitter.Extension(), "compound") || XlEqStringI(splitter.Extension(), "hlsl")) {
-            ConstructToPromiseTextureCompile(std::move(promise), splitter);
-            return BufferUploads::TransactionID_Invalid;
-        } else {
-            return ConstructToPromiseImageFile(std::move(promise), splitter);
-        }
+        TRY {
+            auto splitter = MakeFileNameSplitter(initializer);
+            if (XlEqStringI(splitter.Extension(), "compound") || XlEqStringI(splitter.Extension(), "hlsl")) {
+                ConstructToPromiseTextureCompile(std::move(promise), splitter);
+                return BufferUploads::TransactionID_Invalid;
+            } else {
+                return ConstructToPromiseImageFile(std::move(promise), splitter);
+            }
+        } CATCH(...) {
+            promise.set_exception(std::current_exception());
+        } CATCH_END
     }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
