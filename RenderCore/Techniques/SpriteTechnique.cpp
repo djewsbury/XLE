@@ -7,6 +7,10 @@
 #include "../../Utility/StringFormat.h"
 #include <sstream>
 
+#if XLE_SPRITE_TECHNIQUE_LOG_SHADERS
+	#include <iostream>
+#endif
+
 using namespace Utility::Literals;
 
 namespace Utility
@@ -154,6 +158,7 @@ namespace RenderCore { namespace Techniques
 
 			GraphLanguage::NodeGraphSignature WriteFragment(std::stringstream& str, StringSection<> name);
 			GraphLanguage::NodeGraphSignature WriteGSFragment(std::stringstream& str, StringSection<> name, unsigned vertexCount);
+			GraphLanguage::NodeGraphSignature WriteGSFragment_TriangleOutput(std::stringstream& str, StringSection<> name);
 
 			bool HasAttributeFor(StringSection<> semantic, unsigned semanticIdx);
 
@@ -350,6 +355,57 @@ namespace RenderCore { namespace Techniques
 							[s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
 					if (i != _workingAttributes.end()) {
 						WriteCastOrAssignExpression(str, *i, p._type);
+					} else {
+						WriteDefaultValueExpression(str, p._type);
+					}
+					str << ";" << std::endl;
+				}
+				str << "\toutputStream.Append(output" << vIdx << ");" << std::endl;
+			}
+
+			str << "}" << std::endl;
+			return _signature;
+		}
+
+		GraphLanguage::NodeGraphSignature FragmentWriter::WriteGSFragment_TriangleOutput(std::stringstream& str, StringSection<> name)
+		{
+			// (note -- some SV_ values might still need to be direct function parameters?)
+			str << "struct " << name << "_" << s_VSToGS << std::endl << "{" << std::endl;
+			for (const auto& p:_signature.GetParameters()) {
+				if (p._direction != GraphLanguage::ParameterDirection::In) continue;
+				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
+			}
+			str << "};" << std::endl << std::endl;
+
+			str << "struct " << name << "_" << s_GSToPS << std::endl << "{" << std::endl;
+			for (const auto& p:_signature.GetParameters()) {
+				if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+				str << "\t" << p._type << " " << p._name << ":" << p._semantic << ";" << std::endl;
+			}
+			str << "};" << std::endl << std::endl;
+
+			const unsigned vertexCount = 3;
+			str << "[maxvertexcount(" << vertexCount << ")]" << std::endl;
+			str << "\tvoid " << name << "(triangle " << name << "_" << s_VSToGS << " input[" << vertexCount << "], inout TriangleStream<" << name << "_" << s_GSToPS << "> outputStream)" << std::endl;
+			str << "{" << std::endl;
+			str << _body.str();
+
+			// write the code that should move values from the working attributes into the output vertices
+			for (unsigned vIdx=0; vIdx<vertexCount; ++vIdx) {
+				str << "\t" << name << "_" << s_GSToPS << " output" << vIdx << ";" << std::endl;
+				for (const auto& p:_signature.GetParameters()) {
+					if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
+					str << "\t" << "output" << vIdx << "." << p._name << " = ";
+					// look for the working parameter that matches the semantic (consider cases where we have separate values for each vertex
+					auto s = SplitSemanticAndIdx(p._semantic);
+					assert(s.second == 0);		// funny things happen if this is not zero
+					auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
+						[s, vIdx](const auto& q) { return q._semanticIdx == vIdx && XlEqString(s.first, q._semantic); });
+					if (i == _workingAttributes.end() && vIdx != 0)
+						i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
+							[s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
+					if (i != _workingAttributes.end()) {
+						WriteCastOrAssignExpression(str, *i, p._type, vIdx);
 					} else {
 						WriteDefaultValueExpression(str, p._type);
 					}
@@ -1122,6 +1178,15 @@ void WriteBarycentricCoords(
 		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
 		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
+#if XLE_SPRITE_TECHNIQUE_LOG_SHADERS
+		std::cout << "----- VS ----" << std::endl;
+		std::cout << vs.str() << std::endl;
+		std::cout << "----- GS ----" << std::endl;
+		std::cout << gs.str() << std::endl;
+		std::cout << "----- PS ----" << std::endl;
+		std::cout << ps.str() << std::endl;
+#endif
+
 		std::vector<PatchDelegateOutput> result;
 		result.emplace_back(std::move(vsOutput));
 		result.emplace_back(std::move(psOutput));
@@ -1284,7 +1349,7 @@ void WriteBarycentricCoords(
 
 				// GS signature isn't strictly the signature of a particular function, but contains the members of the
 				// vertex input and output structures
-				gsSignature = writerHelper.WriteGSFragment(gs, "GSEntry", 3);		// assuming triangles
+				gsSignature = writerHelper.WriteGSFragment_TriangleOutput(gs, "GSEntry");
 			}
 		}
 
@@ -1361,6 +1426,9 @@ void WriteBarycentricCoords(
 		psOutput._resource._entrypoint._shaderModel = s_SMPS;
 		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
 		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
+
+		// std::cout << "----- VS ----" << std::endl;
+		// std::cout << vs.str() << std::endl;
 
 		std::vector<PatchDelegateOutput> result;
 		result.emplace_back(std::move(vsOutput));
