@@ -110,21 +110,25 @@ namespace ToolsRig { namespace Camera
 		float deltaCameraYaw, deltaCameraPitch;
 		std::tie(deltaCameraYaw, deltaCameraPitch, deltaPos) = SlewUpdateInternal(slew, dt, input, allowMouse);
 
-		// deltaCameraYaw & pitch modify the position of the focus, relative to the position
-		auto spherical = CartesianToSpherical(camera._focus - camera._position);
-		spherical[0] -= deltaCameraPitch;
-		spherical[1] += deltaCameraYaw;
-		const float safetyThreshold = 0.01f;
-		spherical[0] = Clamp(spherical[0], safetyThreshold, gPI - safetyThreshold);
-		camera._focus = camera._position + SphericalToCartesian(spherical);
+		if (std::abs(deltaCameraYaw) > 1e-3f || std::abs(deltaCameraPitch) > 1e-3f) {
+			// deltaCameraYaw & pitch modify the position of the focus, relative to the position
+			auto spherical = CartesianToSpherical(camera._focus - camera._position);
+			spherical[0] -= deltaCameraPitch;
+			spherical[1] += deltaCameraYaw;
+			const float safetyThreshold = 0.01f;
+			spherical[0] = Clamp(spherical[0], safetyThreshold, gPI - safetyThreshold);
+			camera._focus = camera._position + SphericalToCartesian(spherical);
+		}
 
-		auto cameraToWorld = MakeCameraToWorld(
-			Normalize(camera._focus - camera._position),
-			Float3(0.f, 0.f, 1.f), camera._position);
+		if (std::abs(deltaPos[0]) > 1e-3f || std::abs(deltaPos[1]) > 1e-3f || std::abs(deltaPos[2]) > 1e-3f) {
+			auto cameraToWorld = MakeCameraToWorld(
+				Normalize(camera._focus - camera._position),
+				Float3(0.f, 0.f, 1.f), camera._position);
 
-		auto trans = TransformDirectionVector(cameraToWorld, Float3(deltaPos));
-		camera._position += trans;
-		camera._focus += trans;
+			auto trans = TransformDirectionVector(cameraToWorld, Float3(deltaPos));
+			camera._position += trans;
+			camera._focus += trans;
+		}
 	}
 
 	void Slew::Update(VisCameraSettings& camera, float dt, const OSServices::InputSnapshot& input) const
@@ -255,7 +259,8 @@ namespace ToolsRig { namespace Camera
 			if (input._mouseDelta[0] || input._mouseDelta[1]) {
 				if (modifierMode == Translate) {
 					// Use MakeCameraToWorld3x4() to maximize compatibility with the calculation path used for rendering
-					auto cameraToWorld = MakeCameraToWorld3x4(camera._focus - camera._position, Float3{0,0,1}, camera._position);
+					Float3 cameraForward = camera._focus - camera._position;
+					auto cameraToWorld = MakeCameraToWorld3x4(cameraForward, Float3{0,0,1}, camera._position);
 					auto cameraRight = ExtractRight_Cam(cameraToWorld);
 					auto cameraUp = ExtractUp_Cam(cameraToWorld);
 
@@ -264,7 +269,7 @@ namespace ToolsRig { namespace Camera
 						=  cameraRight * -input._mouseDelta[0] * size * 0.1f * _translationSpeed
 						+  cameraUp * input._mouseDelta[1] * size * 0.1f * _translationSpeed;
 					camera._position += translation;
-					camera._focus += translation;
+					camera._focus = camera._position + cameraForward;
 				}
 			}
 
