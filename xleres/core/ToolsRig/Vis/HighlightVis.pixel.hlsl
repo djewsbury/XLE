@@ -69,8 +69,9 @@ uint Marker(uint2 pos)
 
 bool HatchFilter(uint2 position)
 {
-	uint p = uint(position.x) + uint(position.y);
-	return ((p/4) % 3) == 0;
+	uint p = uint(position.x/2) + uint(position.y);
+	uint width = (uint(float(position.x)/280 - float(position.y)/140 + 2048) + p/64)%4;
+	return !(p&4) && (((p/4) % 15) < (2*width));
 }
 
 float4 HighlightByStencil(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
@@ -80,7 +81,7 @@ float4 HighlightByStencil(float4 position : SV_Position, float2 texCoord : TEXCO
 	uint marker = Marker(uint2(position.xy));
 	if (marker == DummyMarker) { discard; }
 
-	return float4(.5f*GetDistinctFloatColour(marker), .5f*1.f);
+	return float4(GetDistinctFloatColour(marker), .25f*1.f);
 }
 
 float4 OutlineByStencil(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0

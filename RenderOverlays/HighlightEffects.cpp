@@ -133,6 +133,9 @@ namespace RenderOverlays
 
         std::shared_ptr<Metal::ShaderProgram> _outlineShader;
         Metal::BoundUniforms _outlineShaderUniforms;
+        ::Assets::DependencyValidation _depVal;
+
+        const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
         HighlightByStencilShaders(std::shared_ptr<Metal::ShaderProgram> highlightShader, std::shared_ptr<Metal::ShaderProgram> outlineShader = nullptr)
         : _highlightShader(std::move(highlightShader)), _outlineShader(std::move(outlineShader))
@@ -145,6 +148,11 @@ namespace RenderOverlays
             _highlightShaderUniforms = {*_highlightShader, usi};
             if (_outlineShader)
                 _outlineShaderUniforms = {*_outlineShader, usi};
+
+            std::vector<::Assets::DependencyValidationMarker> depVals;
+            depVals.emplace_back(_highlightShader->GetDependencyValidation());
+            if (_outlineShader) depVals.emplace_back(_outlineShader->GetDependencyValidation());
+            _depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
         }
 
         HighlightByStencilShaders() = default;
