@@ -47,8 +47,10 @@ namespace Assets
                         // the top level with "second" nested within and then "third"
                         // nested within that.
                         immediateConfigName._start = immediateConfigName.end()+1;
-                        if (immediateConfigName.begin() < configName.end())
+                        if (immediateConfigName.begin() < configName.end()) {
+                            assert(*immediateConfigName.begin() != ':'); // an empty section in the chain will confuse the logic here
                             immediateConfigName._end = std::find(immediateConfigName.begin(), configName.end(), ':');
+                        }
                         if (immediateConfigName.begin() >= immediateConfigName.end())
                             return formatter.CreateChildFormatter();
                         // else continue searching for the next config name

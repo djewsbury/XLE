@@ -128,7 +128,7 @@ namespace EntityInterface
 			auto split = MakeFileNameSplitter(src);
 			_src = split.AllExceptParameters().AsString();
 			if (!split.Parameters().IsEmpty())
-				_internalPointPrefix = Concatenate(split.Parameters(), "//");
+				_internalPointPrefix = Concatenate(split.Parameters(), "/");
 			_directorySearchRules.SetBaseFile(_src);
 		}
 
