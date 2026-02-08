@@ -81,7 +81,8 @@ float4 HighlightByStencil(float4 position : SV_Position, float2 texCoord : TEXCO
 	uint marker = Marker(uint2(position.xy));
 	if (marker == DummyMarker) { discard; }
 
-	return float4(GetDistinctFloatColour(marker), .25f*1.f);
+	const float alpha = 0.125f;
+	return float4(alpha*GetDistinctFloatColour(marker), alpha);
 }
 
 float4 OutlineByStencil(float4 position : SV_Position, float2 texCoord : TEXCOORD0) : SV_Target0
