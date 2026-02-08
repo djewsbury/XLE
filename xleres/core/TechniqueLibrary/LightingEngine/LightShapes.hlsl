@@ -310,7 +310,7 @@ float ConeLightShapeMultipler(LightDesc light, float3 worldPosition, LightScreen
     float3 A = worldPosition - light.Position;
     float cosTheta = dot(light.OrientationY, A) * rsqrt(dot(A, A));
     float x = (cosTheta-light.CosConeAngle) / (1-light.CosConeAngle);
-    return pow(saturate(x), 0.125);       // simpel falloff, not based on anything physical
+    return pow(saturate(x), 0.66);       // simple falloff, not based on anything physical
 }
 
 float3 ConeLightResolve(
