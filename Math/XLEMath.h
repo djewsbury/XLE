@@ -81,7 +81,7 @@ namespace XLEMath
             // situations where floating point accuracy becomes questionable)
             // The epsilon value is a little arbitrary
         if (value > Primitive(-1e-15) && value < Primitive(1e-15)) return false;
-        *output = 1.f / std::sqrt(value); 
+        *output = Primitive(1) / std::sqrt(value); 
         return true;
     }
 
