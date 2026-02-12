@@ -481,15 +481,9 @@ namespace RenderCore { namespace Metal_Vulkan
 		_pipelineLayout = checked_cast<CompiledPipelineLayout*>(&newPipelineLayout);
 
 		if (_capturedStates) {
-			auto newSequentialHashes = _pipelineLayout->GetSequentialDescSetHashes();
-			unsigned c=0;
-			for (; c<_pipelineLayout->GetDescriptorSetCount(); ++c) {
-				if (newSequentialHashes[c] != _capturedStates->_sequentialDescSetBindingHash[c]) {
-					_capturedStates->_currentDescSet[c] = nullptr;
-					_capturedStates->_sequentialDescSetBindingHash[c] = 0;
-				}
-			}
-			for (; c<s_maxBoundDescriptorSetCount; ++c) {
+			// rebind all descriptor sets, regardless. This is necessary to ensure that we bind the descriptor set with the new pipeline layout in the
+			// _commandList.BindDescriptorSets() call
+			for (unsigned c=0; c<s_maxBoundDescriptorSetCount; ++c) {
 				_capturedStates->_currentDescSet[c] = nullptr;
 				_capturedStates->_sequentialDescSetBindingHash[c] = 0;
 			}
