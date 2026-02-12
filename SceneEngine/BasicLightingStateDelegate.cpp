@@ -174,6 +174,8 @@ namespace SceneEngine
         LightingEngine::ILightScene& lightScene,
         std::shared_ptr<::Assets::OperationContext> operationContext)
     {
+        assert(_lightSourcesInBoundScene.empty());      // if you hit this, it means we're already bound to a scene (either the same one or another)
+
         std::vector<std::pair<uint64_t, LightingEngine::ILightScene::LightSourceId>> lightNameToId;
 
         for (const auto&light:_lightSourcesInCfgFile) {
