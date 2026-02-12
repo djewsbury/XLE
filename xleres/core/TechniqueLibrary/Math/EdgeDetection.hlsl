@@ -7,7 +7,7 @@
 #if !defined(EDGE_DETECTION_H)
 #define EDGE_DETECTION_H
 
-static const float ScharrConstant = 60.f;
+#define ScharrConstant 60.f
 
 static const float ScharrHoriz5x5[5][5] =
 {
@@ -27,7 +27,7 @@ static const float ScharrVert5x5[5][5] =
 	{  1.f / ScharrConstant,  2.f / ScharrConstant,  3.f / ScharrConstant,  2.f / ScharrConstant,  1.f / ScharrConstant }
 };
 
-static const float ScharrConstant3x3 = 32.f;
+#define ScharrConstant3x3 32.f
 
 static const float ScharrHoriz3x3[3][3] =
 {
@@ -43,7 +43,7 @@ static const float ScharrVert3x3[3][3] =
 	{   3.f / ScharrConstant3x3,  10.f / ScharrConstant3x3,   3.f / ScharrConstant3x3 }
 };
 
-static const float Scharr3DConstant3x3 = 1024.f;
+#define Scharr3DConstant3x3 1024.f
 
 static const float Scharr3DX3x3[3][3][3]=
 {
