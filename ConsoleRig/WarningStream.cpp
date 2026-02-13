@@ -160,7 +160,7 @@ namespace ConsoleRig
 		#endif
 
 	#else
-		std::ostream* GetWarningStream() { return nullptr; }
+		std::ostream& GetWarningStream() { return *(std::ostream*)nullptr; }
 		void Warning(const char format[], va_list args) {}
 		void Warning(const char format[], ...) {}
 		void Message(const char format[], va_list args) {}
