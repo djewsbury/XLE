@@ -31,7 +31,7 @@ cbuffer Settings : register(b3, space0)
 		// But, on other hardware we must explicitly access the "G" channel.
 	Texture2D<uint2>	StencilInput : register(t0, space0);
 #elif INPUT_MODE == 1
- 	Texture2D			StencilInput : register(t0, space0);
+ 	Texture2D<uint>		StencilInput : register(t0, space0);
 #elif INPUT_MODE == 2
 	[[vk::input_attachment_index(0)]] SubpassInput<uint>	StencilInput	 	: register(t2, space0);
 #endif
@@ -52,7 +52,7 @@ uint Marker(uint2 pos)
 			uint result = StencilInput.Load(uint3(pos, 0)).g;
 		#endif
 	#elif INPUT_MODE == 1
-		uint result = uint(255.f * StencilInput.Load(uint3(pos, 0)).r);
+		uint result = StencilInput.Load(uint3(pos, 0));
 	#elif INPUT_MODE == 2
 		uint result = StencilInput.SubpassLoad();
 	#endif
@@ -92,15 +92,31 @@ float4 OutlineByStencil(float4 position : SV_Position, float2 texCoord : TEXCOOR
 
 	if (testMarker != DummyMarker) discard;
 
+	int2 stencilDims;
+	StencilInput.GetDimensions(stencilDims.x, stencilDims.y);
+
 	float2 dhdp = 0.0.xx;
+#if 0
 	[unroll] for (int y=0; y<5; ++y) {
 		[unroll] for (int x=0; x<5; ++x) {
-			uint marker = Marker(int2(basePos) + 2 * int2(x-2, y-2));
+			int2 pos = clamp(int2(basePos) + 2 * int2(x-2, y-2), 0, stencilDims-1);
+			uint marker = Marker(pos);
 			float value = (marker == testMarker) * 2.0 - 1.0;
 			dhdp.x += ScharrHoriz5x5[x][y] * value;
 			dhdp.y += ScharrVert5x5[x][y] * value;
 		}
 	}
+#else
+	[unroll] for (int y=0; y<3; ++y) {
+		[unroll] for (int x=0; x<3; ++x) {
+			int2 pos = clamp(int2(basePos) + 2 * int2(x-1, y-1), 0, stencilDims-1);
+			uint marker = Marker(pos);
+			float value = (marker == testMarker) * 2.0 - 1.0;
+			dhdp.x += ScharrHoriz3x3[x][y] * value;
+			dhdp.y += ScharrVert3x3[x][y] * value;
+		}
+	}
+#endif
 
 	float alpha = max(abs(dhdp.x), abs(dhdp.y));
 	alpha = 1.0f - pow(1.0f-alpha, 8.f);
