@@ -1007,6 +1007,22 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return FindClosestToAverage_Internal<GetVertData>(sourceStream, chainStart, chainEnd);
     }
 
+    static unsigned FindClosestToAverage(
+        IteratorRange<const Double3*> sourceStream,
+        const unsigned* chainStart, const unsigned* chainEnd)
+    {
+        assert(chainStart != chainEnd);
+        Double3 ave = sourceStream[*chainStart];
+        for (auto c=chainStart+1; c!=chainEnd; ++c) ave += sourceStream[*c];
+        ave /= double(chainEnd-chainStart);
+
+        float closestDifference = MagnitudeSquared(sourceStream[*chainStart] - ave);
+        auto bestIndex = *chainStart;
+        for (auto c=chainStart+1; c!=chainEnd; ++c)
+            if (auto dist = MagnitudeSquared(sourceStream[*c] - ave); dist < closestDifference) { closestDifference = dist; bestIndex = *c; }
+        return bestIndex;
+    }
+
     std::shared_ptr<IVertexSourceData>
         RemoveDuplicates(
             std::vector<unsigned>& outputMapping,
@@ -1052,6 +1068,48 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return std::make_shared<RawVertexSourceDataAdapter>(
             std::move(finalVB), finalVB.size() / vertexSize, vertexSize,
             sourceStream.GetFormat(), sourceStream.GetProcessingFlags(), sourceStream.GetFormatHint());
+    }
+
+    std::vector<Double3>
+        RemoveDuplicates(
+            std::vector<unsigned>& outputMapping,
+            IteratorRange<const Double3*> sourceStream,
+            float threshold)
+    {
+        assert(!sourceStream.empty());
+        std::vector<Double3> finalVB;
+        finalVB.resize(sourceStream.size());
+
+        // reuse finalVB buffer for temporary single preicision copy of positions
+        auto singlePrecisionPositions = MakeIteratorRange((Float3*)AsPointer(finalVB.begin()), (Float3*)AsPointer(finalVB.begin()) + sourceStream.size());
+        std::copy(sourceStream.begin(), sourceStream.end(), singlePrecisionPositions.begin());
+
+        auto duplicateChains = FindDuplicateChains(
+            outputMapping,
+            *GeoProc::CreateRawDataSource(MakeIteratorRange(singlePrecisionPositions), singlePrecisionPositions.size(), sizeof(Float3), RenderCore::Format::R32G32B32_FLOAT),
+            threshold);
+
+        auto w = finalVB.begin();
+        const unsigned highBit = 1u<<31u;
+		auto i = duplicateChains.begin();
+        while (i != duplicateChains.end()) {
+			auto start = i;
+			++i;
+			while (i != duplicateChains.end() && ((*i) & highBit) == 0) ++i;
+
+			*start &= ~highBit;
+            if ((i - start) > 1) {
+                    // all vertices in this chain will be replaced with the vertex that is the closest to the average of them all
+                auto m = FindClosestToAverage(sourceStream, AsPointer(start), AsPointer(i));
+                *w++ = sourceStream[m];
+            } else {
+                    // This vertex is not part of a chain.
+                *w++ = sourceStream[*start];
+            }
+        }
+
+        finalVB.erase(w, finalVB.end());
+        return finalVB;
     }
 
     std::vector<unsigned> FindDuplicateChains(

@@ -184,6 +184,13 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             const IVertexSourceData& sourceStream,
             float threshold);
 
+    // Note that in this version, we do the "closeness" calculation in single precision, but still return a full double precision result
+    std::vector<Double3>
+        RemoveDuplicates(
+            std::vector<unsigned>& outputMapping,
+            IteratorRange<const Double3*> sourceStream,
+            float threshold);       // <--- single precision "closeness" calculation
+
     std::vector<unsigned> FindDuplicateChains(
         std::vector<unsigned>& oldOrderingToNewOrdering,
         const IVertexSourceData& sourceStream,
