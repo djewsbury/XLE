@@ -92,7 +92,7 @@ namespace XLEMath
             inline bool Normalize_Checked(Vector* result, const Vector& vector)
         { 
             auto magSquared = MagnitudeSquared(vector);
-            Vector::value_type rsqrtMSq;
+            typename Vector::value_type rsqrtMSq;
             if (!XlRSqrt_Checked(&rsqrtMSq, magSquared)) return false;
             *result = vector * rsqrtMSq;
             return true;
