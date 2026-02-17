@@ -20,6 +20,7 @@
 #include "../../Formatters/TextFormatter.h"
 #include "../../Formatters/TextOutputFormatter.h"
 #include "../../Math/Transformations.h"
+#include "../../Math/Geometry.h"
 #include "../../Math/MathSerialization.h"
 #include "catch2/catch_test_macros.hpp"
 
@@ -134,6 +135,24 @@ namespace UnitTests
 		class PolyGeometryPlayground : public IInteractiveTestOverlay
 		{
 		public:
+			void DrawAngularCentroid(RenderOverlays::IOverlayContext& context, const Float4x4& localToWorld)
+			{
+				VLA(unsigned, indices, _poly._vertices.size());
+				VLA_UNSAFE_FORCE(Float3, pts, _poly._vertices.size());
+				for (unsigned c=0; c<_poly._vertices.size(); ++c) { indices[c] = c; pts[c] = Expand(Float2(_poly._vertices[c]), 0.f); }
+				
+				auto centroid = FindAngularCentroidXY<float>(MakeIteratorRange(pts, pts+_poly._vertices.size()), MakeIteratorRange(indices, indices+_poly._vertices.size()));
+				if (centroid) {
+					auto pos = TransformPoint(localToWorld, *centroid);
+					using namespace RenderOverlays;
+					float vertexRadius = 12;
+					ColorB color { 167, 80, 30 }; // rgb(167, 80, 30)
+					OutlineEllipse(context, Rect{Coord(pos[0]-vertexRadius), Coord(pos[1]-vertexRadius), Coord(pos[0]+vertexRadius), Coord(pos[1]+vertexRadius)}, color, 2.f);
+				}
+			}
+
+			////////////////////////////////////////////////////////////////////////////////////////////////////
+
 			float ZoomFactorToScale() const
 			{
 				float scale = 1.f * (_zoomFactor + 1.f);
@@ -160,6 +179,7 @@ namespace UnitTests
 				{
 					auto overlayContext = RenderOverlays::MakeImmediateOverlayContext(parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus());
 					_poly.Draw(*overlayContext, localToWorld, _selectionState);
+					DrawAngularCentroid(*overlayContext, localToWorld);
 				}
 
 				auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, LoadStore::Clear);

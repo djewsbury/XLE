@@ -184,8 +184,8 @@ namespace UnitTests
 			if (	std::min(pt[1], lastPt[1]) <= testPt[1]
 				&& 	std::max(pt[1], lastPt[1]) >  testPt[1]) {
 
-				float A = (testPt[1] - pt[1]) / (lastPt[1] - pt[1]);
-				float xA = LinearInterpolate(pt[0], lastPt[0], A);
+				Primitive A = (testPt[1] - pt[1]) / (lastPt[1] - pt[1]);
+				Primitive xA = LinearInterpolate(pt[0], lastPt[0], A);
 				intersectionCount += xA >= testPt[0];
 			}
 			lastPt = pt;
