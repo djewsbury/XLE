@@ -77,11 +77,13 @@ namespace OSServices
         template<typename Iterator> static bool IsPress     (KeyId key, Iterator begin, Iterator end);
         template<typename Iterator> static bool IsRelease   (KeyId key, Iterator begin, Iterator end);
         template<typename Iterator> static bool IsUp        (KeyId key, Iterator begin, Iterator end);
+        template<typename Iterator> static ActiveButton GetActiveButton (KeyId key, Iterator begin, Iterator end);
 
         bool    IsHeld(KeyId key) const       { return IsHeld(key, _activeButtons.begin(), _activeButtons.end()); }
         bool    IsPress(KeyId key) const      { return IsPress(key, _activeButtons.begin(), _activeButtons.end()); }
         bool    IsRelease(KeyId key) const    { return IsRelease(key, _activeButtons.begin(), _activeButtons.end()); }
         bool    IsUp(KeyId key) const         { return IsUp(key, _activeButtons.begin(), _activeButtons.end()); }
+        ActiveButton GetActiveButton(KeyId key) const { return GetActiveButton(key, _activeButtons.begin(), _activeButtons.end()); }
 
         void    Accumulate(const InputSnapshot& newEvnts, const InputSnapshot& lastFrameState);
         void    Reset();
@@ -135,5 +137,12 @@ namespace OSServices
         for (auto i=begin; i!=end; ++i)
             if (i->_name==key) return !i->_state && !i->_transition;
         return true;
+    }
+
+    template<typename Iterator> InputSnapshot::ActiveButton InputSnapshot::GetActiveButton(KeyId key, Iterator begin, Iterator end)
+    {
+        for (auto i=begin; i!=end; ++i)
+            if (i->_name==key) return *i;
+        return InputSnapshot::ActiveButton{key, false, false};
     }
 }
