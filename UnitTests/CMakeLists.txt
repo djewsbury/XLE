@@ -178,6 +178,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
         UnitTests-Interactive-${metal_name}
         Interactive/InteractiveTestHelper.cpp
         Interactive/VolumeClipTests.cpp
+        Interactive/PolyGeometryTests.cpp
         Interactive/StraightSkeletonTests.cpp
         Interactive/BatchAndDefragTests.cpp
         Interactive/FontRenderingTests.cpp
