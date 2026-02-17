@@ -187,6 +187,15 @@ namespace XLEMath
 		return det;
 	}
 
+	// For a 2d polygon (in XY plane) calculate a "centroid" location that where line between edge vertex and
+	// the centroid will tend bisect the vertex well. Works best on convex polygons.
+	// returns no value if a good centroid is not found. The result will always be within the polygon, and not within
+	// "colinearThreshold" of an edge
+	T1(Primitive) std::optional<Vector3T<Primitive>> FindAngularCentroidXY(
+		IteratorRange<const Vector3T<Primitive>*> positions,
+		IteratorRange<const unsigned*> indices,
+		Primitive colinearThreshold = Primitive(1e-3));
+
         ////////////////////////////////////////////////////////////////////////////////////////////////
             //      I N C R E A S E D   P R E C I S I O N   C A L C U L A T I O N S			//
         ////////////////////////////////////////////////////////////////////////////////////////////////

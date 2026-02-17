@@ -385,6 +385,108 @@ namespace XLEMath
     
     template bool PlaneFit_Checked(Vector4T<float>* result, const Vector3T<float>& pt0, const Vector3T<float>& pt1, const Vector3T<float>& pt2);
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template<typename Primitive>
+		static bool PtInPolygon(IteratorRange<const Vector2T<Primitive>*> loop, Vector2T<Primitive> testPt)
+	{
+		// Note that the basic algorithm here doesn't support colinear lines in "loop" too well
+		// since we're likely to get that case, we ideally want to prefer to use a "testPt" where Y
+		// component is not a multiple of 0.5
+		auto lastPt = *(loop.end()-1);
+		unsigned intersectionCount = 0;
+		for (auto pt:loop) {
+			assert(pt[1] != testPt[1]);		// see note above, preferable to avoid this
+
+			// imagine drawing a line in +X from testPt. Does it intersect this part of the loop?
+			if (	std::min(pt[1], lastPt[1]) <= testPt[1]
+				&& 	std::max(pt[1], lastPt[1]) >  testPt[1]) {
+
+				Primitive A = (testPt[1] - pt[1]) / (lastPt[1] - pt[1]);
+				Primitive xA = LinearInterpolate(pt[0], lastPt[0], A);
+				intersectionCount += xA >= testPt[0];
+			}
+			lastPt = pt;
+		}
+
+		return intersectionCount & 1;		// odd = inside
+	}
+
+	T1(Primitive) std::optional<Vector3T<Primitive>> FindAngularCentroidXY(
+		IteratorRange<const Vector3T<Primitive>*> positions,
+		IteratorRange<const unsigned*> indices,
+		Primitive colinearThreshold)
+	{
+		// Iteratively find a point within the polygon such that the new dividing line from each vertex to the 
+		// point is balanced between the existing edges
+		VLA_UNSAFE_FORCE(Vector2T<Primitive>, edgeTangents, indices.size());
+		auto centroidPos = Zero<Vector2T<Primitive>>();
+		for (unsigned c=0; c<indices.size(); ++c) {
+			auto p0 = positions[indices[c]], p1 = positions[indices[(c+1)%indices.size()]];
+			edgeTangents[c] = Normalize(Truncate(p1)-Truncate(p0));
+			centroidPos += Truncate(p0);
+		}
+		centroidPos /= Primitive(indices.size());
+
+		unsigned iterationCount = 6;
+		while (iterationCount--) {
+			auto movement = Zero<Vector2T<Primitive>>();
+
+			for (unsigned c=0; c<indices.size(); ++c) {
+				auto em1 = (c+indices.size()-1)%indices.size();
+				auto e0 = c;
+
+				Vector2T<Primitive> a;
+				if (!Normalize_Checked(&a, Vector2T<Primitive>(edgeTangents[ e0]-edgeTangents[em1])))
+					a = {edgeTangents[ e0][1], -edgeTangents[ e0][0]};
+				Vector2T<Primitive> m = {a[1], -a[0]};
+				movement -= (m * Dot(m, centroidPos-Truncate(positions[indices[e0]])));
+			}
+
+			movement /= Primitive(indices.size());
+			centroidPos += movement;
+			if (MagnitudeSquared(movement) < colinearThreshold*colinearThreshold)
+				break;
+		}
+
+		{
+			VLA_UNSAFE_FORCE(Vector2T<Primitive>, winding, indices.size());
+			for (unsigned c=0; c<indices.size(); ++c) winding[c] = Truncate(positions[indices[c]]);
+			if (!PtInPolygon<Primitive>(MakeIteratorRange(winding, winding+indices.size()), centroidPos)) return {};
+		}
+
+		// also check if the centroid landed on an edge
+		for (unsigned c=0; c<indices.size(); ++c) {
+			auto em1 = (c+indices.size()-1)%indices.size();
+			auto e0 = c;
+			auto edge = Truncate(positions[indices[e0]])-Truncate(positions[indices[em1]]);
+			auto edgeMagnitude = Magnitude(edge);
+			auto a = Dot(centroidPos-Truncate(positions[indices[em1]]), edge)/(edgeMagnitude*edgeMagnitude);
+			if (a < 0 || a > 1) continue;
+			auto linePt = LinearInterpolate(Truncate(positions[indices[em1]]), Truncate(positions[indices[e0]]), a);
+			auto distSq = MagnitudeSquared(linePt-centroidPos);
+			if (distSq <= colinearThreshold*colinearThreshold) return {};		// fell on the edge
+		}
+
+		// good centroid, but we need to calculate the Z value
+		Primitive centroidZ;
+		{
+			VLA_UNSAFE_FORCE(Vector3T<Primitive>, winding, indices.size());
+			for (unsigned c=0; c<indices.size(); ++c) winding[c] = positions[indices[c]];
+			auto plane = PlaneFit(winding, indices.size());
+			// 0 = A * x + B * y + C * z + D
+			// z = (A * x + B * y + D) / -C
+			centroidZ = -(plane[0] * centroidPos[0] + plane[1] * centroidPos[1] + plane[3]) / plane[2];
+		}
+
+		return Vector3T<Primitive>{ centroidPos[0], centroidPos[1], centroidZ };
+	}
+
+    template std::optional<Vector3T<float>> FindAngularCentroidXY(IteratorRange<const Vector3T<float>*> positions, IteratorRange<const unsigned*> indices, float colinearThreshold);
+    template std::optional<Vector3T<double>> FindAngularCentroidXY(IteratorRange<const Vector3T<double>*> positions, IteratorRange<const unsigned*> indices, double colinearThreshold);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
     unsigned ClipTriangle(Float3 dst[], const Float3 source[], float clippingParam[])
     {
         // Clip the triangle against a single plane, at the point where clippingParam[] is
