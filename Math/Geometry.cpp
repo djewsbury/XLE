@@ -255,12 +255,26 @@ namespace XLEMath
             p0[0], p1[0], p2[0],
             p0[1], p1[1], p2[1],
             p0[2], p1[2], p2[2]};
-        auto det = Determinant(matrix);
-        if (std::abs(det) > InputPrimitive(1e-7)) {
-            // We could use the determinant and the adjoint to find the inverse here, instead going back to cml's inverse algorithm
-            // still, let's promote to double to try to improve accuracy
-            auto inverse = cml::inverse(Matrix3x3T<ResultPrecision>(matrix));
-            return Vector3T<ResultPrecision>{-p0[3], -p1[3], -p2[3]} * inverse;
+
+        auto m00 = matrix(1,1)*matrix(2,2) - matrix(1,2)*matrix(2,1);
+        auto m01 = matrix(1,2)*matrix(2,0) - matrix(1,0)*matrix(2,2);
+        auto m02 = matrix(1,0)*matrix(2,1) - matrix(1,1)*matrix(2,0);
+
+        auto m10 = matrix(0,2)*matrix(2,1) - matrix(0,1)*matrix(2,2);
+        auto m11 = matrix(0,0)*matrix(2,2) - matrix(0,2)*matrix(2,0);
+        auto m12 = matrix(0,1)*matrix(2,0) - matrix(0,0)*matrix(2,1);
+
+		auto m20 = matrix(0,1)*matrix(1,2) - matrix(0,2)*matrix(1,1);
+        auto m21 = matrix(0,2)*matrix(1,0) - matrix(0,0)*matrix(1,2);
+        auto m22 = matrix(0,0)*matrix(1,1) - matrix(0,1)*matrix(1,0);
+
+        auto det = matrix(0,0)*m00 + matrix(0,1)*m01 + matrix(0,2)*m02;
+
+        if (std::abs(det) > InputPrimitive(1e-10)) {		// attempt to prevent low precision results
+            matrix(0,0) = m00/det;  matrix(0,1) = m10/det;  matrix(0,2) = m20/det;
+            matrix(1,0) = m01/det;  matrix(1,1) = m11/det;  matrix(1,2) = m21/det;
+            matrix(2,0) = m02/det;  matrix(2,1) = m12/det;  matrix(2,2) = m22/det;
+            return Vector3T<ResultPrecision>{-p0[3], -p1[3], -p2[3]} * matrix;
         } else
             return {};
     }
@@ -786,14 +800,28 @@ namespace XLEMath
 
         if (!vertexCount) return 0;
 
+		const float equivalenceThreshold = Primitive(1e-6);
         auto anchor = dst[0];
         std::sort(
             dst, &dst[vertexCount],
-            [planeEquation, anchor](const auto& lhs, const auto& rhs) {
+            [planeEquation, anchor, equivalenceThreshold](const auto& lhs, const auto& rhs) {
+				if (std::abs(lhs[0]-rhs[0])<equivalenceThreshold && std::abs(lhs[1]-rhs[1])<equivalenceThreshold && std::abs(lhs[2]-rhs[2])<equivalenceThreshold)
+					return false;
+
                 auto c = Cross(lhs - anchor, rhs - anchor);
+				assert(std::isfinite(c[0]) && !std::isnan(c[0]));
                 return Dot(c, Truncate(planeEquation)) < 0;
             });
-        return vertexCount;
+
+		// filter out sequential equivalents (they should be made sequential by the sorting above)
+		auto w = dst+1;
+		for (auto i=dst+1; i!=dst+vertexCount; i++) {
+			if (std::abs((*(i-1))[0]-(*i)[0])<equivalenceThreshold && std::abs((*(i-1))[1]-(*i)[1])<equivalenceThreshold && std::abs((*(i-1))[2]-(*i)[2])<equivalenceThreshold)
+				continue;
+			*w++ = *i;
+		}
+
+        return w-dst;
     }
 
     int TriangleSign(Float2 p1, Float2 p2, Float2 p3) {
