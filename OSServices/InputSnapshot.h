@@ -54,24 +54,28 @@ namespace OSServices
         bool    IsRelease_LButton() const    { return ((_mouseButtonsDown&1)==0) && ((_mouseButtonsTransition&1)==1); }
         bool    IsUp_LButton() const         { return ((_mouseButtonsDown&1)==0) && ((_mouseButtonsTransition&1)==0); }
         bool    IsDblClk_LButton() const     { return !!(_mouseButtonsDblClk & 1); }
+        ActiveButton GetActiveButton_LButton() const { return {0, !!(_mouseButtonsDown&1), !!(_mouseButtonsTransition&1)}; }
 
         bool    IsHeld_RButton() const       { return ((_mouseButtonsDown&(1<<1))==(1<<1)); }
         bool    IsPress_RButton() const      { return ((_mouseButtonsDown&(1<<1))==(1<<1))  && ((_mouseButtonsTransition&(1<<1))==(1<<1)); }
         bool    IsRelease_RButton() const    { return ((_mouseButtonsDown&(1<<1))==0)       && ((_mouseButtonsTransition&(1<<1))==(1<<1)); }
         bool    IsUp_RButton() const         { return ((_mouseButtonsDown&(1<<1))==0)       && ((_mouseButtonsTransition&(1<<1))==0); }
         bool    IsDblClk_RButton() const     { return !!(_mouseButtonsDblClk & (1<<1)); }
+        ActiveButton GetActiveButton_RButton() const { return {0, !!(_mouseButtonsDown&(1<<1)), !!(_mouseButtonsTransition&(1<<1))}; }
 
         bool    IsHeld_MButton() const       { return ((_mouseButtonsDown&(1<<2))==(1<<2)); }
         bool    IsPress_MButton() const      { return ((_mouseButtonsDown&(1<<2))==(1<<2))  && ((_mouseButtonsTransition&(1<<2))==(1<<2)); }
         bool    IsRelease_MButton() const    { return ((_mouseButtonsDown&(1<<2))==0)       && ((_mouseButtonsTransition&(1<<2))==(1<<2)); }
         bool    IsUp_MButton() const         { return ((_mouseButtonsDown&(1<<2))==0)       && ((_mouseButtonsTransition&(1<<2))==0); }
         bool    IsDblClk_MButton() const     { return !!(_mouseButtonsDblClk & (1<<2)); }
+        ActiveButton GetActiveButton_MButton() const { return {0, !!(_mouseButtonsDown&(1<<2)), !!(_mouseButtonsTransition&(1<<2))}; }
 
 		bool    IsHeld_MouseButton(unsigned btnIdx) const       { return ((_mouseButtonsDown&(1u<<btnIdx))==(1u<<btnIdx)); }
         bool    IsPress_MouseButton(unsigned btnIdx) const      { return ((_mouseButtonsDown&(1u<<btnIdx))==(1u<<btnIdx))	&& ((_mouseButtonsTransition&(1u<<btnIdx))==(1u<<btnIdx)); }
         bool    IsRelease_MouseButton(unsigned btnIdx) const    { return ((_mouseButtonsDown&(1u<<btnIdx))==0u)				&& ((_mouseButtonsTransition&(1u<<btnIdx))==(1u<<btnIdx)); }
         bool    IsUp_MouseButton(unsigned btnIdx) const         { return ((_mouseButtonsDown&(1u<<btnIdx))==0u)				&& ((_mouseButtonsTransition&(1u<<btnIdx))==0u); }
         bool    IsDblClk_MouseButton(unsigned btnIdx) const     { return !!(_mouseButtonsDblClk & (1u<<btnIdx)); }
+        ActiveButton GetActiveButton_MouseButton(unsigned btnIdx) const { return {0, !!(_mouseButtonsDown&(1<<btnIdx)), !!(_mouseButtonsTransition&(1<<btnIdx))}; }
 
         template<typename Iterator> static bool IsHeld      (KeyId key, Iterator begin, Iterator end);
         template<typename Iterator> static bool IsPress     (KeyId key, Iterator begin, Iterator end);
