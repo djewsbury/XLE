@@ -39,7 +39,7 @@ namespace RenderCore { namespace Assets
 		void AddOverride(RawMaterial&& mat);
 		void AddOverride(FutureMaterial&&);
 		void AddOverride(FuturePredefinedDescriptorSet&&);
-		void AddOverride(FutureMaterialSet&&);
+		void AddOverride(FutureMaterialSet&&, std::string prefix = {});
 		void AddOverride(std::string materialFileIdentifier);
 
 		struct Override
@@ -50,7 +50,7 @@ namespace RenderCore { namespace Assets
 		std::vector<std::pair<Override, RawMaterial>> _inlineMaterialOverrides;
 		std::vector<std::pair<Override, std::string>> _materialFileOverrides;
 		std::vector<std::pair<Override, FutureMaterial>> _futureMaterialOverrides;
-		std::vector<std::pair<Override, FutureMaterialSet>> _futureMaterialSetOverrides;
+		std::vector<std::pair<Override, std::pair<FutureMaterialSet, std::string>>> _futureMaterialSetOverrides;
 		std::vector<std::pair<Override, FuturePredefinedDescriptorSet>> _futurePredefinedDescriptorSetOverrides;
 		unsigned _nextOverrideIdx = 0;
 

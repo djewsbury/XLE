@@ -406,7 +406,9 @@ namespace RenderCore { namespace Assets
 				} else if (o1 != construction->_materialFileOverrides.end() && o1->first._overrideIdx == overrideIdx) {
 
 					if (o1->first._application == 0 || o1->first._application == guid) {
-						auto indexer = ::AssetsNew::ContextAndIdentifier{ (StringMeldInPlace(buffer) << o1->second << ":" << cfg).AsString() };
+						// note that we use the parameters on "o1->second" as a prefix on the cfg names we're going to read from
+						auto splitName = MakeFileNameSplitter(o1->second);
+						auto indexer = ::AssetsNew::ContextAndIdentifier{ (StringMeldInPlace(buffer) << splitName.AllExceptParameters() << ":" << splitName.Parameters() << cfg).AsString() };
 						partialMaterials.emplace_back(util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, indexer));
 						partialMaterialDescriptorSets.emplace_back(util->GetCachedFuture<ResolvedDescriptorSet>(s_DescriptorSet_ComponentName, indexer));
 					}
@@ -422,9 +424,9 @@ namespace RenderCore { namespace Assets
 						// in order to put this in "partialMaterials"
 						std::promise<ResolvedMaterial> promisedMaterial;
 						auto futureMaterial = promisedMaterial.get_future();
-						::Assets::WhenAll(o3->second).ThenConstructToPromise(
+						::Assets::WhenAll(o3->second.first).ThenConstructToPromise(
 							std::move(promisedMaterial),
-							[cfg, util](const ::Assets::ContextImbuedAsset<sp<::AssetsNew::CompoundAssetScaffold>>& scaffold) {
+							[cfg=o3->second.second+cfg, util](const ::Assets::ContextImbuedAsset<sp<::AssetsNew::CompoundAssetScaffold>>& scaffold) {
 								auto indexer = ::AssetsNew::ScaffoldAndEntityName{ scaffold, Hash64(cfg) DEBUG_ONLY(, cfg) };
 								return util->GetCachedFuture<RawMaterial>(s_RawMaterial_ComponentName, indexer).get();	// note -- stall
 							});
@@ -642,9 +644,9 @@ namespace RenderCore { namespace Assets
 		_hash = 0;
 	}
 
-	void MaterialSetConstruction::AddOverride(FutureMaterialSet&& mat)
+	void MaterialSetConstruction::AddOverride(FutureMaterialSet&& mat, std::string prefix)
 	{
-		_futureMaterialSetOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
+		_futureMaterialSetOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::make_pair(std::move(mat), std::move(prefix)));
 		_disableHash = true;
 		_hash = 0;
 	}
