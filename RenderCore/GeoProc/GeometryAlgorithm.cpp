@@ -831,29 +831,64 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         return flattenedIndexBuffer;
     }
 
-    std::vector<uint8_t> ConvertIndexBufferFormat(std::vector<unsigned>&& src, Format ibFormat)
+    std::vector<uint8_t> ConvertIndexBufferFormat(IteratorRange<const void*> voidSrc, Format srcFormat, Format dstFormat)
     {
 		// go back to the original index format; there's no reason to make it wider
-		if (ibFormat == Format::R32_UINT) {
-			return {(const uint8_t*)AsPointer(src.begin()), (const uint8_t*)AsPointer(src.end())};
-		} else if (ibFormat == Format::R16_UINT) {
-			std::vector<uint8_t> convertedResult;
-			convertedResult.resize(src.size()*sizeof(uint16_t));
-			std::copy(
-				src.begin(), src.end(),
-				(uint16_t*)convertedResult.data());
-			return convertedResult;
-		} else if (ibFormat == Format::R8_UINT) {
-			std::vector<uint8_t> convertedResult;
-			convertedResult.resize(src.size()*sizeof(uint8_t));
-			std::copy(
-				src.begin(), src.end(),
-				(uint8_t*)convertedResult.data());
-			return convertedResult;
-		} else {
-			assert(0);
-			return {};
-		}
+        std::vector<uint8_t> convertedResult;
+        if (srcFormat == Format::R32_UINT) {
+            auto src = voidSrc.Cast<const unsigned*>();
+            if (dstFormat == Format::R32_UINT) {
+                convertedResult = {(const uint8_t*)AsPointer(src.begin()), (const uint8_t*)AsPointer(src.end())};
+            } else if (dstFormat == Format::R16_UINT) {
+                convertedResult.resize(src.size()*sizeof(uint16_t));
+                std::copy(
+                    src.begin(), src.end(),
+                    (uint16_t*)convertedResult.data());
+            } else if (dstFormat == Format::R8_UINT) {
+                convertedResult.resize(src.size()*sizeof(uint8_t));
+                std::copy(
+                    src.begin(), src.end(),
+                    (uint8_t*)convertedResult.data());
+            } else {
+                assert(0);
+            }
+        } else if (srcFormat == Format::R16_UINT) {
+            auto src = voidSrc.Cast<const uint16_t*>();
+            if (dstFormat == Format::R32_UINT) {
+                convertedResult.resize(src.size()*sizeof(uint32_t));
+                std::copy(
+                    src.begin(), src.end(),
+                    (uint32_t*)convertedResult.data());
+            } else if (dstFormat == Format::R16_UINT) {
+                convertedResult = {(const uint8_t*)AsPointer(src.begin()), (const uint8_t*)AsPointer(src.end())};
+            } else if (dstFormat == Format::R8_UINT) {
+                convertedResult.resize(src.size()*sizeof(uint8_t));
+                std::copy(
+                    src.begin(), src.end(),
+                    (uint8_t*)convertedResult.data());
+            } else {
+                assert(0);
+            }
+        } else if (srcFormat == Format::R8_UINT) {
+            auto src = voidSrc.Cast<const uint8_t*>();
+            if (dstFormat == Format::R32_UINT) {
+                convertedResult.resize(src.size()*sizeof(uint32_t));
+                std::copy(
+                    src.begin(), src.end(),
+                    (uint32_t*)convertedResult.data());
+            } else if (dstFormat == Format::R16_UINT) {
+                convertedResult.resize(src.size()*sizeof(uint16_t));
+                std::copy(
+                    src.begin(), src.end(),
+                    (uint16_t*)convertedResult.data());
+            } else if (dstFormat == Format::R8_UINT) {
+                convertedResult = {(const uint8_t*)AsPointer(src.begin()), (const uint8_t*)AsPointer(src.end())};
+            } else {
+                assert(0);
+            }
+        }
+
+        return convertedResult;
 	}
 
     void RemapIndexBuffer(

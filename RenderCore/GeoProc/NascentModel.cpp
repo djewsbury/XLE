@@ -296,6 +296,19 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			}
 		}
 
+		// Reduce the size of the index buffer if we can losslessly use a more compact format
+		if (geoBlock._mesh->GetUnifiedVertexCount() <= (1u<<8u)-1u) {
+			if (geoBlock._indexFormat != Format::R8_UINT) {
+				geoBlock._indices = ConvertIndexBufferFormat(geoBlock._indices, geoBlock._indexFormat, Format::R8_UINT);
+				geoBlock._indexFormat = Format::R8_UINT;
+			}
+		} else if (geoBlock._mesh->GetUnifiedVertexCount() <= (1u<<16u)-1u) {
+			if (geoBlock._indexFormat != Format::R16_UINT) {
+				geoBlock._indices = ConvertIndexBufferFormat(geoBlock._indices, geoBlock._indexFormat, Format::R16_UINT);
+				geoBlock._indexFormat = Format::R16_UINT;
+			}
+		}
+
 		BuildIncludedAttributes(geoBlock, rules);
 
             // If we have normals, tangents & bitangents... then we can remove one of them
@@ -310,7 +323,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		if (buildTopologicalIndexBuffer) {
 			auto drawCalls = BuildDrawCallsForGeoAlgorithm(geoBlock);
 			auto tempBuffer = BuildAdjacencyIndexBufferForUniquePositions(*geoBlock._mesh, MakeIteratorRange(drawCalls));
-			adjacencyIndexBuffer = ConvertIndexBufferFormat(std::move(tempBuffer), geoBlock._indexFormat);
+			adjacencyIndexBuffer = ConvertIndexBufferFormat(MakeIteratorRange(tempBuffer), Format::R32_UINT, geoBlock._indexFormat);
 		}
 
         NativeVBLayout vbLayout = BuildDefaultLayout(*geoBlock._mesh, NativeVBSettings { rules._16BitNativeTypes.value_or(false) });

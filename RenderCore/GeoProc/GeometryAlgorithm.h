@@ -74,8 +74,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
         IteratorRange<const DrawCallForGeoAlgorithm*> drawCalls);
 
     std::vector<uint8_t> ConvertIndexBufferFormat(
-        std::vector<unsigned>&& src,
-        Format ibFormat);
+        IteratorRange<const void*> src,
+        Format srcFormat, Format dstFormat);
 
     void RemapIndexBuffer(
         IteratorRange<const void*> outputIndices, IteratorRange<const void*> inputIndices,
