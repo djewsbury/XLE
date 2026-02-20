@@ -9,6 +9,7 @@
 #include "CommonUtils.h"
 #include "CommonResources.h"
 #include "../IDevice.h"
+#include "../DeviceInitialization.h"
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../GeoProc/MeshDatabase.h"        // for GeoProc::Copy
@@ -292,6 +293,9 @@ namespace RenderCore { namespace Techniques
 		////////////////////////////////////////////////////////////////////////////////////
 
 		// Create the dynamic VB and assign it to all of the slots it needs to go to
+		// We need to align up to a restrictive boundary to ensure each individual instances ends up with a buffer on aligned boundaries
+		const unsigned postDeformVBAlignment = std::max(64u, device.GetDeviceLimits()._unorderedAccessBufferOffsetAlignment);
+		bufferIterators._bufferIterators[Internal::VB_PostDeform] = CeilToMultiple(bufferIterators._bufferIterators[Internal::VB_PostDeform], postDeformVBAlignment);
 		result->_outputVBSize = bufferIterators._bufferIterators[Internal::VB_PostDeform];
 
 		if (!bufferIterators._cpuStaticDataLoadRequests.empty()) {

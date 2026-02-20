@@ -460,6 +460,8 @@ namespace RenderCore { namespace Techniques
 
 					for (auto i:deformerAndInstances._flatInstances) {
 						accelerator->_instanceToReadiedOffset[allType][i] = uniformBufferPageOffset + movingOffsets[allType];
+						// note -- each individual instance (as well as the full buffer) must be aligned
+						assert((accelerator->_instanceToReadiedOffset[allType][i] % allocationAlignments[allType]) == 0);
 						movingOffsets[allType] += accelerator->_reservationPerInstance[allType];
 					}
 
