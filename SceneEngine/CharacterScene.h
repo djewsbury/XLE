@@ -10,7 +10,7 @@
 #include <memory>
 #include <future>
 
-namespace RenderCore { namespace Techniques { class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; class DeformersPacket; }}
+namespace RenderCore { namespace Techniques { class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; class DeformersPacket; class DeformAccelerator; }}
 namespace RenderCore { namespace BufferUploads { class IManager; using CommandListID = uint32_t; }}
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Assets { class SkeletonMachine; class ModelRendererConstruction; class SkeletonBinding; }}
@@ -47,6 +47,9 @@ namespace SceneEngine
 
 		struct SkeletonMachine { std::vector<uint64_t> _outputInterface; std::vector<uint32_t> _cmdStream; };
 		virtual std::shared_future<SkeletonMachine> GetSkeletonMachine(OpaquePtr renderer) = 0;
+
+		virtual std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> GetModelRendererConstruction(OpaquePtr model) = 0;
+		virtual std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformAccelerator>> GetDeformAccelerator(OpaquePtr renderer) = 0;		// note that the opaque pointer is "renderer", not "deformers"
 
 		virtual void OnFrameBarrier() = 0;
 		virtual void CancelConstructions() = 0;

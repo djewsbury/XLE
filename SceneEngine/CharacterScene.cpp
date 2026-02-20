@@ -127,6 +127,8 @@ namespace SceneEngine
 
 		std::shared_future<RenderCore::Assets::SkeletonBinding> CreateSkeletonBinding(OpaquePtr renderer, IteratorRange<const uint64_t*> inputInterface) override;
 		std::shared_future<SkeletonMachine> GetSkeletonMachine(OpaquePtr renderer) override;
+		std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> GetModelRendererConstruction(OpaquePtr model) override;
+		std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformAccelerator>> GetDeformAccelerator(OpaquePtr renderer) override;
 		RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) override;
 
 		std::shared_ptr<Assets::OperationContext> GetLoadingContext() override;
@@ -514,6 +516,38 @@ namespace SceneEngine
 				});
 		} else
 			promise.set_value(MakeCharacterSceneSkeletonMachine(rendererEntry._renderer.GetSkeletonMachine()));
+		return result;
+	}
+
+	auto CharacterScene::GetModelRendererConstruction(OpaquePtr model) -> std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>>
+	{
+		assert(model);
+		ScopedLock(_poolLock);
+
+		std::promise<SkeletonMachine> promise;
+		auto result = promise.get_future();
+
+		auto& modelEntry = *((const CharacterSceneInternal::ModelEntry*)model.get());
+		return modelEntry._completedConstruction;
+	}
+
+	auto CharacterScene::GetDeformAccelerator(OpaquePtr renderer) -> std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformAccelerator>>
+	{
+		assert(renderer);
+		ScopedLock(_poolLock);
+
+		std::promise<std::shared_ptr<RenderCore::Techniques::DeformAccelerator>> promise;
+		auto result = promise.get_future();
+
+		auto& rendererEntry = *((const CharacterSceneInternal::RendererEntry*)renderer.get());
+		if (rendererEntry._pendingRenderer.valid()) {
+			::Assets::WhenAll(rendererEntry._pendingRenderer).CheckImmediately().ThenConstructToPromise(
+				std::move(promise),
+				[](const auto& renderer) {
+					return renderer._deformAccelerator;
+				});
+		} else
+			promise.set_value(rendererEntry._renderer._deformAccelerator);
 		return result;
 	}
 
