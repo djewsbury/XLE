@@ -12,7 +12,7 @@
 namespace Utility
 {
     template <typename Type> 
-        inline bool IsPowerOfTwo(Type x)
+        inline constexpr bool IsPowerOfTwo(Type x)
     {
             //  powers of two should have only 1 bit set... We can check using standard
             //  bit twiddling check...
@@ -58,7 +58,7 @@ namespace Utility
     }
 
     template <typename Type>
-        inline Type CeilToMultiplePow2(Type input, unsigned multiple)
+        inline constexpr Type CeilToMultiplePow2(Type input, unsigned multiple)
     {
             // returns "input", or the next largest multiple of the number "multiple"
             // Here, we assume "multiple" is a power of 2
@@ -67,14 +67,14 @@ namespace Utility
     }
 
     template <typename Type>
-        inline Type FloorToMultiplePow2(Type input, unsigned multiple)
+        inline constexpr Type FloorToMultiplePow2(Type input, unsigned multiple)
     {
         assert(IsPowerOfTwo(multiple));
         return input & ~(multiple - 1);
     }
 
     template <typename Type>
-        inline Type CeilToMultiple(Type input, unsigned multiple)
+        inline constexpr Type CeilToMultiple(Type input, unsigned multiple)
     {
         assert(multiple > 0);
         return input + multiple - 1 - (input - 1) % multiple;

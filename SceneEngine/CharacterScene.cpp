@@ -37,6 +37,8 @@ namespace SceneEngine
 {
 	namespace CharacterSceneInternal
 	{
+		static constexpr unsigned s_pingPongBufferCount = 2;		// for skeleton machine outputs
+
 		struct ModelEntry
 		{
 			std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> _completedConstruction;
@@ -83,6 +85,8 @@ namespace SceneEngine
 			RenderCore::Assets::AnimationSetBinding _animSetBinding;
 			RenderCore::Techniques::ModelConstructionSkeletonBinding _modelToSkeletonBinding;
 			std::vector<Float4x4> _skeletonMachineOutput;
+			uint8_t _skeletonMachineOutputCount = 0;
+			uint8_t _pingPongBufferCounter = -1;
 		};
 
 		struct RendererEntry
@@ -438,8 +442,10 @@ namespace SceneEngine
 
 				// setup skeleton binding & initial pose for rigid parts
 				result._modelToSkeletonBinding = RenderCore::Techniques::ModelConstructionSkeletonBinding { *modelConstruction };
-				result._skeletonMachineOutput.resize(renderer.GetSkeletonMachine().GetOutputMatrixCount());
-				renderer.GetSkeletonMachine().GenerateOutputTransforms(MakeIteratorRange(result._skeletonMachineOutput));
+				result._skeletonMachineOutputCount = renderer.GetSkeletonMachine().GetOutputMatrixCount();
+				result._skeletonMachineOutput.resize(result._skeletonMachineOutputCount*CharacterSceneInternal::s_pingPongBufferCount);
+				for (unsigned buffer=0; buffer<CharacterSceneInternal::s_pingPongBufferCount; ++buffer)
+					renderer.GetSkeletonMachine().GenerateOutputTransforms(MakeIteratorRange(result._skeletonMachineOutput.begin()+buffer*result._skeletonMachineOutputCount, result._skeletonMachineOutput.begin()+(buffer+1)*result._skeletonMachineOutputCount));
 				return result;
 			});
 
@@ -680,14 +686,16 @@ namespace SceneEngine
 			_activeAnimator->_animSetBinding.GetParameterBindingRules());
 
 		// generate the joint transforms based on the animation parameters
-		assert(_activeAnimator->_skeletonMachineOutput.size() == _activeSkeletonMachine->GetOutputMatrixCount());
+		++_activeAnimator->_pingPongBufferCounter; _activeAnimator->_pingPongBufferCounter &= 1;
+		assert(_activeAnimator->_skeletonMachineOutputCount == _activeSkeletonMachine->GetOutputMatrixCount());
+		auto outputRange = MakeIteratorRange(_activeAnimator->_skeletonMachineOutput.begin()+_activeAnimator->_pingPongBufferCounter*_activeAnimator->_skeletonMachineOutputCount, _activeAnimator->_skeletonMachineOutput.begin()+(_activeAnimator->_pingPongBufferCounter+1)*_activeAnimator->_skeletonMachineOutputCount);
 		_activeAnimator->_animSetBinding.GenerateOutputTransforms(
-			MakeIteratorRange(_activeAnimator->_skeletonMachineOutput),
+			outputRange,
 			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
 
 		// set the skeleton machine output to the deformer
 		_activeAnimator->_deformerSkeletonInterface->FeedInSkeletonMachineResults(
-			instanceIdx, MakeIteratorRange(_activeAnimator->_skeletonMachineOutput));
+			instanceIdx, outputRange);
 	}
 
 	void ICharacterScene::AnimationConfigureHelper::ApplyAnimation(unsigned instanceIdx, const uint64_t ids[], const float times[], const float weights[], unsigned animationCount)
@@ -737,14 +745,16 @@ namespace SceneEngine
 		}
 
 		// generate the joint transforms based on the animation parameters
-		assert(_activeAnimator->_skeletonMachineOutput.size() == _activeSkeletonMachine->GetOutputMatrixCount());
+		++_activeAnimator->_pingPongBufferCounter; _activeAnimator->_pingPongBufferCounter &= 1;
+		assert(_activeAnimator->_skeletonMachineOutputCount == _activeSkeletonMachine->GetOutputMatrixCount());
+		auto outputRange = MakeIteratorRange(_activeAnimator->_skeletonMachineOutput.begin()+_activeAnimator->_pingPongBufferCounter*_activeAnimator->_skeletonMachineOutputCount, _activeAnimator->_skeletonMachineOutput.begin()+(_activeAnimator->_pingPongBufferCounter+1)*_activeAnimator->_skeletonMachineOutputCount);
 		bind.GenerateOutputTransforms(
-			MakeIteratorRange(_activeAnimator->_skeletonMachineOutput),
+			outputRange,
 			MakeIteratorRange(parameterBlock, &parameterBlock[parameterBlockSize]));
 
 		// set the skeleton machine output to the deformer
 		_activeAnimator->_deformerSkeletonInterface->FeedInSkeletonMachineResults(
-			instanceIdx, MakeIteratorRange(_activeAnimator->_skeletonMachineOutput));
+			instanceIdx, outputRange);
 	}
 
 	void ICharacterScene::AnimationConfigureHelper::ApplyAnimation(unsigned instanceIdx, IteratorRange<const Float4x4*> skeletonMachineOutput)
@@ -752,15 +762,23 @@ namespace SceneEngine
 		assert(_activeAnimator);
 		assert(_activeAnimator->_deformerSkeletonInterface);
 
+		// copy into our buffers
+		++_activeAnimator->_pingPongBufferCounter; _activeAnimator->_pingPongBufferCounter &= 1;
+		assert(_activeAnimator->_skeletonMachineOutputCount == skeletonMachineOutput.size());
+		auto outputRange = MakeIteratorRange(_activeAnimator->_skeletonMachineOutput.begin()+_activeAnimator->_pingPongBufferCounter*_activeAnimator->_skeletonMachineOutputCount, _activeAnimator->_skeletonMachineOutput.begin()+(_activeAnimator->_pingPongBufferCounter+1)*_activeAnimator->_skeletonMachineOutputCount);
+		std::copy(skeletonMachineOutput.begin(), skeletonMachineOutput.end(), outputRange.begin());
+
 		// set the skeleton machine output to the deformer
 		_activeAnimator->_deformerSkeletonInterface->FeedInSkeletonMachineResults(
 			instanceIdx, skeletonMachineOutput);
 	}
 
-	IteratorRange<const Float4x4*> ICharacterScene::AnimationConfigureHelper::GetSkeletonMachineOutput()
+	IteratorRange<const Float4x4*> ICharacterScene::AnimationConfigureHelper::GetSkeletonMachineOutput(unsigned historical)
 	{
 		assert(_activeAnimator);
-		return _activeAnimator->_skeletonMachineOutput;
+		static_assert(IsPowerOfTwo(CharacterSceneInternal::s_pingPongBufferCount));			// expecting Internal::s_pingPongBufferCount to be a power of two
+		auto buffer = (_activeAnimator->_pingPongBufferCounter-historical)&(CharacterSceneInternal::s_pingPongBufferCount-1);
+		return MakeIteratorRange(_activeAnimator->_skeletonMachineOutput.begin()+buffer*_activeAnimator->_skeletonMachineOutputCount, _activeAnimator->_skeletonMachineOutput.begin()+(buffer+1)*_activeAnimator->_skeletonMachineOutputCount);
 	}
 
 	ICharacterScene::AnimationConfigureHelper::AnimationConfigureHelper(ICharacterScene& scene)
