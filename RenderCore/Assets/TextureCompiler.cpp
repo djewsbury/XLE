@@ -433,19 +433,19 @@ namespace RenderCore { namespace Assets
 		auto descFuture = srcPkt.GetDesc();
 		descFuture.wait();
 		auto desc = descFuture.get();
-		assert(desc._type == ResourceDesc::Type::Texture && desc._textureDesc._width >= 1 && desc._textureDesc._height >= 1);
 		auto srcSize = ByteCount(desc);
+		assert(desc._type == ResourceDesc::Type::Texture && desc._textureDesc._width >= 1 && desc._textureDesc._height >= 1);
 		auto dstDesc = desc._textureDesc;
 
 		AlignedUniquePtr<uint8_t> data { (uint8_t*)XlMemAlign(srcSize, 64) };
 
-		auto mipCount = desc._textureDesc._mipCount;
-		auto arrayLayerCount = ActualArrayLayerCount(desc._textureDesc);
+		auto mipCount = dstDesc._mipCount;
+		auto arrayLayerCount = ActualArrayLayerCount(dstDesc);
 		VLA_UNSAFE_FORCE(BufferUploads::IAsyncDataSource::SubResource, subres, mipCount*arrayLayerCount);
 		for (unsigned a=0; a<arrayLayerCount; ++a)
 			for (unsigned m=0; m<mipCount; ++m) {
 				auto& sr = subres[m+a*mipCount];
-				auto srcOffset = GetSubResourceOffset(desc._textureDesc, m, a);
+				auto srcOffset = GetSubResourceOffset(dstDesc, m, a);
 				sr._id = SubResourceId{m, a};
 				sr._destination = {PtrAdd(data.get(), srcOffset._offset), PtrAdd(data.get(), srcOffset._offset+srcOffset._size)};
 				sr._pitches = srcOffset._pitches;

@@ -1287,7 +1287,12 @@ namespace RenderCore { namespace LightingEngine
 		virtual std::future<ResourceDesc> GetDesc() override
 		{
 			std::promise<ResourceDesc> promise;
-			promise.set_value(CreateDesc(0, TextureDesc::Plain1D(_width, Format::R16G16_UNORM)));
+			if (_dims == 2) {
+				auto dims = std::sqrt(_width); assert(dims*dims == _width);
+				promise.set_value(CreateDesc(0, TextureDesc::Plain2D(dims, dims, Format::R16G16_UNORM)));
+			} else {
+				promise.set_value(CreateDesc(0, TextureDesc::Plain1D(_width, Format::R16G16_UNORM)));
+			}
 			return promise.get_future();
 		}
 
@@ -1318,7 +1323,8 @@ namespace RenderCore { namespace LightingEngine
 		}
 
 		unsigned _width;
-		HaltonOrderedSamplesTexture(unsigned width) : _width(width) {}
+		unsigned _dims;
+		HaltonOrderedSamplesTexture(unsigned width, unsigned dims=1) : _width(width), _dims(dims) {}
 	};
 
 	std::shared_ptr<Assets::ITextureCompiler> TextureCompiler_LightingEngineCommon(
@@ -1352,15 +1358,19 @@ namespace RenderCore { namespace LightingEngine
 		{
 		public:
 			unsigned _width = 16384;
+			unsigned _dims = 1;
 			std::string GetIntermediateName() const override { return (StringMeld<128>() << "halton-ordered-samples-" << _width).AsString(); }
-			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<HaltonOrderedSamplesTexture>(_width); }
+			std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override { return std::make_shared<HaltonOrderedSamplesTexture>(_width, _dims); }
 
 			Compiler_HaltonOrderedSamples(Formatters::TextInputFormatter<>& fmttr)
 			{
 				StringSection<> kn;
 				while (fmttr.TryKeyedItem(kn)) {
 					if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
-					else Formatters::SkipValueOrElement(fmttr);
+					else if (XlEqString(kn, "Dims")) {
+						_dims = Formatters::RequireCastValue<decltype(_width)>(fmttr);
+						if (_dims != 1 && _dims != 2) Throw(std::runtime_error("Dims must be 1 or 2"));
+					} else Formatters::SkipValueOrElement(fmttr);
 				}
 			}
 		};
