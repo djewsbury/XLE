@@ -631,6 +631,7 @@ namespace SceneEngine
 	{
 		auto* rendererEntry = (CharacterSceneInternal::RendererEntry*)renderer;
 		_activeRenderer = &rendererEntry->_renderer;
+		_completionCmdList = std::max(_completionCmdList, _activeRenderer->_completionCmdList);
 		return _activeRenderer->_drawableConstructor != nullptr;
 	}
 

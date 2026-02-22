@@ -83,6 +83,8 @@ namespace SceneEngine
 
 		bool IsGood() const { return _activeRenderer != nullptr; }
 
+		RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
+
 		BuildDrawablesHelper(
 			ICharacterScene& scene,
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
