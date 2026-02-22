@@ -627,6 +627,25 @@ namespace SceneEngine
 		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
+	void ICharacterScene::BuildDrawablesHelper::CullAndBuildDrawables(
+		unsigned instanceIdx, const Float3x4& localToWorld,
+		const Float3& customWorldSpaceBoundingSphere, float customBoundingSphereRadius)
+	{
+		if (_complexCullingVolume && _complexCullingVolume->TestSphere(customWorldSpaceBoundingSphere, customBoundingSphereRadius) == CullTestResult::Culled)
+			return;
+		uint32_t viewMask = 0;
+		float r = customWorldSpaceBoundingSphere[3];
+		for (unsigned v=0; v<_views.size(); ++v)
+			viewMask |= (!CullAABB(_views[v]._worldToProjection, customWorldSpaceBoundingSphere-Float3{r,r,r}, customWorldSpaceBoundingSphere+Float3{r,r,r}, RenderCore::Techniques::GetDefaultClipSpaceType())) << v;
+		if (!viewMask) return;
+
+		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
+			*_activeRenderer->_drawableConstructor,
+			_pkts,
+			localToWorld, instanceIdx, viewMask);
+		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
+	}
+
 	bool ICharacterScene::BuildDrawablesHelper::SetRenderer(void* renderer)
 	{
 		auto* rendererEntry = (CharacterSceneInternal::RendererEntry*)renderer;

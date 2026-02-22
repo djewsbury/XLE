@@ -81,6 +81,12 @@ namespace SceneEngine
 		void CullAndBuildDrawables(
 			unsigned instanceIdx, const Float3& translation, const Float3x3& rotation, float uniformScale);
 
+		/// this varation ignores the bounding volume included in the renderer, and instead uses the given
+		/// bounding sphere for culling. The bounding sphere is expressed in world space!
+		void CullAndBuildDrawables(
+			unsigned instanceIdx, const Float3x4& localToWorld,
+			const Float3& customWorldSpaceBoundingSphere, float customBoundingSphereRadius);
+
 		bool IsGood() const { return _activeRenderer != nullptr; }
 
 		RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
