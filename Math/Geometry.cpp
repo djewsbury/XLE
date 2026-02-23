@@ -49,8 +49,7 @@ namespace XLEMath
 				that can be solved with some simple algebra for the answer.
 
 				This was originally based on an implementation from Paul Bourke.
-					http://local.wasp.uwa.edu.au/~pbourke/geometry/lineline3d/
-					(no longer available there)
+					https://paulbourke.net/geometry/pointlineplane/
 		*/
 
 		const float epsilon = 0.0001f;
@@ -64,18 +63,18 @@ namespace XLEMath
 		auto p43 = p4-p3;
 		auto p21 = p2-p1;
 
-			/* early out if either line is zero length (or too close for accuracy) */
-		if (Dot(p43,p43) < epsilon || Dot(p21,p21) < epsilon)
-			return false;
-
 		auto d1343 = Dot(p13, p43);
 		auto d4321 = Dot(p43, p21);
 		auto d1321 = Dot(p13, p21);
 		auto d4343 = Dot(p43, p43);
 		auto d2121 = Dot(p21, p21);
 
+					/* early out if either line is zero length (or too close for accuracy) */
+		if (d4343 < epsilon || d2121 < epsilon)
+			return false;
+
 		float denom = d2121 * d4343 - d4321 * d4321;
-        if (std::abs(denom) < epsilon) return false;
+		if (std::abs(denom) < epsilon) return false;
 
 		float numer = d1343 * d4321 - d1321 * d4343;
 		mua = numer / denom;

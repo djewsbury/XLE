@@ -1953,7 +1953,7 @@ namespace XLEMath
 		if (!stationary) {
 			// If the loop is contracting, and there are no valid collapses, we are subject to precision errors. If we don't clamp time, these loops
 			// will invert and expand infinitely
-			if (loop._signOfInitialLoop < 0) {
+			if (loop._signOfInitialLoop <= 0) {
 				bool atLeastOneValidCollapse = false;
 				for (auto& e:loop._edges)
 					atLeastOneValidCollapse |= e._collapsePt[2] != std::numeric_limits<Primitive>::max();
