@@ -43,11 +43,12 @@ namespace PlatformRig
         virtual ~IOverlay();
     };
 
-    class IUpdateTick
+    class IFrameEvents
     {
     public:
-        virtual void Update(float deltaTime) = 0;
-        virtual ~IUpdateTick();
+        virtual void OnFrameBarrier(RenderCore::Techniques::ParsingContext&) = 0;
+        virtual void OnAnimationBarrier(float deltaTime) = 0;
+        virtual ~IFrameEvents();
     };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,7 +70,7 @@ namespace PlatformRig
         virtual ~IOverlayExtended();
     };
 
-    class OverlaySystemSwitch : public IOverlay, public IOverlayExtended, public IUpdateTick
+    class OverlaySystemSwitch : public IOverlay, public IOverlayExtended, public IFrameEvents
     {
     public:
         virtual ProcessInputResult ProcessInput(
@@ -77,7 +78,8 @@ namespace PlatformRig
 			const OSServices::InputSnapshot& evnt) override;
 
         void Render(RenderCore::Techniques::ParsingContext& parserContext) override;
-        void Update(float deltaTime) override;
+        void OnFrameBarrier(RenderCore::Techniques::ParsingContext&) override;
+        void OnAnimationBarrier(float deltaTime) override;
         void SetActivationState(bool newState) override;
 		OverlayState GetOverlayState() const override;
 
@@ -99,7 +101,7 @@ namespace PlatformRig
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    class OverlaySystemSet : public IOverlay, public IOverlayExtended, public IUpdateTick
+    class OverlaySystemSet : public IOverlay, public IOverlayExtended, public IFrameEvents
     {
     public:
         virtual ProcessInputResult ProcessInput(
@@ -107,7 +109,8 @@ namespace PlatformRig
 			const OSServices::InputSnapshot& evnt) override;
 
         void Render(RenderCore::Techniques::ParsingContext& parserContext) override;
-        void Update(float deltaTime) override;
+        void OnFrameBarrier(RenderCore::Techniques::ParsingContext&) override;
+        void OnAnimationBarrier(float deltaTime) override;
         void SetActivationState(bool newState) override;
 		virtual OverlayState GetOverlayState() const override;
 

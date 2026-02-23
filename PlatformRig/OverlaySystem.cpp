@@ -77,11 +77,18 @@ namespace PlatformRig
             _pimpl->_childSystems[_pimpl->_activeChildIndex].second->Render(parserContext);
     }
 
-    void OverlaySystemSwitch::Update(float deltaTime)
+    void OverlaySystemSwitch::OnFrameBarrier(RenderCore::Techniques::ParsingContext& parserContext)
     {
         if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size()))
-            if (auto ut = dynamic_cast<IUpdateTick*>(_pimpl->_childSystems[_pimpl->_activeChildIndex].second.get()))
-                ut->Update(deltaTime);
+            if (auto ut = dynamic_cast<IFrameEvents*>(_pimpl->_childSystems[_pimpl->_activeChildIndex].second.get()))
+                ut->OnFrameBarrier(parserContext);
+    }
+
+    void OverlaySystemSwitch::OnAnimationBarrier(float deltaTime)
+    {
+        if (_pimpl->_activeChildIndex >= 0 && _pimpl->_activeChildIndex < signed(_pimpl->_childSystems.size()))
+            if (auto ut = dynamic_cast<IFrameEvents*>(_pimpl->_childSystems[_pimpl->_activeChildIndex].second.get()))
+                ut->OnAnimationBarrier(deltaTime);
     }
 
     void OverlaySystemSwitch::SetActivationState(bool newState) 
@@ -183,11 +190,18 @@ namespace PlatformRig
         }
     }
 
-    void OverlaySystemSet::Update(float deltaTime)
+    void OverlaySystemSet::OnFrameBarrier(RenderCore::Techniques::ParsingContext& parserContext)
     {
         for (auto i=_pimpl->_childSystems.begin(); i!=_pimpl->_childSystems.end(); ++i)
-            if (auto ut = dynamic_cast<IUpdateTick*>(i->get()))
-                ut->Update(deltaTime);
+            if (auto ut = dynamic_cast<IFrameEvents*>(i->get()))
+                ut->OnFrameBarrier(parserContext);
+    }
+
+    void OverlaySystemSet::OnAnimationBarrier(float deltaTime)
+    {
+        for (auto i=_pimpl->_childSystems.begin(); i!=_pimpl->_childSystems.end(); ++i)
+            if (auto ut = dynamic_cast<IFrameEvents*>(i->get()))
+                ut->OnAnimationBarrier(deltaTime);
     }
 
     void OverlaySystemSet::SetActivationState(bool newState) 
@@ -259,7 +273,7 @@ namespace PlatformRig
         const InputContext& context,
         const OSServices::InputSnapshot& evnt) { return ProcessInputResult::Passthrough; }
     IOverlay::~IOverlay() {}
-    IUpdateTick::~IUpdateTick() {}
+    IFrameEvents::~IFrameEvents() {}
 	void IOverlayExtended::SetActivationState(bool newState) {}
 	auto IOverlayExtended::GetOverlayState() const -> OverlayState { return {}; }
     IOverlayExtended::~IOverlayExtended() {}
