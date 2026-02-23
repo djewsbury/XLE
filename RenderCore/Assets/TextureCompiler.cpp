@@ -142,7 +142,7 @@ namespace RenderCore { namespace Assets
 			XlZeroMemory(_srcTexture);
 
 			auto descFuture = dataSrc.GetDesc();
-			descFuture.wait();
+			YieldToPool(descFuture);
 			auto desc = descFuture.get();
 			assert(desc._type == ResourceDesc::Type::Texture && desc._textureDesc._width >= 1 && desc._textureDesc._height >= 1);
 			_srcDesc = desc._textureDesc;
@@ -169,7 +169,8 @@ namespace RenderCore { namespace Assets
 				}
 
 			auto dataFuture = dataSrc.PrepareData(MakeIteratorRange(subres, &subres[mipCount*arrayLayerCount]));
-			dataFuture.wait();
+			YieldToPool(dataFuture);
+			dataFuture.get();
 
 			// as per compressonator example, swizzle BGRA types
 			if (_srcTexture.format == CMP_FORMAT_BGRA_8888) {
@@ -431,7 +432,7 @@ namespace RenderCore { namespace Assets
 		BufferUploads::IAsyncDataSource& srcPkt)
 	{
 		auto descFuture = srcPkt.GetDesc();
-		descFuture.wait();
+		YieldToPool(descFuture);
 		auto desc = descFuture.get();
 		auto srcSize = ByteCount(desc);
 		assert(desc._type == ResourceDesc::Type::Texture && desc._textureDesc._width >= 1 && desc._textureDesc._height >= 1);
@@ -452,7 +453,8 @@ namespace RenderCore { namespace Assets
 			}
 
 		auto dataFuture = srcPkt.PrepareData(MakeIteratorRange(subres, &subres[mipCount*arrayLayerCount]));
-		dataFuture.wait();
+		YieldToPool(dataFuture);
+		dataFuture.get();
 
 		size_t ddsHeaderOffset = 0;
 		auto destinationBlob = PrepareDDSBlob(dstDesc, ddsHeaderOffset);
