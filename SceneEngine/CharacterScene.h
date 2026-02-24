@@ -119,7 +119,7 @@ namespace SceneEngine
 		void ApplySingleAnimation(unsigned instanceIdx, uint64_t id, float time);
 		void ApplyAnimation(unsigned instanceIdx, const uint64_t ids[], const float times[], const float weights[], unsigned animationCount);		// weights must be pre-normalized
 		void ApplyAnimation(unsigned instanceIdx, IteratorRange<const Float4x4*> skeletonMachineOutput);
-		IteratorRange<const Float4x4*> GetSkeletonMachineOutput(unsigned instanceIdx, unsigned historical=0);
+		IteratorRange<const Float4x4*> GetMostRecentlyAppliedSkeletonMachineOutput();
 		bool IsGood() const { return _activeAnimator != nullptr; }
 
 		AnimationConfigureHelper(ICharacterScene& scene);
