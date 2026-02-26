@@ -2083,50 +2083,6 @@ namespace XLEMath
 	T1(Primitive) StraightSkeletonCalculator<Primitive>::~StraightSkeletonCalculator()
 	{}
 
-	static std::vector<unsigned> AsVertexLoopsOrdered(IteratorRange<const std::pair<unsigned, unsigned>*> segments)
-	{
-		// From a line segment soup, generate vertex loops. This requires searching
-		// for segments that join end-to-end, and following them around until we
-		// make a loop.
-		// Note that in vertex loop order we want to go from tail to head (which is actually segment.second, segment.first
-		// return vertex count, index0, index1, index2, ..., vertex count, index0, index, ....
-		std::vector<std::pair<unsigned, unsigned>> pool(segments.begin(), segments.end());
-		std::vector<unsigned> result;
-		while (!pool.empty()) {
-			size_t workingLoopBegin = result.size();
-			result.push_back(0);	// sentinel for size (we'll come back later)
-			{
-				auto i = pool.end()-1;
-				result.push_back(i->second);
-				result.push_back(i->first);
-				pool.erase(i);
-			}
-			for (;;) {
-				assert(!pool.empty());	// if we hit this, we have open segments
-				auto searching = result.back();
-				auto hit = pool.end();
-				for (auto i=pool.begin(); i!=pool.end(); ++i) if (i->second == searching) hit = i;
-
-				assert(hit != pool.end());
-				auto newVert = hit->first;
-				pool.erase(hit);
-				auto meet = std::find(result.begin()+workingLoopBegin+1, result.end(), newVert);
-				if (meet != result.end()) {
-					// closed the loop.. But all of the vertices before "meet" have been cut off from the
-					// loop and have to be added back into the pool
-					for (auto i=result.begin()+workingLoopBegin+1; i!=meet; ++i)
-						pool.emplace_back(*(i+1), *i);
-					result.erase(result.begin()+workingLoopBegin+1, meet);
-					break;
-				}
-				result.push_back(newVert);
-			}
-			result[workingLoopBegin] = unsigned(result.size()-(workingLoopBegin+1));
-		}
-
-		return result;
-	}
-
 	T1(Primitive) std::vector<unsigned> StraightSkeleton<Primitive>::WavefrontLoops() const
 	{
 		std::vector<std::pair<unsigned, unsigned>> segmentSoup;
@@ -2135,7 +2091,7 @@ namespace XLEMath
 				segmentSoup.emplace_back(e._head, e._tail);
 		// We shouldn't need the edges in _unplacedEdges, so long as each edge has been correctly
 		// assigned to it's source face
-		return AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
+		return AsVertexLoopsDirected(MakeIteratorRange(segmentSoup));
 	}
 
 	T1(Primitive) std::vector<unsigned> StraightSkeleton<Primitive>::VertexLoopsForFace(unsigned faceIdx) const
@@ -2150,7 +2106,7 @@ namespace XLEMath
 			auto& e = _edgesByFace[faceIdx][(c+offset)%_edgesByFace[faceIdx].size()];
 			segmentSoup.emplace_back(e._head, e._tail);
 		}
-		return AsVertexLoopsOrdered(MakeIteratorRange(segmentSoup));
+		return AsVertexLoopsDirected(MakeIteratorRange(segmentSoup));
 	}
 
 	T1(Primitive) Primitive StraightSkeleton<Primitive>::LastEventTime() const

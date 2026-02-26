@@ -196,6 +196,16 @@ namespace XLEMath
 		IteratorRange<const unsigned*> indices,
 		Primitive colinearThreshold = Primitive(1e-3));
 
+	// Given a list of edges, produce all of the vertex loops (respecting edge order)
+	// result is count, vertex, vertex, vertex, ..., count, vertex, vertex, vertex, ...
+	void AsVertexLoopsDirected(
+		std::vector<unsigned>& result,
+		IteratorRange<const std::pair<unsigned, unsigned>*> edges);
+
+	void AsVertexLoopsUndirected(
+		std::vector<unsigned>& result,
+		IteratorRange<const std::pair<unsigned, unsigned>*> edges);
+
         ////////////////////////////////////////////////////////////////////////////////////////////////
             //      I N C R E A S E D   P R E C I S I O N   C A L C U L A T I O N S			//
         ////////////////////////////////////////////////////////////////////////////////////////////////

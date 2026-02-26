@@ -860,6 +860,105 @@ namespace XLEMath
 		}
 	}
 
+	void AsVertexLoopsDirected(
+		std::vector<unsigned>& result,
+		IteratorRange<const std::pair<unsigned, unsigned>*> edges)
+	{
+		// From a line segment soup, generate vertex loops. This requires searching
+		// for segments that join end-to-end, and following them around until we
+		// make a loop.
+		// Note that in vertex loop order we want to go from tail to head (which is actually segment.second, segment.first
+		// return vertex count, index0, index1, index2, ..., vertex count, index0, index, ....
+		std::vector<std::pair<unsigned, unsigned>> pool(edges.begin(), edges.end());
+		assert(result.empty());
+		result.reserve(edges.size()+2);
+		while (!pool.empty()) {
+			size_t workingLoopBegin = result.size();
+			result.push_back(0);	// sentinel for size (we'll come back later)
+			{
+				result.push_back(pool.back().first);
+				result.push_back(pool.back().second);
+				pool.pop_back();
+			}
+			for (;;) {
+				assert(!pool.empty());	// if we hit this, we have open segments
+				auto searching = result.back();
+				auto hit = pool.end();
+				for (auto i=pool.begin(); i!=pool.end(); ++i) if (i->first == searching) hit = i;
+
+				assert(hit != pool.end());
+				if (hit == pool.end()) {
+					result[workingLoopBegin] = unsigned(result.size()-(workingLoopBegin+1));
+					return;
+				}
+				auto newVert = hit->second;
+				pool.erase(hit);
+				auto meet = std::find(result.begin()+workingLoopBegin+1, result.end(), newVert);
+				if (meet != result.end()) {
+					// closed the loop.. But all of the vertices before "meet" have been cut off from the
+					// loop and have to be added back into the pool
+					for (auto i=result.begin()+workingLoopBegin+1; i!=meet; ++i)
+						pool.emplace_back(*i, *(i+1));
+					result.erase(result.begin()+workingLoopBegin+1, meet);
+					break;
+				}
+				result.push_back(newVert);
+			}
+			result[workingLoopBegin] = unsigned(result.size()-(workingLoopBegin+1));
+		}
+	}
+
+	void AsVertexLoopsUndirected(
+		std::vector<unsigned>& result,
+		IteratorRange<const std::pair<unsigned, unsigned>*> edges)
+	{
+		#if defined(_DEBUG)
+			// We expect there are no duplicate or flipped edges. These duplicates should annihilate each other
+			std::vector<std::pair<unsigned, unsigned>> temp;
+			for (auto& e:edges) { assert(e.first != e.second); temp.emplace_back(std::min(e.first, e.second), std::max(e.first, e.second)); };
+			std::sort(temp.begin(), temp.end());
+			assert(std::unique(b2e(temp)) == temp.end());
+		#endif
+
+		std::vector<std::pair<unsigned, unsigned>> pool(edges.begin(), edges.end());
+		assert(result.empty());
+		result.reserve(edges.size()+2);
+		while (!pool.empty()) {
+			size_t workingLoopBegin = result.size();
+			result.push_back(0);	// sentinel for size (we'll come back later)
+			{
+				result.push_back(pool.back().first);
+				result.push_back(pool.back().second);
+				pool.pop_back();
+			}
+			for (;;) {
+				assert(!pool.empty());	// if we hit this, we have open segments
+				auto searching = result.back();
+				auto hit = pool.end();
+				for (auto i=pool.begin(); i!=pool.end(); ++i) if (i->first == searching || i->second == searching) hit = i;
+
+				assert(hit != pool.end());
+				if (hit == pool.end()) {
+					result[workingLoopBegin] = unsigned(result.size()-(workingLoopBegin+1));
+					return;
+				}
+				auto newVert = (hit->second == searching) ? hit->first : hit->second;
+				pool.erase(hit);
+				auto meet = std::find(result.begin()+workingLoopBegin+1, result.end(), newVert);
+				if (meet != result.end()) {
+					// closed the loop.. But all of the vertices before "meet" have been cut off from the
+					// loop and have to be added back into the pool
+					for (auto i=result.begin()+workingLoopBegin+1; i!=meet; ++i)
+						pool.emplace_back(*i, *(i+1));
+					result.erase(result.begin()+workingLoopBegin+1, meet);
+					break;
+				}
+				result.push_back(newVert);
+			}
+			result[workingLoopBegin] = unsigned(result.size()-(workingLoopBegin+1));
+		}
+	}
+
     template
         std::pair<unsigned, unsigned> ClipIndexedBasedTriangle(
 			unsigned[], unsigned[],
