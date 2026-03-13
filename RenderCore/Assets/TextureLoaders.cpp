@@ -47,22 +47,7 @@ namespace RenderCore { namespace Assets
 			desc._arrayCount = (metadata.arraySize > 1) ? uint16_t(metadata.arraySize) : 0u;
 		desc._mipCount = uint8_t(metadata.mipLevels);
 		desc._samples = TextureSamples::Create();
-
-			// we need to use a "typeless" format for any pixel formats that can
-			// cast to to SRGB or linear versions. This allows the caller to use
-			// both SRGB and linear ShaderResourceView(s).
-			// But, we don't want to do this for all formats that can become typeless
-			// because we need to retain that information on the resource. For example,
-			// if we made R32_** formats typeless here, when we create the shader resource
-			// view there would be no way to know if it was originally a R32_FLOAT, or a R32_UINT (etc)
-			// Also if the texture is explicitly not SRGB, don't switch to typeless here, because we need
-			// to retain that information.
-		auto srcFormat = (RenderCore::Format)metadata.format;
-		if (RenderCore::HasLinearAndSRGBFormats(srcFormat) && RenderCore::AsSRGBFormat(srcFormat) == srcFormat) {
-			desc._format = RenderCore::AsTypelessFormat(srcFormat);
-		} else {
-			desc._format = srcFormat;
-		}
+		desc._format = (RenderCore::Format)metadata.format;			 // retain SRGB / RGB flag present in the source dds file
 
 		switch (metadata.dimension) {
 		case TEX_DIMENSION_TEXTURE1D: desc._dimensionality = TextureDesc::Dimensionality::T1D; break;

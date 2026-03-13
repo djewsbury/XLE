@@ -77,7 +77,7 @@ namespace RenderCore { namespace Techniques
     {
         _generateMipmaps = true;
         _colSpaceRequestString = SourceColorSpace::Unspecified;
-        _colSpaceDefault = SourceColorSpace::Unspecified;
+        _colSpaceDefault = SourceColorSpace::SRGB;      // when we have no guidance on color space, we fallback on SRGB
 
         for (auto c:initializer.Parameters()) {
             if (c == 'l' || c == 'L') { _colSpaceRequestString = SourceColorSpace::Linear; }
@@ -403,6 +403,7 @@ namespace RenderCore { namespace Techniques
             }
         } CATCH(...) {
             promise.set_exception(std::current_exception());
+            return BufferUploads::TransactionID_Invalid;
         } CATCH_END
     }
 
