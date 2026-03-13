@@ -4,6 +4,7 @@
 
 #include "StraightSkeleton.h"
 #include "StraightSkeleton_Internal.h"
+#include "Geometry.h"
 #include "../Core/Exceptions.h"
 #include <cmath>
 #include <optional>
@@ -2091,7 +2092,9 @@ namespace XLEMath
 				segmentSoup.emplace_back(e._head, e._tail);
 		// We shouldn't need the edges in _unplacedEdges, so long as each edge has been correctly
 		// assigned to it's source face
-		return AsVertexLoopsDirected(MakeIteratorRange(segmentSoup));
+		std::vector<unsigned> result;
+		AsVertexLoopsDirected(result, MakeIteratorRange(segmentSoup));
+		return result;
 	}
 
 	T1(Primitive) std::vector<unsigned> StraightSkeleton<Primitive>::VertexLoopsForFace(unsigned faceIdx) const
@@ -2106,7 +2109,9 @@ namespace XLEMath
 			auto& e = _edgesByFace[faceIdx][(c+offset)%_edgesByFace[faceIdx].size()];
 			segmentSoup.emplace_back(e._head, e._tail);
 		}
-		return AsVertexLoopsDirected(MakeIteratorRange(segmentSoup));
+		std::vector<unsigned> result;
+		AsVertexLoopsDirected(result, MakeIteratorRange(segmentSoup));
+		return result;
 	}
 
 	T1(Primitive) Primitive StraightSkeleton<Primitive>::LastEventTime() const

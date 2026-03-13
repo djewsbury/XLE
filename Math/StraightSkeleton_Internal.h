@@ -65,7 +65,7 @@ namespace XLEMath
 		static EdgeCollapse NonCollapse() { return { EdgeCollapseType::NonCollapse, Zero<PointAndTime<Primitive>>() }; }
 	};
 
-	enum WindingType { Left, Right, Straight, FlatV };
+	enum WindingType { Left, Right, Straight, FlatV, Invalid };
 	T1(Primitive) Primitive WindingDeterminant(Vector2T<Primitive> zero, Vector2T<Primitive> one, Vector2T<Primitive> two)
 	{
 		// This is the 2d dot product of (one - zero) and a vector orthogonal to two - zero
@@ -91,6 +91,7 @@ namespace XLEMath
 		#endif
 
 		Primitive d = (zero[0] - one[0]) * (two[0] - one[0]) + (zero[1] - one[1]) * (two[1] - one[1]);
+		if (d == Primitive(0) || d == -Primitive(0)) return {Invalid, 0};		// Bitwise comparison intended. May trigger if two inputs are exactly identical
 		return {(d > 0) ? FlatV : Straight, sign};
 	}
 
@@ -103,25 +104,27 @@ namespace XLEMath
 		#endif
 	}
 
-	T1(Primitive) auto SetMagnitude(Vector2T<Primitive> input, Primitive mag)
-		-> typename std::enable_if<!std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
+	T1(Primitive) auto SetMagnitude(Vector2T<Primitive>& result, Vector2T<Primitive> input, Primitive mag)
+		-> typename std::enable_if<!std::is_integral<Primitive>::value, bool>::type
 	{
 		auto scale = std::hypot(input[0], input[1]);		// (note "scale" becomes promoted to double)
-		Vector2T<Primitive> result;
+		if (scale == Primitive(0)) return false;	// bitwise comparison intended
+
 		for (unsigned c=0; c<2; ++c)
 			result[c] = input[c] * mag / scale;
-		return result;
+		return true;
 	}
 
-	T1(Primitive) auto SetMagnitude(Vector2T<Primitive> input, Primitive mag)
-		-> typename std::enable_if<std::is_integral<Primitive>::value, Vector2T<Primitive>>::type
+	T1(Primitive) auto SetMagnitude(Vector2T<Primitive>& result, Vector2T<Primitive> input, Primitive mag)
+		-> typename std::enable_if<std::is_integral<Primitive>::value, bool>::type
 	{
 		auto scale = std::hypot(input[0], input[1]);		// (note "scale" becomes promoted to double)
+		if (scale == 0) return false;	// bitwise comparison intended
+
 		using Promoted = decltype(scale);
-		Vector2T<Primitive> result;
 		for (unsigned c=0; c<2; ++c)
 			result[c] = (Primitive)std::round(Promoted(input[c]) * Promoted(mag) / scale);
-		return result;
+		return true;
 	}
 
 	T1(Primitive) struct PromoteIntegral { using Value = Primitive; };
@@ -178,8 +181,11 @@ namespace XLEMath
 		auto t0 = Vector2T<Primitive>(vex1-vex0);
 		auto t1 = Vector2T<Primitive>(vex2-vex1);
 
-		auto N0 = SetMagnitude(EdgeTangentToMovementDir(t0), movementTime);
-		auto N1 = SetMagnitude(EdgeTangentToMovementDir(t1), movementTime);
+		Vector2T<Primitive> N0, N1;
+		if (!SetMagnitude(N0, EdgeTangentToMovementDir(t0), movementTime))
+			return {};
+		if (!SetMagnitude(N1, EdgeTangentToMovementDir(t1), movementTime))
+			return {};
 
 		auto A = vex0 - vex1 + N0;
 		auto B = N0;
@@ -280,7 +286,7 @@ namespace XLEMath
 		auto winding0 = CalculateWindingType(pm1, p0, p1, epsilon*magFactor0);
 		auto winding1 = CalculateWindingType(p0, p1, p2, epsilon*magFactor1);
 
-		if (winding0.first == WindingType::FlatV && winding1.first == WindingType::FlatV) {
+		if ((winding0.first == WindingType::FlatV && winding1.first == WindingType::FlatV) || winding0.first == WindingType::Invalid || winding1.first == WindingType::Invalid) {
 
 			return EdgeCollapse<Primitive>::NonCollapse();
 
