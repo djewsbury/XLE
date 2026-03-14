@@ -81,7 +81,7 @@ namespace ToolsRig
 		std::shared_ptr<Techniques::IShaderResourceDelegate> _lightSceneResourceDelegate;
 	};
 
-	static void ConfigureForwardLightingSelectors(ParameterBox& box, const LightingEngine::ForwardPlusLightScene& scene)
+	static void ConfigureForwardLightingSelectors(ParameterBox& box, const LightingEngine::ForwardPlusLightScene& scene, bool enableDistantIBL)
 	{
 		auto& lightOperatorMapping = scene.GetLightOperatorsMapping();
 
@@ -102,6 +102,8 @@ namespace ToolsRig
 			if (lightOperatorMapping._staticShadowProbesCfg) box.SetParameter("SHADOW_PROBE", 1);
 			if (lightOperatorMapping._dynamicShadowProbesCfg) box.SetParameter("DYNAMIC_SHADOW_PROBE", 1);
 		}
+
+		if (enableDistantIBL) box.SetParameter("SPECULAR_IBL", 1);
 	}
 
 	void RegisterPrepareLightScene(ToolsRig::ShaderLab& shaderLab)
@@ -138,6 +140,15 @@ namespace ToolsRig
 			[](auto& formatter, auto& context, auto* sequence) {
 				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used in a sequence"));
 
+				StringSection<> keyName;
+				bool enableDistantIBL = false;
+				while (formatter.TryKeyedItem(keyName)) {
+					if (XlEqString(keyName, "EnableDistantIBL")) {
+						enableDistantIBL = Formatters::RequireCastValue<bool>(formatter);
+					} else
+						formatter.SkipValueOrElement();
+				}
+
 				auto opStep = std::make_shared<PrepareForwardLightScene>(context._drawingApparatus->_device, context._lightScene);
 				sequence->CreateStep_CallFunction(
 					[opStep](auto& iterator) {
@@ -153,7 +164,7 @@ namespace ToolsRig
 							});
 					});
 
-				ConfigureForwardLightingSelectors(context._forwardLightingSelectors, *opStep->_lightScene);
+				ConfigureForwardLightingSelectors(context._forwardLightingSelectors, *opStep->_lightScene, enableDistantIBL);
 			});
 
 		shaderLab.RegisterOperation(
