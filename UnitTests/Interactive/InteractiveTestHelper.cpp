@@ -163,7 +163,7 @@ namespace UnitTests
 			#else
 				_xleresmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("xleres", ::Assets::CreateFileSystem_OS("C:/code/XLE/xleres/core", ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
 			#endif
-			if (enabledComponents)
+			if (enabledComponents & EnabledComponents::RawOSFileSystem)
 				_rawosmnt = ::Assets::MainFileSystem::GetMountingTree()->Mount("rawos", ::Assets::CreateFileSystem_OS({}, ConsoleRig::GlobalServices::GetInstance().GetPollingThread()));
 
 			auto osWindow = std::make_unique<OSServices::Window>();
