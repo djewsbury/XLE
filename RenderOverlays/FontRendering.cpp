@@ -1124,16 +1124,13 @@ namespace RenderOverlays
 		if (!queryResult)
 			return false;
 
-		assert(bitmaps[0]->_width * bitmaps[0]->_height);	// empty bitmap glyph shouldn't show up
-
 		auto estimatedQuadCount = span._totalInstanceCount;
 		workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
 
 		auto i = span._instances;
 		for (unsigned c=0; c<span._glyphCount; ++c) {
 			auto& bitmap = *bitmaps[c];
-			assert(bitmap._width && bitmap._height);
-			// if (!bitmap._width || !bitmap._height) continue;
+			if (!bitmap._width || !bitmap._height) continue;
 
 			auto endi = i+span._glyphsInstanceCounts[c];
 			for (;i!=endi; ++i) {
@@ -1193,8 +1190,6 @@ namespace RenderOverlays
 		if (!queryResult)
 			return false;
 
-		assert(bitmaps[0]->_width * bitmaps[0]->_height);	// empty bitmap glyph shouldn't show up
-
 		auto estimatedQuadCount = span._totalInstanceCount;
 		workingVertices.ReserveQuads((unsigned)estimatedQuadCount * 8);
 
@@ -1203,8 +1198,7 @@ namespace RenderOverlays
 		auto i = span._instances;
 		for (unsigned c=0; c<span._glyphCount; ++c) {
 			auto& bitmap = *bitmaps[c];
-			assert(bitmap._width && bitmap._height);
-			// if (!bitmap._width || !bitmap._height) continue;
+			if (!bitmap._width || !bitmap._height) continue;
 
 			auto endi = i+span._glyphsInstanceCounts[c];
 			for (;i!=endi; ++i) {
