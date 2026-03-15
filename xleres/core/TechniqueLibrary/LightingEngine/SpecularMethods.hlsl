@@ -264,7 +264,7 @@ float3 ReferenceSpecularGGX(
 float3 CalculateSpecular_GGX(
     float3 normal, float3 directionToEye, float3 negativeLightDirection,
     float3 halfVector,
-    float roughness, float3 F0, bool mirrorSurface)
+    float roughness, float3 F0, bool metallic, bool mirrorSurface)
 {
     #if 0
 
@@ -274,13 +274,17 @@ float3 CalculateSpecular_GGX(
 
     #else
 
-        float aveF0 = 0.3333f * (F0.r + F0.g + F0.b);
-        // return LightingFuncGGX_REF(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
+        [branch] if (!metallic) {
+            float aveF0 = F0.r;
+            // return LightingFuncGGX_REF(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
 
-        if (!mirrorSurface) {
-            return LightingFuncGGX_OPT5(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
+            if (!mirrorSurface) {
+                return LightingFuncGGX_OPT5(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
+            } else {
+                return LightingFuncGGX_OPT5_Mirror(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
+            }
         } else {
-            return LightingFuncGGX_OPT5_Mirror(normal, directionToEye, negativeLightDirection, roughness, aveF0).xxx;
+            return LightingFuncGGX_OPT5_XLE_Metallic(normal, directionToEye, negativeLightDirection, roughness, F0);
         }
 
     #endif
@@ -295,6 +299,7 @@ struct SpecularParameters
     float   roughness;
     float3  F0;
     float3  transmission;
+    bool    metallic;
     bool    mirrorSurface;
 };
 
@@ -324,11 +329,12 @@ SpecularParameters SpecularParameters_RoughF0(float roughness, float3 F0)
     return SpecularParameters_RoughF0(roughness, F0, false);
 }
 
-SpecularParameters SpecularParameters_RoughF0Transmission(float roughness, float3 F0, float3 transmission)
+SpecularParameters SpecularParameters_RoughF0Transmission(float roughness, float3 F0, float3 transmission, bool metallic = false)
 {
     SpecularParameters result;
     result.roughness = roughness;
     result.F0 = F0;
+    result.metallic = metallic;
     result.mirrorSurface = false;
     result.transmission = transmission;
     return result;
@@ -346,7 +352,7 @@ float3 CalculateSpecular(
     #elif SPECULAR_METHOD==1
         return CalculateSpecular_GGX(
             normal, directionToEye, negativeLightDirection, halfVector,
-            parameters.roughness, parameters.F0, parameters.mirrorSurface);
+            parameters.roughness, parameters.F0, parameters.metallic, parameters.mirrorSurface);
     #elif SPECULAR_METHOD==2
         return pow(dot(reflect(negativeLightDirection, normal), directionToEye), 4);
     #endif

@@ -84,11 +84,16 @@ float3 DirectionalLightResolve_Specular(
 
 		// In our "metal" lighting model, sample.diffuseAlbedo actually contains
 		// per-wavelength F0 values.
-	float3 metalF0 = sample.diffuseAlbedo;
-	float3 F0_0 = lerp(GetF0_0(sample).xxx, NormalizeMetalColor(metalF0), GetMetallicness(sample));
+	float3 F0_0 = GetF0_0(sample).xxx;
+	float metallicness = GetMetallicness(sample);
+	bool metal = metallicness > 0.1;
+	[branch] if (metal) {
+		float3 metalF0 = sample.diffuseAlbedo;
+		F0_0 = lerp(F0_0, NormalizeMetalColor(metalF0), metallicness);
+	}
 
 	SpecularParameters param0 = SpecularParameters_RoughF0Transmission(
-		roughnessValue, F0_0, sample.transmission);
+		roughnessValue, F0_0, sample.transmission, metal);
 
 	float3 spec0 = CalculateSpecular(
 		sample.worldSpaceNormal, directionToEye,
