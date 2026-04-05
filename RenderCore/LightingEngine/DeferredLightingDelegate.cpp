@@ -227,6 +227,7 @@ namespace RenderCore { namespace LightingEngine
 				box.SetParameter("BACK_STENCIL_REF", 0xff);
 				unsigned batches = Techniques::BatchFlags::Opaque;
 				batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
+				batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("sky"_h);
 				createGBuffer.AddSubpass(std::move(subpass), std::move(defIllumDel), batches, std::move(box), std::move(srDelegate));
 				return std::make_pair(std::move(createGBuffer), normalsFitting->GetCompletionCommandList());
 			});
@@ -547,6 +548,7 @@ namespace RenderCore { namespace LightingEngine
 					for (const auto&seqCfg:captures->_lightScene->_priorityShadowScheduler->GetSequencerCfgsForPrepareSteps()) {
 						auto batches = Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending;
 						batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
+						batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("sky"_h);
 						mainSequence.CreatePrepareOnlyParseScene(batches);
 						mainSequence.CreatePrepareOnlyStep_ExecuteDrawables(seqCfg);
 					}

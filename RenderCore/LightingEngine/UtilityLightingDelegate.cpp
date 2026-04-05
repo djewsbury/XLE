@@ -98,6 +98,7 @@ namespace RenderCore { namespace LightingEngine
 			ParameterBox box;
 			auto batches = Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending;
 			batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
+			batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("sky"_h);
 			result.AddSubpass(std::move(mainSubpass), mainDelegate, batches);
 		}
 
