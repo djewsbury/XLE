@@ -497,6 +497,7 @@ namespace RenderCore { namespace LightingEngine
 			// individual subresources will be switched to this state when rendered to; but Vulkan validation layer still complains about the unwritten layers
 			auto tableRes = _pimpl->_staticTable.get();
 			Metal::BarrierHelper{*Metal::DeviceContext::Get(threadContext)}.Add(*tableRes, Metal::BarrierResourceUsage::NoState(), BindFlag::ShaderResource);
+			_pimpl->_pendingStaticTableInit = false;
 		}
 
 		if (_pimpl->_pendingClearOfProbeUniforms) {
