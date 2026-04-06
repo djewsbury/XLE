@@ -227,13 +227,18 @@ namespace RenderCore { namespace Assets { namespace GeoProc
             const bool handleWrappingPointVertices = true;
             if (handleWrappingPointVertices) {
                 auto& posStream = mesh.GetStreams()[posElement];
-                if (posStream.GetVertexMap().empty())
-                    Throw(std::runtime_error("Wrapping point tangent frame correction can't be applied because unique vertex positions not calculated"));
 
                 std::vector<std::pair<unsigned, unsigned>> posStreamToUnifiedIndexMap;          // first is the stream index, second is the unified index
-                posStreamToUnifiedIndexMap.reserve(posStream.GetVertexMap().size());
-                unsigned q=0;
-                for (auto i:posStream.GetVertexMap()) posStreamToUnifiedIndexMap.emplace_back(i, q++);
+                if (!posStream.GetVertexMap().empty()) {
+                    posStreamToUnifiedIndexMap.reserve(posStream.GetVertexMap().size());
+                    unsigned q=0;
+                    for (auto i:posStream.GetVertexMap()) posStreamToUnifiedIndexMap.emplace_back(i, q++);
+                } else {
+                    // If there's no vertex map on the position coords, we have to assume that each position is used for only a single vertex 
+                    // this typically only happens when the mapping is extremely regular (such as some kind of projection based only on the position itself)
+                    posStreamToUnifiedIndexMap.reserve(mesh.GetUnifiedVertexCount());
+                    for (unsigned c=0; c<mesh.GetUnifiedVertexCount(); ++c) posStreamToUnifiedIndexMap.emplace_back(c, c);
+                }
 
                 std::sort(
                     posStreamToUnifiedIndexMap.begin(), posStreamToUnifiedIndexMap.end(),
