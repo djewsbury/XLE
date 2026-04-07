@@ -177,6 +177,8 @@ float3 CalculateIllumination(
 							float3 light = SphereLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
 							[branch] if (l.Shape == LIGHT_SHAPE_CONE) light *= ConeLightShapeMultipler(l, worldPosition, screenDest);
 							result += shadowing * light;
+						} else if (l.Shape == LIGHT_SHAPE_TUBE) {
+							result += shadowing * TubeLightResolve(sample, sampleExtraNoSSAO, l, worldPosition, directionToEye, screenDest);
 						}
 						#if defined(_DEBUG)
 							else result += float3(1,0,0);

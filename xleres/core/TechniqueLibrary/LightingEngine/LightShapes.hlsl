@@ -172,9 +172,9 @@ float3 TubeLightResolve(
     // We can choose to use either "specLightDir" or "tubePoint" for our diffuse distance calc
     // If we use tubePoint, the radius will have no effect on the diffuse result (just on specular result)
     // This might not be perfectly correct, but it can avoid artefacts that can occur at certain angles
-    float distanceSq = MagnitudeSquared(tubePoint - worldPosition);
+    float distanceSq = MagnitudeSquared(tubePoint);
     float rDistance = rsqrt(distanceSq);
-    float3 diffuseRepDir = (tubePoint - worldPosition) * rDistance;
+    float3 diffuseRepDir = (tubePoint) * rDistance;
 
     float3 diffuse = DirectionalLightResolve_Diffuse_NdotL(sample, directionToEye, diffuseRepDir, NdotL, light);
     float3 specular = DirectionalLightResolve_Specular(sample, directionToEye, normalize(specLightDir), light, sampleExtra.screenSpaceOcclusion);
