@@ -408,9 +408,8 @@ namespace RenderCore { namespace LightingEngine
 
 					Techniques::VertexInputStates inputStates;
 					MiniInputElementDesc inputElements[] = { {Techniques::CommonSemantics::POSITION, Format::R32G32B32_FLOAT} };
-					Techniques::VertexInputStates vInput;
 					inputStates._miniInputAssembly = MakeIteratorRange(inputElements);
-					vInput._topology = Topology::TriangleList;
+					inputStates._topology = Topology::TriangleList;
 					FrameBufferDesc fbDesc{{}, std::vector<SubpassDesc>{SubpassDesc{}}};
 					Techniques::FrameBufferTarget fbTarget{&fbDesc, 0};
 					std::promise<Techniques::GraphicsPipelineAndLayout> promisedPipeline;

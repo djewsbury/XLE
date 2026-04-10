@@ -36,7 +36,7 @@ namespace RenderCore { namespace Techniques
 	{
 		IteratorRange<const InputElementDesc*> _inputAssembly;
 		IteratorRange<const MiniInputElementDesc*> _miniInputAssembly;
-		Topology _topology;
+		Topology _topology = Topology::TriangleList;
 
 		uint64_t GetHash() const;
 	};
