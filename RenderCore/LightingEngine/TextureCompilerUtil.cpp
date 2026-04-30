@@ -192,9 +192,7 @@ namespace RenderCore { namespace LightingEngine
 		if (filter != EquirectFilterMode::ProjectToSphericalHarmonic)
 			assert(ActualArrayLayerCount(targetDesc) == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
 
-		auto threadContext = Techniques::GetThreadContext();
-		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(threadContext->GetDevice());
+		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(Techniques::Services::GetInstance().GetDevicePtr());
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "Input"_h);
@@ -256,18 +254,48 @@ namespace RenderCore { namespace LightingEngine
 				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 		}
 
-		auto inputRes = Techniques::CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
-		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
-		Metal::CompleteInitialization(metalContext, {outputRes.get()});
-		if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(threadContext.get()))
-			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
-
 		computeOpFuture->StallWhilePending();
 		auto computeOp = computeOpFuture->Actualize();
 
 		auto depVal = ::Assets::GetDepValSys().Make();
 		depVal.RegisterDependency(computeOp->GetDependencyValidation());
 		depVal.RegisterDependency(dataSrc.GetDependencyValidation());
+
+		// additional special case resources
+		std::shared_ptr<Techniques::IComputeShaderOperator> horizontalDensities, normalizeDensities;
+		if (filter == EquirectFilterMode::ToGlossySpecular) {
+			auto horizontalDensitiesFuture = CreateComputeOperator(
+				pipelineCollection,
+				IBL_PREFILTER_HLSL ":CalculateHorizontalMarginalDensities",
+				{},
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
+			auto normalizeDensitiesFuture = CreateComputeOperator(
+				pipelineCollection,
+				IBL_PREFILTER_HLSL ":NormalizeMarginalDensities",
+				{},
+				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
+			horizontalDensitiesFuture->StallWhilePending();
+			normalizeDensitiesFuture->StallWhilePending();
+			horizontalDensities = horizontalDensitiesFuture->Actualize();
+			normalizeDensities = normalizeDensitiesFuture->Actualize();
+
+			depVal.RegisterDependency(horizontalDensities->GetDependencyValidation());
+			depVal.RegisterDependency(normalizeDensities->GetDependencyValidation());
+		}
+
+		////////////////////////////////////////////////
+		// Create metal context
+		//
+		// Delay creating the metal context as long as possible (particularly after any resource stalls)
+		// Since the metal context can construct a command list, which will make it impossible to release
+		// GPU resources until we're finished with it
+		auto threadContext = Techniques::GetThreadContext();
+		auto metalContext = Metal::DeviceContext::Get(*threadContext);
+		auto inputRes = Techniques::CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
+		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
+		Metal::CompleteInitialization(*metalContext, {outputRes.get()});
+		if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(threadContext.get()))
+			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
 
 		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
 
@@ -332,24 +360,6 @@ namespace RenderCore { namespace LightingEngine
 			}
 		} else if (filter == EquirectFilterMode::ToGlossySpecular) {
 			// glossy specular
-			auto horizontalDensitiesFuture = CreateComputeOperator(
-				pipelineCollection,
-				IBL_PREFILTER_HLSL ":CalculateHorizontalMarginalDensities",
-				{},
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
-			auto normalizeDensitiesFuture = CreateComputeOperator(
-				pipelineCollection,
-				IBL_PREFILTER_HLSL ":NormalizeMarginalDensities",
-				{},
-				TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
-			horizontalDensitiesFuture->StallWhilePending();
-			normalizeDensitiesFuture->StallWhilePending();
-			auto horizontalDensities = horizontalDensitiesFuture->Actualize();
-			auto normalizeDensities = normalizeDensitiesFuture->Actualize();
-
-			depVal.RegisterDependency(horizontalDensities->GetDependencyValidation());
-			depVal.RegisterDependency(normalizeDensities->GetDependencyValidation());
-
 			auto inputDesc = inputRes->GetDesc()._textureDesc;
 			const unsigned densityBlock = 16;
 			UInt2 densitiesDims { (inputDesc._width+densityBlock-1)/densityBlock, (inputDesc._height+densityBlock-1)/densityBlock };
@@ -360,16 +370,16 @@ namespace RenderCore { namespace LightingEngine
 				CreateDesc(BindFlag::UnorderedAccess, TextureDesc::Plain1D(densitiesDims[1], Format::R32_FLOAT)),
 				"marginal-vertical-cdf")->CreateTextureView(BindFlag::UnorderedAccess);
 			RenderCore::IResource* toComplete[] { marginalHorizontalCFG->GetResource().get(), marginalVerticalCFG->GetResource().get() };
-			Metal::CompleteInitialization(metalContext, toComplete);
+			Metal::CompleteInitialization(*metalContext, toComplete);
 
 			IResourceView* resViews[] = { inputView.get(), nullptr, marginalHorizontalCFG.get(), marginalVerticalCFG.get(), nullptr, nullptr };
 			UniformsStream us;
 			us._resourceViews = MakeIteratorRange(resViews);
 
 			horizontalDensities->Dispatch(*threadContext, (densitiesDims[0]+8-1)/8, (densitiesDims[1]+8-1)/8, 1, &usi, us);
-			Metal::BarrierHelper(metalContext).Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
+			Metal::BarrierHelper(*metalContext).Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
 			normalizeDensities->Dispatch(*threadContext, 1, 1, 1, &usi, us);
-			Metal::BarrierHelper(metalContext)
+			Metal::BarrierHelper(*metalContext)
 				.Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess)
 				.Add(*marginalVerticalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
 
