@@ -199,4 +199,7 @@ namespace RenderOverlays
     inline Float3 SRGBToLinear_Formal(Float3 input) { return { SRGBToLinear_Formal(input[0]), SRGBToLinear_Formal(input[1]), SRGBToLinear_Formal(input[2]) }; }
     inline Float4 LinearToSRGB_Formal(Float4 input) { return { LinearToSRGB_Formal(input[0]), LinearToSRGB_Formal(input[1]), LinearToSRGB_Formal(input[2]), input[3] }; }
     inline Float4 SRGBToLinear_Formal(Float4 input) { return { SRGBToLinear_Formal(input[0]), SRGBToLinear_Formal(input[1]), SRGBToLinear_Formal(input[2]), input[3] }; }
+
+    // 20 distributed colors, suitable for a map or diagram. s_distinctColorsAndNames[20] is white and s_distinctColorsAndNames[21] is black
+    extern const std::pair<std::string, ColorB> s_distinctColorsAndNames[22];
 }

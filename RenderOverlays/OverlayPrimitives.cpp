@@ -113,8 +113,33 @@ namespace RenderOverlays
 		if (XlEqString(str, "Bottom")) return TextAlignment::Bottom;
 		if (XlEqString(str, "BottomRight")) return TextAlignment::BottomRight;
 		return {};
-
 	}
+
+	const std::pair<std::string, ColorB> s_distinctColorsAndNames[22] =
+	{
+		{ "red", {230, 25, 75} },
+		{ "green", {60, 180, 180} },
+		{ "yellow", {255, 225, 225} },
+		{ "blue", {0, 130, 130} },
+		{ "orange", {245, 130, 130} },
+		{ "purple", {145, 30, 30} },
+		{ "cyan", {70, 240, 240} },
+		{ "magenta", {240, 50, 50} },
+		{ "lime", {210, 245, 245} },
+		{ "pink", {250, 190, 190} },
+		{ "teal", {0, 128, 128} },
+		{ "lavender", {220, 190, 190} },
+		{ "brown", {170, 110, 110} },
+		{ "beige", {255, 250, 250} },
+		{ "maroon", {128, 0, 0} },
+		{ "mint", {170, 255, 255} },
+		{ "olive", {128, 128, 128} },
+		{ "apricot", {255, 215, 215} },
+		{ "navy", {0, 0, 0} },
+		{ "grey", {128, 128, 128} },
+		{ "white", {255, 255, 255} },
+		{ "black", {0, 0, 0} }
+	};
 }
 
 
