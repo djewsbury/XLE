@@ -1627,7 +1627,9 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		
 			void SetLocalToWorld(const Float4x4& newLocalToWorld) override
 			{
-				_position = ExtractTranslation(newLocalToWorld);
+				ScaleRotationTranslationM srt{newLocalToWorld};
+				_position = srt._translation;
+				_cutoffRange = std::max(std::max(srt._scale[0], srt._scale[1]), srt._scale[2]);
 				_parent->_tiler->UpdateLight(_position, _cutoffRange, _idForTiler);
 				if (_positionalChain) _positionalChain->SetLocalToWorld(newLocalToWorld);
 			}
@@ -1683,12 +1685,14 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	static CB_Decal MakeDecalUniforms(const LightingEngine::Internal::StandardPositionalLight& light, uint32_t typeCode)
 	{
-		return CB_Decal {
+		auto worldToLocal = InvertOrthonormalTransform(
 			Float3x4 {
 				light._orientation(0,0), light._orientation(0,1), light._orientation(0,2), light._position[0],
 				light._orientation(1,0), light._orientation(1,1), light._orientation(1,2), light._position[1],
-				light._orientation(2,0), light._orientation(2,1), light._orientation(2,2), light._position[2] }
-		};
+				light._orientation(2,0), light._orientation(2,1), light._orientation(2,2), light._position[2] });
+		Combine_IntoLHS(worldToLocal, ArbitraryScale{1.f/light._radii[0], 1.f/light._radii[1], 1.f});
+
+		return CB_Decal { worldToLocal };
 	}
 
 	void TiledDecalScheduler::DoPrepareUniforms(Techniques::ParsingContext& parsingContext)

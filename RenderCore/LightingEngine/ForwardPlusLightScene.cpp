@@ -250,14 +250,14 @@ namespace RenderCore { namespace LightingEngine
 			if (bindingFlags & decalUniformFlags) {
 				assert((bindingFlags & decalUniformFlags) == decalUniformFlags);
 				if (_lightScene->_tiledDecalScheduler) {
-					dst[0] = &_lightScene->_tiledDecalScheduler->GetLightDepthTableUAV();
-					dst[1] = &_lightScene->_tiledDecalScheduler->GetLightListUAV();
-					dst[2] = _lightScene->_decalTiler->_outputs._tiledLightBitFieldSRV.get();
-					assert(dst[0] && dst[1] && dst[2]);
+					dst[10] = &_lightScene->_tiledDecalScheduler->GetLightDepthTableUAV();
+					dst[11] = &_lightScene->_tiledDecalScheduler->GetLightListUAV();
+					dst[12] = _lightScene->_decalTiler->_outputs._tiledLightBitFieldSRV.get();
+					assert(dst[10] && dst[11] && dst[12]);
 				} else {
-					dst[0] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
-					dst[1] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
-					dst[2] = context.GetTechniqueContext()._commonResources->_black2DSRV.get();
+					dst[10] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
+					dst[11] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
+					dst[12] = context.GetTechniqueContext()._commonResources->_black2DSRV.get();
 				}
 			}
 		}

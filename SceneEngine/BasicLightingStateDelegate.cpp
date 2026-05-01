@@ -275,6 +275,10 @@ namespace SceneEngine
             _lightOperatorHashToId.emplace_back(_ambientOperator, cfg.Register(_operatorResolveContext._ambientOperators._objects[0].second));
         }
 
+        for (const auto& decalOperator:_operatorResolveContext._decalOperators._objects) {
+            _lightOperatorHashToId.emplace_back(decalOperator.first, cfg.Register(decalOperator.second));
+        }
+
         if (!_operatorResolveContext._toneMapAcesOperators._objects.empty()) {
             if (_operatorResolveContext._toneMapAcesOperators._objects.size() != 1)
                 Throw(std::runtime_error("Only one tonemap operator allowed in BasicLightingStateDelegate configuration file"));
@@ -1167,6 +1171,13 @@ namespace SceneEngine
 
     bool SetProperty(
         LightingEngine::AmbientLightOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
+    {
+        return false;
+    }
+
+    bool SetProperty(
+        LightingEngine::DecalLightOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const ImpliedTyping::TypeDesc& type)
     {
         return false;
