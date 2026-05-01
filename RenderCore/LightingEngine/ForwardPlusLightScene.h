@@ -9,7 +9,7 @@
 #include "ShadowPreparer.h"		// for ShadowOperatorDesc
 
 namespace RenderCore::Techniques { class ITechniqueDelegate; class DeferredShaderResource; class IShaderResourceDelegate; }
-namespace RenderCore::LightingEngine::Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProbeScheduler; class PriorityShadowProjectionScheduler; class DominantLightSet; class PriorityShadowSchedulerUtil; class TiledLightScheduler; class AmbientResourcesScheduler; }
+namespace RenderCore::LightingEngine::Internal { class SemiStaticShadowProbeScheduler; class DynamicShadowProbeScheduler; class PriorityShadowProjectionScheduler; class DominantLightSet; class PriorityShadowSchedulerUtil; class TiledLightScheduler; class TiledDecalScheduler; class AmbientResourcesScheduler; }
 
 namespace RenderCore { namespace LightingEngine
 {
@@ -23,6 +23,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 	public:
 		RasterizationLightTileOperator* GetLightTiler() { return _lightTiler.get(); }
+		RasterizationLightTileOperator* GetDecalTiler() { return _decalTiler.get(); }
 		ShadowProbes& GetShadowProbes() { return *_shadowProbes; }
 		const IPreparedShadowResult* GetDominantPreparedShadow();
 
@@ -39,7 +40,12 @@ namespace RenderCore { namespace LightingEngine
 
 		struct OperatorInfo
 		{
-			bool _tileable = false;
+			struct Flags
+			{
+				enum Values { TileableLight = 1u<<0u, TileableDecal = 1u<<1u };
+				using BitField = uint32_t;
+			};
+			Flags::BitField _flags = 0;
 			unsigned _uniformShapeCode = 0;
 			unsigned _shadowPreparerId = ~0u;
 		};
@@ -89,12 +95,13 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Internal::PriorityShadowProjectionScheduler> _priorityShadowScheduler;
 		std::shared_ptr<Internal::DominantLightSet> _dominantLightSet;
 		std::shared_ptr<Internal::TiledLightScheduler> _tiledLightScheduler;
+		std::shared_ptr<Internal::TiledDecalScheduler> _tiledDecalScheduler;
 		std::shared_ptr<Internal::AmbientResourcesScheduler> _ambientResourcesScheduler;
 
 		std::function<void*(uint64_t)> _queryInterfaceHelper;
 
 	private:
-		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
+		std::shared_ptr<RasterizationLightTileOperator> _lightTiler, _decalTiler;
 		std::shared_ptr<Techniques::IPipelineAcceleratorPool> _pipelineAccelerators;
 		std::shared_ptr<SharedTechniqueDelegateBox> _techDelBox;
 
@@ -119,7 +126,8 @@ namespace RenderCore { namespace LightingEngine
 		static std::shared_ptr<ForwardPlusLightScene> CreateInternal(
 			const ConstructionServices&,
 			std::shared_ptr<Internal::PriorityShadowSchedulerUtil> shadowPreparers,
-			std::shared_ptr<RasterizationLightTileOperator> lightTiler, 
+			std::shared_ptr<RasterizationLightTileOperator> lightTiler,
+			std::shared_ptr<RasterizationLightTileOperator> decalTiler,
 			ForwardPlusLightScene::LightOperatorsMapping&& shadowPreparerMapping,
 			std::shared_ptr<IResourceView> glossLut,
 			BufferUploads::CommandListID glossLutCompletion,

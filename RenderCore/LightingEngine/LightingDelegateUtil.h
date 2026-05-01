@@ -319,6 +319,50 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		unsigned _pingPongCounter = 0;
 	};
 
+	class TiledDecalScheduler : public ILightSceneComponent
+	{
+	public:
+		void DoPrepareUniforms(RenderCore::Techniques::ParsingContext& parsingContext);
+		void WriteEnvProps(CB_EnvironmentProps&);
+
+		RenderCore::IResourceView& GetLightListUAV() { return *_uniforms[_pingPongCounter%dimof(_uniforms)]._lightListUAV; }
+		RenderCore::IResourceView& GetLightDepthTableUAV() { return *_uniforms[_pingPongCounter%dimof(_uniforms)]._lightDepthTableUAV; }
+
+		struct LightOperatorInfo
+		{
+			bool _tileable = false;
+		};
+
+		TiledDecalScheduler(
+			std::shared_ptr<RasterizationLightTileOperator> lightTiler,
+			IteratorRange<const LightOperatorInfo*> operatorInfo);
+		~TiledDecalScheduler();
+	private:
+		// ILightSceneComponent
+		void RegisterLight(unsigned setIdx, unsigned lightIdx) override;
+		void DeregisterLight(unsigned setIdx, unsigned lightIdx) override;
+		bool BindToSet(ILightScene::LightOperatorId, unsigned setIdx, QueryInterfaceFunction&&) override;
+		void* QueryInterface(unsigned setIdx, ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode) override;
+
+		struct SceneSet;
+		std::vector<std::unique_ptr<SceneSet>> _sceneSets;
+
+		std::vector<LightOperatorInfo> _operatorInfos;
+		std::shared_ptr<RasterizationLightTileOperator> _lightTiler;
+
+		struct SceneLightUniforms
+		{
+			std::shared_ptr<RenderCore::IResource> _lightList;
+			std::shared_ptr<RenderCore::IResourceView> _lightListUAV;
+			std::shared_ptr<RenderCore::IResource> _lightDepthTable;
+			std::shared_ptr<RenderCore::IResourceView> _lightDepthTableUAV;
+		};
+		SceneLightUniforms _uniforms[3];
+		std::shared_ptr<RenderCore::IResource> _unmapLightList;
+		std::shared_ptr<RenderCore::IResource> _unmapDepthTable;
+		unsigned _pingPongCounter = 0;
+	};
+
 	class AmbientResourcesScheduler : public ILightSceneComponent
 	{
 	public:

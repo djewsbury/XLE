@@ -1614,6 +1614,205 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	struct TiledDecalScheduler::SceneSet
+	{
+		struct LightEntry : public LightingEngine::IPositionalLightSource
+		{
+			LightingEngine::Internal::StandardPositionalLight* _standardLight = nullptr;
+			IPositionalLightSource* _positionalChain = nullptr;
+			unsigned _idForTiler = ~0u;
+			Float3 _position { 0.f, 0.f, 0.f };
+			float _cutoffRange = 1.f;
+			SceneSet* _parent = nullptr;
+		
+			void SetLocalToWorld(const Float4x4& newLocalToWorld) override
+			{
+				_position = ExtractTranslation(newLocalToWorld);
+				_parent->_tiler->UpdateLight(_position, _cutoffRange, _idForTiler);
+				if (_positionalChain) _positionalChain->SetLocalToWorld(newLocalToWorld);
+			}
+			Float4x4 GetLocalToWorld() const override { assert(_positionalChain); return _positionalChain->GetLocalToWorld(); }
+		};
+		std::deque<LightEntry> _lights;
+		std::shared_ptr<LightingEngine::RasterizationLightTileOperator> _tiler;
+		ILightSceneComponent::QueryInterfaceFunction _qi;
+		LightOperatorInfo _operatorInfo;
+		unsigned _setIdForTiler = 0;
+
+		void RegisterLight(unsigned index)
+		{
+			if (_lights.size() <= index)
+				_lights.resize(index+1);
+
+			LightEntry newLight;
+			newLight._idForTiler = _setIdForTiler|index;
+			newLight._parent = this;
+			if ((newLight._positionalChain = (LightingEngine::IPositionalLightSource*)_qi(index, TypeHashCode<LightingEngine::IPositionalLightSource>))) {
+				auto localToWorld = newLight._positionalChain->GetLocalToWorld();
+				newLight._position = ExtractTranslation(localToWorld);
+			}
+			newLight._standardLight = (LightingEngine::Internal::StandardPositionalLight*)_qi(index, TypeHashCode<LightingEngine::Internal::StandardPositionalLight>);
+
+			assert(_lights[index]._idForTiler == ~0u);		// if you hit this, it means we're about the register the same light multiple times with the tiler
+			_tiler->AddLight(newLight._position, newLight._cutoffRange, newLight._idForTiler);
+			_lights[index] = std::move(newLight);
+		}
+
+		void DeregisterLight(unsigned index)
+		{
+			_tiler->RemoveLight(_lights[index]._idForTiler);
+			_lights[index] = {};
+		}
+
+		void SetQI(ILightSceneComponent::QueryInterfaceFunction&& qi)
+		{
+			_qi = std::move(qi);
+			unsigned idx = 0;
+			for (auto& light:_lights) {
+				light._positionalChain = (LightingEngine::IPositionalLightSource*)_qi(idx, TypeHashCode<LightingEngine::IPositionalLightSource>);
+				light._standardLight = (LightingEngine::Internal::StandardPositionalLight*)_qi(idx, TypeHashCode<LightingEngine::Internal::StandardPositionalLight>);
+				++idx;
+			}
+		}
+	};
+
+	struct CB_Decal
+	{
+		Float3x4 _transform;
+	};
+
+	static CB_Decal MakeDecalUniforms(const LightingEngine::Internal::StandardPositionalLight& light, uint32_t typeCode)
+	{
+		assert(0);
+		return CB_Decal {};
+	}
+
+	void TiledDecalScheduler::DoPrepareUniforms(Techniques::ParsingContext& parsingContext)
+	{
+		++_pingPongCounter;
+
+		auto& uniforms = _uniforms[_pingPongCounter%dimof(_uniforms)];
+		auto& tilerOutputs = _lightTiler->_outputs;
+		auto& device = *parsingContext.GetThreadContext().GetDevice();
+		{
+			Metal::ResourceMap map{
+				device, *uniforms._lightDepthTable,
+				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
+				0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size()};
+			std::memcpy(map.GetData().begin(), tilerOutputs._lightDepthTable.data(), sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
+			map.FlushCache();
+		}
+		if (tilerOutputs._lightCount) {
+			Metal::ResourceMap map{
+				device, *uniforms._lightList,
+				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
+				0, sizeof(CB_Decal)*tilerOutputs._lightCount};
+			auto* i = (CB_Decal*)map.GetData().begin();
+			auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
+			for (auto idx=tilerOutputs._lightOrdering.begin(); idx!=end; ++idx, ++i) {
+				auto setIdx = *idx >> 24, lightIdx = (*idx)&0xffffff;
+				auto& lightDesc = _sceneSets[setIdx]->_lights[lightIdx];	// expensive array lookup
+				*i = MakeDecalUniforms(*lightDesc._standardLight, 0);
+			}
+
+			map.FlushCache();
+		}
+
+		// additional copy from our shared memory mapping into gpu-only memory
+		if (tilerOutputs._lightCount && _unmapLightList) {
+			auto& metalContext = *Metal::DeviceContext::Get(parsingContext.GetThreadContext());
+			auto bltEncoder = metalContext.BeginBlitEncoder();
+			bltEncoder.Copy(
+				*_unmapLightList,
+				RenderCore::CopyPartial_Src{*uniforms._lightList, 0, unsigned(sizeof(CB_Decal)*tilerOutputs._lightCount)});
+			bltEncoder.Copy(
+				*_unmapDepthTable,
+				RenderCore::CopyPartial_Src{*uniforms._lightDepthTable, 0, unsigned(sizeof(unsigned)*tilerOutputs._lightDepthTable.size())});
+		}
+	}
+
+	void TiledDecalScheduler::WriteEnvProps(CB_EnvironmentProps& dst)
+	{
+		// dst._decalCount = _lightTiler->_outputs._lightCount;
+	}
+
+	void TiledDecalScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx)
+	{
+		_sceneSets[setIdx]->RegisterLight(lightIdx);
+	}
+
+	void TiledDecalScheduler::DeregisterLight(unsigned setIdx, unsigned lightIdx)
+	{
+		_sceneSets[setIdx]->DeregisterLight(lightIdx);
+	}
+
+	bool TiledDecalScheduler::BindToSet(LightingEngine::ILightScene::LightOperatorId op, unsigned setIdx, QueryInterfaceFunction&& qi)
+	{
+		if (op >= _operatorInfos.size() || !_operatorInfos[op]._tileable) return false;
+		if (_sceneSets.size() <= setIdx)
+			_sceneSets.resize(setIdx+1);
+		if (!_sceneSets[setIdx]) _sceneSets[setIdx] = std::make_unique<SceneSet>();
+		_sceneSets[setIdx]->_setIdForTiler = setIdx << 24u;
+		_sceneSets[setIdx]->_tiler = _lightTiler;
+		_sceneSets[setIdx]->SetQI(std::move(qi));
+		_sceneSets[setIdx]->_operatorInfo = _operatorInfos[op];
+		return true;
+	}
+
+	void* TiledDecalScheduler::QueryInterface(unsigned setIdx, LightingEngine::ILightScene::LightSourceId lightIdx, uint64_t interfaceTypeCode)
+	{
+		if (!_sceneSets[setIdx]) return nullptr;
+		switch(interfaceTypeCode) {
+		case TypeHashCode<LightingEngine::IPositionalLightSource>:
+			return (LightingEngine::IPositionalLightSource*)&_sceneSets[setIdx]->_lights[lightIdx];
+		default:
+			return nullptr;
+		}
+	}
+
+	TiledDecalScheduler::TiledDecalScheduler(
+		std::shared_ptr<LightingEngine::RasterizationLightTileOperator> lightTiler,
+		IteratorRange<const LightOperatorInfo*> operatorInfo)
+	: _lightTiler(std::move(lightTiler))
+	, _operatorInfos(operatorInfo.begin(), operatorInfo.end())
+	{
+		auto& device = *_lightTiler->GetDevice();
+		auto tilerConfig = _lightTiler->GetConfiguration();
+		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
+
+		auto lightListDesc = CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(CB_Decal)*tilerConfig._maxLightsPerView, sizeof(CB_Decal)));
+		auto lightDepthTableDesc = CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(unsigned)*tilerConfig._depthLookupGradiations, sizeof(unsigned)));
+
+		if (tilerConfig._copyOutOfSharedMemory) {
+			_unmapLightList = device.CreateResource(lightListDesc, "decal-list");
+			_unmapDepthTable = device.CreateResource(lightDepthTableDesc, "decal-depth-table");
+		}
+
+		lightListDesc._allocationRules = lightDepthTableDesc._allocationRules = allocationRulesForDynamicCBs;
+		for (unsigned c=0; c<dimof(_uniforms); c++) {
+			_uniforms[c]._lightList = device.CreateResource(lightListDesc, "decal-list");
+			_uniforms[c]._lightDepthTable = device.CreateResource(lightDepthTableDesc, "decal-depth-table");
+		}
+
+		if (_unmapLightList) {
+			_uniforms[0]._lightListUAV = _unmapLightList->CreateBufferView(BindFlag::UnorderedAccess);
+			_uniforms[0]._lightDepthTableUAV = _unmapDepthTable->CreateBufferView(BindFlag::UnorderedAccess);
+			for (unsigned c=1; c<dimof(_uniforms); c++) {
+				_uniforms[c]._lightListUAV = _uniforms[0]._lightListUAV;
+				_uniforms[c]._lightDepthTableUAV = _uniforms[0]._lightDepthTableUAV;
+			}
+		} else {
+			for (unsigned c=0; c<dimof(_uniforms); c++) {
+				_uniforms[c]._lightListUAV = _uniforms[c]._lightList->CreateBufferView(BindFlag::UnorderedAccess);
+				_uniforms[c]._lightDepthTableUAV = _uniforms[c]._lightDepthTable->CreateBufferView(BindFlag::UnorderedAccess);
+			}
+		}
+	}
+
+	TiledDecalScheduler::~TiledDecalScheduler() {}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	void AmbientResourcesScheduler::RegisterLight(LightSetId setIdx, ILightScene::LightSourceId lightIdx)
 	{
 		assert(setIdx == _boundSet);

@@ -37,7 +37,7 @@ namespace RenderCore { namespace LightingEngine
 	{
 		// ensure FiniteRange flag is set for tilable lights
 		for (auto& op:_lightOperatorsMapping._operatorInfos) {
-			if (op._tileable) AssociateFlag(&op-_lightOperatorsMapping._operatorInfos.data(), Internal::StandardPositionLightFlags::SupportFiniteRange);
+			if (op._flags & OperatorInfo::Flags::TileableLight) AssociateFlag(&op-_lightOperatorsMapping._operatorInfos.data(), Internal::StandardPositionLightFlags::SupportFiniteRange);
 			if (op._uniformShapeCode == 3) AssociateFlag(&op-_lightOperatorsMapping._operatorInfos.data(), Internal::StandardPositionLightFlags::SupportConeSource);
 		}
 
@@ -64,9 +64,16 @@ namespace RenderCore { namespace LightingEngine
 
 		if (_lightTiler) {
 			std::vector<Internal::TiledLightScheduler::LightOperatorInfo> infosForTiledScheduler; infosForTiledScheduler.reserve(_lightOperatorsMapping._operatorInfos.size());
-			for (auto& i:_lightOperatorsMapping._operatorInfos) infosForTiledScheduler.push_back({i._tileable, i._uniformShapeCode});
+			for (auto& i:_lightOperatorsMapping._operatorInfos) infosForTiledScheduler.push_back({!!(i._flags & OperatorInfo::Flags::TileableLight), i._uniformShapeCode});
 			_tiledLightScheduler = std::make_shared<Internal::TiledLightScheduler>(_lightTiler, infosForTiledScheduler);
 			RegisterComponent(_tiledLightScheduler);
+		}
+
+		if (_decalTiler) {
+			std::vector<Internal::TiledDecalScheduler::LightOperatorInfo> infosForTiledScheduler; infosForTiledScheduler.reserve(_lightOperatorsMapping._operatorInfos.size());
+			for (auto& i:_lightOperatorsMapping._operatorInfos) infosForTiledScheduler.push_back({!!(i._flags & OperatorInfo::Flags::TileableDecal)});
+			_tiledDecalScheduler = std::make_shared<Internal::TiledDecalScheduler>(_decalTiler, infosForTiledScheduler);
+			RegisterComponent(_tiledDecalScheduler);
 		}
 
 		if (_lightOperatorsMapping._staticShadowProbesCfg) {
@@ -143,6 +150,9 @@ namespace RenderCore { namespace LightingEngine
 
 			if (_tiledLightScheduler)
 				_tiledLightScheduler->WriteEnvProps(*i);
+
+			if (_tiledDecalScheduler)
+				_tiledDecalScheduler->WriteEnvProps(*i);
 			
 			i->_enableSSR = enableSSR;
 			if (_ambientResourcesScheduler) {
@@ -158,6 +168,9 @@ namespace RenderCore { namespace LightingEngine
 		if (_tiledLightScheduler)
 			_tiledLightScheduler->DoPrepareUniforms(parsingContext);		// should be called after the RasterizationLightTileOperator has been updated
 
+		if (_tiledDecalScheduler)
+			_tiledDecalScheduler->DoPrepareUniforms(parsingContext);
+
 		if (_completionCommandListID)
 			parsingContext.RequireCommandList(_completionCommandListID);
 	}
@@ -165,6 +178,7 @@ namespace RenderCore { namespace LightingEngine
 	void ForwardPlusLightScene::Prerender(IThreadContext& threadContext)
 	{
 		if (_lightTiler) _lightTiler->CompleteInitialization(threadContext);
+		if (_decalTiler) _decalTiler->CompleteInitialization(threadContext);
 		if (_shadowProbes) _shadowProbes->CompleteInitialization(threadContext);
 		if (_dynamicShadowProbes) _dynamicShadowProbes->CompleteInitialization(threadContext);
 		if (_ambientResourcesScheduler) _ambientResourcesScheduler->Prerender();
@@ -231,6 +245,21 @@ namespace RenderCore { namespace LightingEngine
 				context.RequireCommandList(_lightScene->_ambientResourcesScheduler->_distantSpecularIBLCompletion);
 				context.RequireCommandList(_lightScene->_glossLutCompletion);
 			}
+
+			const auto decalUniformFlags = (1ull<<10ull)|(1ull<<11ull)|(1ull<<12ull);
+			if (bindingFlags & decalUniformFlags) {
+				assert((bindingFlags & decalUniformFlags) == decalUniformFlags);
+				if (_lightScene->_tiledDecalScheduler) {
+					dst[0] = &_lightScene->_tiledDecalScheduler->GetLightDepthTableUAV();
+					dst[1] = &_lightScene->_tiledDecalScheduler->GetLightListUAV();
+					dst[2] = _lightScene->_decalTiler->_outputs._tiledLightBitFieldSRV.get();
+					assert(dst[0] && dst[1] && dst[2]);
+				} else {
+					dst[0] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
+					dst[1] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
+					dst[2] = context.GetTechniqueContext()._commonResources->_black2DSRV.get();
+				}
+			}
 		}
 		ForwardPlusLightScene* _lightScene = nullptr;
 		ShaderResourceDelegate(ForwardPlusLightScene& lightScene)
@@ -246,6 +275,9 @@ namespace RenderCore { namespace LightingEngine
 			BindResourceView(7, "DynamicCubeShadowProperties"_h);
 			BindResourceView(8, "SpecularIBL"_h);
 			BindResourceView(9, "GlossLUT"_h);
+			BindResourceView(10, "DecalDepthTable"_h);
+			BindResourceView(11, "DecalList"_h);
+			BindResourceView(12, "TiledDecalBitField"_h);
 		}
 	};
 
@@ -264,6 +296,7 @@ namespace RenderCore { namespace LightingEngine
 		const ConstructionServices& constructionServices,
 		std::shared_ptr<Internal::PriorityShadowSchedulerUtil> shadowPreparers,
 		std::shared_ptr<RasterizationLightTileOperator> lightTiler,
+		std::shared_ptr<RasterizationLightTileOperator> decalTiler,
 		LightOperatorsMapping&& lightOperatorsMapping,
 		std::shared_ptr<IResourceView> glossLut,
 		BufferUploads::CommandListID glossLutCompletion,
@@ -277,6 +310,7 @@ namespace RenderCore { namespace LightingEngine
 		lightScene->_depVal = std::move(depVal);
 
 		lightScene->_lightTiler = lightTiler;
+		lightScene->_decalTiler = decalTiler;
 		lightScene->_glossLut = glossLut ? std::move(glossLut) : Techniques::Services::GetCommonResources()->_black2DSRV;
 		lightScene->_glossLutCompletion = glossLutCompletion;
 
@@ -295,6 +329,7 @@ namespace RenderCore { namespace LightingEngine
 		{
 			std::future<std::shared_ptr<Internal::PriorityShadowSchedulerUtil>> _shadowPreparationOperatorsFuture;
 			std::future<std::shared_ptr<RasterizationLightTileOperator>> _lightTilerFuture;
+			std::future<std::shared_ptr<RasterizationLightTileOperator>> _decalTilerFuture;
 			std::shared_future<std::shared_ptr<Techniques::DeferredShaderResource>> _glossLUTFuture;
 		};
 		auto helper = std::make_shared<Helper>();
@@ -304,9 +339,13 @@ namespace RenderCore { namespace LightingEngine
 				lightOperatorsMapping._priorityShadowPreparers,
 				constructionServices._pipelineAccelerators, constructionServices._techDelBox);
 
-		bool atLeastOneTilable = false;
-		for (auto& info:lightOperatorsMapping._operatorInfos) atLeastOneTilable |= info._tileable;
+		bool atLeastOneTilable = false, atLeastOneTilableDecal = false;
+		for (auto& info:lightOperatorsMapping._operatorInfos) {
+			atLeastOneTilable |= !!(info._flags & OperatorInfo::Flags::TileableLight);
+			atLeastOneTilableDecal |= !!(info._flags & OperatorInfo::Flags::TileableDecal);
+		}
 		if (atLeastOneTilable) helper->_lightTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
+		if (atLeastOneTilableDecal) helper->_decalTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
 
 		helper->_glossLUTFuture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(GLOSS_LUT_TEXTURE);
 
@@ -317,6 +356,7 @@ namespace RenderCore { namespace LightingEngine
 				auto timeoutTime = std::chrono::steady_clock::now() + timeout;
 				if (helper->_shadowPreparationOperatorsFuture.valid() && Internal::MarkerTimesOut(helper->_shadowPreparationOperatorsFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (helper->_lightTilerFuture.valid() && Internal::MarkerTimesOut(helper->_lightTilerFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (helper->_decalTilerFuture.valid() && Internal::MarkerTimesOut(helper->_decalTilerFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (helper->_glossLUTFuture.valid() && Internal::MarkerTimesOut(helper->_glossLUTFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
@@ -324,22 +364,26 @@ namespace RenderCore { namespace LightingEngine
 			{
 				std::shared_ptr<IResourceView> glossLut;
 				BufferUploads::CommandListID glossLutCompletion = 0;
-				::Assets::DependencyValidationMarker depVals[2] { ::Assets::DependencyValidationMarker_Invalid, ::Assets::DependencyValidationMarker_Invalid };
+				::Assets::DependencyValidationMarker depVals[3] { ::Assets::DependencyValidationMarker_Invalid, ::Assets::DependencyValidationMarker_Invalid };
 				if (helper->_glossLUTFuture.valid()) {
 					auto defRes = helper->_glossLUTFuture.get();
 					glossLut = defRes->GetShaderResource();
 					glossLutCompletion = defRes->GetCompletionCommandList();
 					depVals[0] = defRes->GetDependencyValidation();
 				}
-				std::shared_ptr<RasterizationLightTileOperator> lightTiler;
+				std::shared_ptr<RasterizationLightTileOperator> lightTiler, decalTiler;
 				if (helper->_lightTilerFuture.valid()) {
 					lightTiler = helper->_lightTilerFuture.get();
 					depVals[1] = lightTiler->GetDependencyValidation();
 				}
+				if (helper->_decalTilerFuture.valid()) {
+					decalTiler = helper->_decalTilerFuture.get();
+					depVals[2] = decalTiler->GetDependencyValidation();
+				}
 				auto depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 				std::shared_ptr<Internal::PriorityShadowSchedulerUtil> priorityPreparers;
 				if (helper->_shadowPreparationOperatorsFuture.valid()) priorityPreparers = helper->_shadowPreparationOperatorsFuture.get();
-				return CreateInternal(constructionServices, std::move(priorityPreparers), std::move(lightTiler), std::move(lightOperatorsMapping), glossLut, glossLutCompletion, std::move(depVal));
+				return CreateInternal(constructionServices, std::move(priorityPreparers), std::move(lightTiler), std::move(decalTiler), std::move(lightOperatorsMapping), glossLut, glossLutCompletion, std::move(depVal));
 			});
 	}
 

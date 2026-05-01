@@ -34,6 +34,11 @@ namespace RenderCore { namespace LightingEngine
 	{
 	};
 
+	struct DecalLightOperatorDesc
+	{
+		uint64_t GetHash(uint64_t seed = DefaultSeed64) const;
+	};
+
 	std::optional<LightSourceShape> AsLightSourceShape(StringSection<>);
 	const char* AsString(LightSourceShape);
 	std::optional<DiffuseModel> AsDiffuseModel(StringSection<>);

@@ -330,7 +330,7 @@ namespace RenderCore { namespace LightingEngine
 	static ForwardPlusLightScene::OperatorInfo AsOperatorInfo(const PositionalLightOperatorDesc& desc)
 	{
 		bool tilable = !(desc._flags & PositionalLightOperatorDesc::Flags::DominantLight);
-		return {tilable, Internal::AsUniformShapeCode(desc._shape)};
+		return {tilable ? ForwardPlusLightScene::OperatorInfo::Flags::TileableLight : 0u, Internal::AsUniformShapeCode(desc._shape)};
 	}
 
 	struct OperatorDigest
@@ -424,7 +424,7 @@ namespace RenderCore { namespace LightingEngine
 
 						if (_lightOperatorsMapping._operatorInfos.size() <= op._lightOperatorId)
 							_lightOperatorsMapping._operatorInfos.resize(op._lightOperatorId+1);
-						_lightOperatorsMapping._operatorInfos[op._lightOperatorId] = AsOperatorInfo(op._desc);;
+						_lightOperatorsMapping._operatorInfos[op._lightOperatorId] = AsOperatorInfo(op._desc);
 
 						if (op._desc._flags & PositionalLightOperatorDesc::Flags::DominantLight) {
 							if (_lightOperatorsMapping._dominantLightOperator != ~0u)
@@ -480,6 +480,17 @@ namespace RenderCore { namespace LightingEngine
 								_lightOperatorsMapping._operatorInfos.resize(op._lightOperatorId+1);
 							_lightOperatorsMapping._operatorInfos[op._lightOperatorId]._shadowPreparerId = unsigned(i-hashedShadowPreparers.begin());
 						}
+						maxLightOperatorId = std::max(maxLightOperatorId, int(op._lightOperatorId));
+					}
+					break;
+
+				case TypeHashCode<LightOperatorAssignment<DecalLightOperatorDesc>>:
+					{
+						auto& op = Internal::ChainedOperatorCast<LightOperatorAssignment<DecalLightOperatorDesc>>(*chain);
+
+						if (_lightOperatorsMapping._operatorInfos.size() <= op._lightOperatorId)
+							_lightOperatorsMapping._operatorInfos.resize(op._lightOperatorId+1);
+						_lightOperatorsMapping._operatorInfos[op._lightOperatorId] = {ForwardPlusLightScene::OperatorInfo::Flags::TileableDecal, 0};
 						maxLightOperatorId = std::max(maxLightOperatorId, int(op._lightOperatorId));
 					}
 					break;

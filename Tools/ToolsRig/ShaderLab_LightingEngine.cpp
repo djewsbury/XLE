@@ -195,6 +195,33 @@ namespace ToolsRig
 			});
 
 		shaderLab.RegisterOperation(
+			"PrepareTiledDecals",
+			[](auto& formatter, auto& context, auto* sequence) {
+				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used in a sequence"));
+
+				LightingEngine::ForwardPlusLightScene* forwardLightScene = nullptr;
+				if (context._lightScene) forwardLightScene = (LightingEngine::ForwardPlusLightScene*)context._lightScene->QueryInterface(TypeHashCode<LightingEngine::ForwardPlusLightScene>);
+				if (!forwardLightScene) Throw(std::runtime_error("Missing light scene, or incorrect type in PrepareTiledLights"));
+
+				// tiler
+				if (!forwardLightScene->GetDecalTiler()) return;
+
+				forwardLightScene->GetDecalTiler()->PreregisterAttachments(context._stitchingContext, context._fbProps);
+
+				sequence->CreateStep_CallFunction(
+					[forwardLightScene](auto& iterator) {
+						forwardLightScene->GetDecalTiler()->UpdatePreFragmentUniforms(iterator);
+					});
+				sequence->CreateStep_RunFragments(forwardLightScene->GetDecalTiler()->CreateInitFragment(context._fbProps));
+				sequence->CreateStep_RunFragments(forwardLightScene->GetDecalTiler()->CreateFragment(context._fbProps));
+				sequence->CreateStep_CallFunction(
+					[forwardLightScene](auto& iterator) {
+						forwardLightScene->GetDecalTiler()->BarrierToReadingLayout(*iterator._threadContext);
+					});
+				sequence->ResolvePendingCreateFragmentSteps();
+			});
+
+		shaderLab.RegisterOperation(
 			"BindBaseLightingResources",
 			[](auto& formatter, auto& context, auto* sequence) {
 				if (!sequence) Throw(std::runtime_error("ShaderLab operation expecting to be used in a sequence"));

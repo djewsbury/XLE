@@ -279,6 +279,8 @@ namespace RenderCore { namespace LightingEngine
 		return HashCombine(h, seed);
 	}
 
+	uint64_t DecalLightOperatorDesc::GetHash(uint64_t seed) const { return 0; }
+
 	std::optional<LightSourceShape> AsLightSourceShape(StringSection<> input)
 	{
 		if (XlEqString(input, "Directional")) return LightSourceShape::Directional;
