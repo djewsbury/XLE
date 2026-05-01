@@ -158,14 +158,15 @@ float3 TubeLightResolve(
         // For diffuse, we can directly calculate the integral of NdotL against a line
         // For specular, we use a representative point (similar to the sphere implementation)
 
-    float3 L0 = light.Position - light.SourceRadiusY * light.OrientationY;
-    float3 L1 = light.Position + light.SourceRadiusY * light.OrientationY;
+    float3 p = light.Position - worldPosition;
+    float3 L0 = p - light.SourceRadiusY * light.OrientationY;
+    float3 L1 = p + light.SourceRadiusY * light.OrientationY;
 
-    float NdotL = TubeLightDiffuseIntegral(L0 - worldPosition, L1 - worldPosition, sample.worldSpaceNormal);
+    float NdotL = TubeLightDiffuseIntegral(L0, L1, sample.worldSpaceNormal);
 
         // note --  After doing "RepresentativeVector_Tube" we could also use
         //          RepresentativeVector_Sphere to estimate a thick tube
-    float3 tubePoint = RepresentativeVector_Tube(L0 - worldPosition, L1 - worldPosition, reflectionDir);
+    float3 tubePoint = RepresentativeVector_Tube(L0, L1, reflectionDir);
     float distortionCompensation;
     float3 specLightDir = RepresentativeVector_Sphere(distortionCompensation, tubePoint, light.SourceRadiusX, reflectionDir);
 
@@ -178,6 +179,10 @@ float3 TubeLightResolve(
 
     float3 diffuse = DirectionalLightResolve_Diffuse_NdotL(sample, directionToEye, diffuseRepDir, NdotL, light);
     float3 specular = DirectionalLightResolve_Specular(sample, directionToEye, normalize(specLightDir), light, sampleExtra.screenSpaceOcclusion);
+
+    // Reduce the specular power according to the ratio of solid angles between a sphere and capsule -- 4pr^2 / (2pr(2r + h))
+    float powerMultiplier = light.SourceRadiusX / (light.SourceRadiusX + 0.5 * light.SourceRadiusY);
+    specular *= powerMultiplier;
 
         // This specular attenuation method is based on Karis. Maybe it needs
         // a little more work...?
