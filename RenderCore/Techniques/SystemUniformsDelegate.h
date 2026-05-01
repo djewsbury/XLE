@@ -16,6 +16,7 @@ namespace RenderCore { namespace Techniques
 	{
 	public:
 		void SetLocalTransformFallback(const LocalTransformConstants& input) { _localTransformFallback = input; }
+		void SetGlobalTime(float time) { _time = time; }
 
 		void WriteImmediateData(ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst) override;
 		void WriteSamplers(ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<ISampler**> dst) override;
@@ -25,5 +26,6 @@ namespace RenderCore { namespace Techniques
 	private:
 		LocalTransformConstants _localTransformFallback;
 		std::shared_ptr<ISampler> _samplers[4];
+		float _time = 0.f;
 	};
 }}

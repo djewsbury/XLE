@@ -11,6 +11,14 @@ using namespace Utility::Literals;
 
 namespace RenderCore { namespace Techniques
 {
+	struct GlobalStateConstants
+	{
+		float GlobalTime;
+		uint32_t GlobalSamplingPassIndex;
+		uint32_t GlobalSamplingPassCount;
+		uint32_t Dummy;
+	};
+
 	void SystemUniformsDelegate::WriteImmediateData(ParsingContext& context, const void* objectContext, unsigned idx, IteratorRange<void*> dst)
 	{
 		switch (idx) {
@@ -26,6 +34,9 @@ namespace RenderCore { namespace Techniques
 		case 2:
 			*(ViewportConstants*)dst.begin() = BuildViewportConstants(context.GetViewport());
 			break;
+		case 3:
+			*(GlobalStateConstants*)dst.begin() = { _time, 0, 0, 0 };
+			break;
 		}
 	}
 
@@ -38,6 +49,8 @@ namespace RenderCore { namespace Techniques
 			return sizeof(LocalTransformConstants);
 		case 2:
 			return sizeof(ViewportConstants);
+		case 3:
+			return sizeof(GlobalStateConstants);
 		default:
 			return 0;
 		}
@@ -57,6 +70,7 @@ namespace RenderCore { namespace Techniques
 		BindImmediateData(0, "GlobalTransform"_h);
 		BindImmediateData(1, "LocalTransform"_h);
 		BindImmediateData(2, "ReciprocalViewportDimensionsCB"_h);
+		BindImmediateData(3, "GlobalState"_h);
 
 		XlZeroMemory(_localTransformFallback);
 		_localTransformFallback._localToWorld = Identity<Float3x4>();
