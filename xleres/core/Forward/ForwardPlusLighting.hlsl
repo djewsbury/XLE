@@ -23,6 +23,7 @@ cbuffer EnvironmentProps : register (b0, space2)
 	LightDesc DominantLight;
 	uint LightCount;
 	bool EnableSSR;
+	uint DecalCount;
 	float4 DiffuseSHCoefficients[25];			// todo -- require premultiplied coefficients instead of reference coefficients
 };
 

@@ -36,6 +36,7 @@ namespace SceneEngine
 		ObjectTable<RenderCore::LightingEngine::PositionalLightOperatorDesc> _lightSourceOperators;
 		ObjectTable<RenderCore::LightingEngine::ShadowOperatorDesc> _shadowOperators;
 		ObjectTable<RenderCore::LightingEngine::AmbientLightOperatorDesc> _ambientOperators;
+		ObjectTable<RenderCore::LightingEngine::DecalLightOperatorDesc> _decalOperators;
 		ObjectTable<RenderCore::LightingEngine::ForwardLightingTechniqueDesc> _forwardLightingOperators;
 		ObjectTable<RenderCore::LightingEngine::DeferredLightingTechniqueDesc> _deferredLightingOperators;
 		ObjectTable<RenderCore::LightingEngine::UtilityLightingTechniqueDesc> _utilityLightingOperator;
@@ -68,6 +69,11 @@ namespace SceneEngine
 				case ConstHash64("Ambient"):
 					RequireBeginElement(fmttr);
 					_ambientOperators.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+					break;
+				case ConstHash64("Decal"):
+					RequireBeginElement(fmttr);
+					_decalOperators.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
 				case ConstHash64("ForwardLighting"):

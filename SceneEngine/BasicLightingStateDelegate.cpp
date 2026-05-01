@@ -711,6 +711,14 @@ namespace SceneEngine
         return result;
     }
 
+    auto MergedLightingEngineCfg::Register(const LightingEngine::DecalLightOperatorDesc& decal) -> LightOperatorId
+    {
+        auto result = unsigned(_lightOperatorHashes.size());
+        _lightOperatorHashes.push_back(~0ull);
+        SetOperator<LightingEngine::LightOperatorAssignment<LightingEngine::DecalLightOperatorDesc>>({result, decal});
+        return result;
+    }
+
     void MergedLightingEngineCfg::AddToOperatorList(LightingEngine::ChainedOperatorDesc& op)
     {
         if (_firstChainedOperator) {

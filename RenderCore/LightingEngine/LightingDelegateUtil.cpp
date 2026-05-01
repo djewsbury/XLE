@@ -1683,8 +1683,12 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	static CB_Decal MakeDecalUniforms(const LightingEngine::Internal::StandardPositionalLight& light, uint32_t typeCode)
 	{
-		assert(0);
-		return CB_Decal {};
+		return CB_Decal {
+			Float3x4 {
+				light._orientation(0,0), light._orientation(0,1), light._orientation(0,2), light._position[0],
+				light._orientation(1,0), light._orientation(1,1), light._orientation(1,2), light._position[1],
+				light._orientation(2,0), light._orientation(2,1), light._orientation(2,2), light._position[2] }
+		};
 	}
 
 	void TiledDecalScheduler::DoPrepareUniforms(Techniques::ParsingContext& parsingContext)
@@ -1695,17 +1699,19 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto& tilerOutputs = _lightTiler->_outputs;
 		auto& device = *parsingContext.GetThreadContext().GetDevice();
 		{
+			assert(tilerOutputs._lightDepthTable.size() <= _lightTiler->GetConfiguration()._depthLookupGradiations);
 			Metal::ResourceMap map{
 				device, *uniforms._lightDepthTable,
-				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
+				Metal::ResourceMap::Mode::WriteDiscardPrevious,
 				0, sizeof(unsigned)*tilerOutputs._lightDepthTable.size()};
 			std::memcpy(map.GetData().begin(), tilerOutputs._lightDepthTable.data(), sizeof(unsigned)*tilerOutputs._lightDepthTable.size());
 			map.FlushCache();
 		}
 		if (tilerOutputs._lightCount) {
+			assert(tilerOutputs._lightCount <= _lightTiler->GetConfiguration()._maxLightsPerView);
 			Metal::ResourceMap map{
 				device, *uniforms._lightList,
-				Metal::ResourceMap::Mode::WriteDiscardPrevious, 
+				Metal::ResourceMap::Mode::WriteDiscardPrevious,
 				0, sizeof(CB_Decal)*tilerOutputs._lightCount};
 			auto* i = (CB_Decal*)map.GetData().begin();
 			auto end = tilerOutputs._lightOrdering.begin() + tilerOutputs._lightCount;
@@ -1733,7 +1739,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 
 	void TiledDecalScheduler::WriteEnvProps(CB_EnvironmentProps& dst)
 	{
-		// dst._decalCount = _lightTiler->_outputs._lightCount;
+		dst._decalCount = _lightTiler->_outputs._lightCount;
 	}
 
 	void TiledDecalScheduler::RegisterLight(unsigned setIdx, unsigned lightIdx)

@@ -67,6 +67,10 @@ namespace SceneEngine
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 
     bool SetProperty(
+        RenderCore::LightingEngine::DecalLightOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
         RenderCore::LightingEngine::SunSourceFrustumSettings& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 
