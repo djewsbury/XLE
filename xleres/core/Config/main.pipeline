@@ -1,6 +1,4 @@
 #include "sequencer.pipeline"
-#include "forward.pipeline"
-#include "shadow-template.pipeline"
 
 DescriptorSet Material {};		// replaced by PipelineAcceleratorPool
 DescriptorSet Spacer {};
@@ -19,38 +17,6 @@ PipelineLayout GraphicsMain
 		float3x4 LocalToWorld;
 		float3 LocalSpaceView;
 		uint Dummy;
-	};
-};
-
-PipelineLayout GraphicsForwardPlus
-{
-	AutoDescriptorSet Numeric;				// 0
-	DescriptorSet Sequencer;				// 1
-	DescriptorSet ForwardLighting;			// 2
-	DescriptorSet ShadowTemplate;			// 3
-	DescriptorSet Material;					// 4
-
-	VSPushConstants LocalTransform
-	{
-		float3x4 LocalToWorld;
-		float3 LocalSpaceView;
-		uint Dummy;
-	};
-};
-
-PipelineLayout GraphicsProbePrepare
-{
-	AutoDescriptorSet Numeric;				// 0
-	DescriptorSet Sequencer;				// 1
-	DescriptorSet ProbePrepareLighting;		// 2
-	DescriptorSet Spacer;					// 3
-	DescriptorSet Material;					// 4
-
-	VSPushConstants LocalTransform
-	{
-		float3x4 LocalToWorld;
-		float3 LocalSpaceView;
-		uint ViewMask;
 	};
 };
 

@@ -31,7 +31,7 @@ using namespace Assets::Literals;
 #define DEFERRED_LIGHT_OPERATOR_VERTEX_HLSL "xleres/Deferred/light-resolve-operator.vertex.hlsl"
 #define DEFERRED_LIGHT_OPERATOR_PIXEL_HLSL "xleres/Deferred/light-resolve-operator.pixel.hlsl"
 
-#define FORWARD_PIPELINE "xleres/Config/forward.pipeline"_initializer
+#define FORWARD_PIPELINE "xleres/Forward/forward.pipeline"_initializer
 
 #define CASCADE_VIS_HLSL "xleres/Deferred/debugging/cascadevis.pixel.hlsl"
 #define HIGHLIGHT_VIS_PIXEL_HLSL "xleres/ToolsRig/Vis/HighlightVis.pixel.hlsl"

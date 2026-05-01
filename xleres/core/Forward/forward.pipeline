@@ -1,3 +1,5 @@
+#include "../Config/main.pipeline"
+#include "../Config/shadow-template.pipeline"
 
 DescriptorSet ForwardLighting
 {
@@ -42,5 +44,37 @@ DescriptorSet ForwardLighting
 DescriptorSet ProbePrepareLighting
 {
 	UniformBuffer EnvironmentProps;						// 0
+};
+
+PipelineLayout GraphicsForwardPlus
+{
+	AutoDescriptorSet Numeric;				// 0
+	DescriptorSet Sequencer;				// 1
+	DescriptorSet ForwardLighting;			// 2
+	DescriptorSet ShadowTemplate;			// 3
+	DescriptorSet Material;					// 4
+
+	VSPushConstants LocalTransform
+	{
+		float3x4 LocalToWorld;
+		float3 LocalSpaceView;
+		uint Dummy;
+	};
+};
+
+PipelineLayout GraphicsProbePrepare
+{
+	AutoDescriptorSet Numeric;				// 0
+	DescriptorSet Sequencer;				// 1
+	DescriptorSet ProbePrepareLighting;		// 2
+	DescriptorSet Spacer;					// 3
+	DescriptorSet Material;					// 4
+
+	VSPushConstants LocalTransform
+	{
+		float3x4 LocalToWorld;
+		float3 LocalSpaceView;
+		uint ViewMask;
+	};
 };
 

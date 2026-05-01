@@ -329,7 +329,7 @@ namespace UnitTests
 
 			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 			{
-				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
+				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(FORWARD_PIPELINE ":GraphicsProbePrepare");
 			}
 		};
 
@@ -437,7 +437,7 @@ namespace UnitTests
 
 			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 			{
-				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
+				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(FORWARD_PIPELINE ":GraphicsProbePrepare");
 			}
 		};
 
@@ -552,7 +552,7 @@ namespace UnitTests
 
 			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 			{
-				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
+				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(FORWARD_PIPELINE ":GraphicsProbePrepare");
 			}
 		};
 
@@ -752,7 +752,7 @@ namespace UnitTests
 
 			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> GetPipelineLayout() override
 			{
-				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(MAIN_PIPELINE ":GraphicsProbePrepare");
+				return ::Assets::ActualizeAssetPtr<RenderCore::Assets::PredefinedPipelineLayout>(FORWARD_PIPELINE ":GraphicsProbePrepare");
 			}
 		};
 

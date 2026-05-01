@@ -76,7 +76,7 @@ IllumShared=~
 
 Forward=~
 	Inherit=~; IllumShared; Shared.tech:Forward
-	PipelineLayout=xleres/Config/main.pipeline:GraphicsForwardPlus
+	PipelineLayout=xleres/Forward/forward.pipeline:GraphicsForwardPlus
 
 Deferred=~
 	Inherit=~; IllumShared; Shared.tech:Deferred
@@ -184,16 +184,16 @@ ProbePrepare_NoPatches=~
 	Inherit=~; Forward_NoPatches
 	Selectors=~
 		PROBE_PREPARE=1
-	PipelineLayout=xleres/Config/main.pipeline:GraphicsProbePrepare
+	PipelineLayout=xleres/Forward/forward.pipeline:GraphicsProbePrepare
 
 ProbePrepare_PerPixel=~
 	Inherit=~; Forward_PerPixel
 	Selectors=~
 		PROBE_PREPARE=1
-	PipelineLayout=xleres/Config/main.pipeline:GraphicsProbePrepare
+	PipelineLayout=xleres/Forward/forward.pipeline:GraphicsProbePrepare
 
 ProbePrepare_PerPixelAndEarlyRejection=~
 	Inherit=~; Forward_PerPixelAndEarlyRejection
 	Selectors=~
 		PROBE_PREPARE=1
-	PipelineLayout=xleres/Config/main.pipeline:GraphicsProbePrepare
+	PipelineLayout=xleres/Forward/forward.pipeline:GraphicsProbePrepare

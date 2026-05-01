@@ -47,7 +47,7 @@ SystemInputs InitializeSystemInputs(uint sampleIndex : SV_SampleIndex) : SYSTEMI
 
 Entity=main
 TechniqueDelegateConfig=main=~
-	PipelineLayout=xleres/Config/main.pipeline:GraphicsForwardPlus
+	PipelineLayout=xleres/Forward/forward.pipeline:GraphicsForwardPlus
 	Preconfiguration=xleres/Config/Preconfiguration.hlsl
 RawMaterial=main=~
 ShaderPatchCollection=main=~
