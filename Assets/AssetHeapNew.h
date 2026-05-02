@@ -868,5 +868,35 @@ namespace AssetsNew
 		return heap.Lookup<Type>(cacheKey);
 	}
 
+	template<auto ConstructToPromiseFn, typename... Params> ::AssetsNew::AssetHeap::Iterator<::Assets::Internal::AssetTypeFromConstructToPromise<ConstructToPromiseFn>> GetFn(AssetHeap& heap, Params&&... initialisers)
+	{
+		auto cacheKey = ::Assets::Internal::BuildParamHash(initialisers...);
+		using Type = ::Assets::Internal::AssetTypeFromConstructToPromise<ConstructToPromiseFn>;
+
+		if (auto l = heap.Lookup<Type>(cacheKey)) {
+			if (l.GetDependencyValidation().GetValidationIndex() <= 0)
+				return l;
+		}
+
+		// No existing asset, or asset is invalidated. Fall through
+
+		auto lock = heap.WriteLock<Type>();
+
+		// We have to check again for a valid object, incase another thread modified the heap
+		// before we took our write lock
+		if (auto l = heap.LookupAlreadyLocked<Type>(cacheKey)) {
+			if (l.GetDependencyValidation().GetValidationIndex() <= 0)
+				return l;		// another thread changed the entry, and it completed quickly
+		}
+
+		std::promise<Type> promise;
+		heap.InsertAlreadyLocked<Type>(cacheKey, ::Assets::Internal::AsString(initialisers...), promise.get_future());
+
+		lock = {}; // after unlocking here, other threads will return the future we've just placed in the heap
+
+		ConstructToPromiseFn(std::move(promise), std::forward<Params>(initialisers)...);
+		return heap.Lookup<Type>(cacheKey);
+	}
+
 }
 
