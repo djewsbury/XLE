@@ -2675,9 +2675,15 @@ namespace RenderCore { namespace ImplVulkan
 				&nextImageIndex);
 			_lastAcquiredImage = nextImageIndex;
 
-			// TODO: Deal with the VK_SUBOPTIMAL_KHR and VK_ERROR_OUT_OF_DATE_KHR
-			// return codes
-			if (res != VK_SUCCESS)
+			// TODO: Deal with VK_ERROR_OUT_OF_DATE_KHR return codes
+			// Note on VK_SUBOPTIMAL_KHR
+			//	- this is a "success" return code for this function. The presentation chain no longer matches the window exactly, but can
+			//		but used (it will just be scaled)
+			//	- it can happen if we don't update the presentation chain size immediately after a window resize
+			//
+			// VK_TIMEOUT and VK_NOT_READY are also "success" return codes. However we should not get these if timeout is UINT64_MAX
+			assert(res != VK_TIMEOUT && res != VK_NOT_READY);
+			if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR)
 				Throw(VulkanAPIFailure(res, "Failure during acquire next image"));
 		}
 

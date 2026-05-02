@@ -610,7 +610,9 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		ScopedLock(_queueLock);
 		auto res = vkQueuePresentKHR(_underlying, &present);
-		if (res != VK_SUCCESS)
+		// Note that VK_SUBOPTIMAL_KHR is a "sucess" return code here. It means the buffer will be scaled for display, because it
+		// doesn't match the size of the window
+		if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR)
 			Throw(VulkanAPIFailure(res, "Failure while queuing present"));
 	}
 
