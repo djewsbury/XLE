@@ -75,6 +75,7 @@ namespace PlatformRig
 					return RenderFrame { _activeParsingContext.value() };
 				} else {
 					// ------- zero size presentation chain -- fail to render & yield some process time when appropriate ------
+					_pending = Pending::None;
 					if (_pending == Pending::ShowWindowBeginRenderFrame) {
 						_apparatus->_osWindow->Show();
 					} else
@@ -228,7 +229,18 @@ namespace PlatformRig
 		_lastOverlayConfiguration = _apparatus->_frameRig->GetOverlayConfiguration(*_apparatus->_presentationChain);
 	}
 
-	MessageLoop::~MessageLoop() = default;
+	MessageLoop::~MessageLoop()
+	{
+		// If we're still pending an end frame, ensure we shut it down
+		// This is required because _apparatus->_frameRig outlives MesageLoop, and will end up with an incomplete frame
+		if (_pending == Pending::EndRenderFrame) {
+			assert(_activeParsingContext);
+			auto parsingContext = std::move(_activeParsingContext.value());
+			_activeParsingContext = {};
+			_apparatus->_frameRig->ShutdownFrame(parsingContext, _appLogFile.get());
+			_pending = Pending::None;
+		}
+	}
 	MessageLoop::MessageLoop(MessageLoop&&) = default;
 	MessageLoop& MessageLoop::operator=(MessageLoop&&) = default;
 
