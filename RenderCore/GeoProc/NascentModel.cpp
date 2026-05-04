@@ -297,12 +297,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 		}
 
 		// Reduce the size of the index buffer if we can losslessly use a more compact format
+		#if 0	// Vulkan layer doesn't support 8 bit index buffers by default, because of their niche usefulness
 		if (geoBlock._mesh->GetUnifiedVertexCount() <= (1u<<8u)-1u) {
 			if (geoBlock._indexFormat != Format::R8_UINT) {
 				geoBlock._indices = ConvertIndexBufferFormat(geoBlock._indices, geoBlock._indexFormat, Format::R8_UINT);
 				geoBlock._indexFormat = Format::R8_UINT;
 			}
-		} else if (geoBlock._mesh->GetUnifiedVertexCount() <= (1u<<16u)-1u) {
+		} else
+		#endif
+		if (geoBlock._mesh->GetUnifiedVertexCount() <= (1u<<16u)-1u) {
 			if (geoBlock._indexFormat != Format::R16_UINT) {
 				geoBlock._indices = ConvertIndexBufferFormat(geoBlock._indices, geoBlock._indexFormat, Format::R16_UINT);
 				geoBlock._indexFormat = Format::R16_UINT;
