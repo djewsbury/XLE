@@ -587,32 +587,42 @@ namespace RenderCore { namespace Techniques
 			// (and we can potentially skip a texture lookup for alpha test geo sometimes)
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;
 
-			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
-			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
-			if (shaderPatches) {
-				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+			auto illumType = shaderPatches ? CalculateIllumType(shaderPatches->GetInterface()) : IllumType::NoPerPixel;
+			if (!shaderPatches || illumType != IllumType::SpriteTechnique) {
 
-				bool hasEarlyRejectionTest = shaderPatches->GetInterface().HasPatchType(s_earlyRejectionTest);
-				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+				const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
+				const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+				std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+				if (shaderPatches) {
+					nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 
-				if (hasEarlyRejectionTest) {
-					psTechEntry = &_techniqueFileHelper._earlyRejectionSrc;
-					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
+					bool hasEarlyRejectionTest = shaderPatches->GetInterface().HasPatchType(s_earlyRejectionTest);
+					bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+					if (hasEarlyRejectionTest) {
+						psTechEntry = &_techniqueFileHelper._earlyRejectionSrc;
+						psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_earlyRejection, &s_patchExp_earlyRejection[dimof(s_patchExp_earlyRejection)]);
+					}
+
+					if (hasDeformVertex) {
+						vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+						vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+					}
 				}
 
-				if (hasDeformVertex) {
-					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
-				}
+				nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
+				TechniqueEntry mergedTechEntry = *vsTechEntry;
+				mergedTechEntry.MergeIn(*psTechEntry);
+				PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
+
+			} else {
+
+				// new style, more flexible approach
+				if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h)
+					i->second.Configure(*nascentDesc, shaderPatches, iaAttributes);
+
 			}
 
-			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
-
-			TechniqueEntry mergedTechEntry = *vsTechEntry;
-			mergedTechEntry.MergeIn(*psTechEntry);
-
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 			return nascentDesc;
 		}
 
@@ -622,16 +632,17 @@ namespace RenderCore { namespace Techniques
 		TechniqueDelegate_DepthOnly(
 			TechniqueFileHelper&& helper,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
+			const FlexibleTechniqueHelper& flexibleHelper,
 			const RSDepthBias& singleSidedBias,
 			const RSDepthBias& doubleSidedBias,
 			CullMode cullMode, FaceWinding faceWinding,
 			std::optional<ShadowGenType> shadowGen)
-		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout))
+		: _techniqueFileHelper(std::move(helper)), _flexibleHelper(flexibleHelper), _pipelineLayout(std::move(pipelineLayout))
 		{
 			_rs[0x0] = RasterizationDesc{cullMode,        faceWinding, (float)singleSidedBias._depthBias, singleSidedBias._depthBiasClamp, singleSidedBias._slopeScaledBias};
 			_rs[0x1] = RasterizationDesc{CullMode::None,  faceWinding, (float)doubleSidedBias._depthBias, doubleSidedBias._depthBiasClamp, doubleSidedBias._slopeScaledBias};
 
-			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation(), _flexibleHelper.GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 
@@ -643,16 +654,17 @@ namespace RenderCore { namespace Techniques
 			CullMode cullMode, FaceWinding faceWinding,
 			std::optional<ShadowGenType> shadowGen)
 		{
-			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
+			auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
+			::Assets::WhenAll(std::move(techniqueSet), ::Assets::GetAssetFuture<Techniques::FlexibleTechniqueHelper>(util, TECH_ENTRY_DEPTHONLY)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
-				[singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen](auto&& promise, auto techniqueSetFile) {
+				[singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen](auto&& promise, auto techniqueSetFile, const auto& flexibleHelper) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile, shadowGen};
 						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
-							[helper=std::move(helper), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen](auto pipelineLayout) mutable {
-								return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(helper), std::move(pipelineLayout), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen);
+							[helper=std::move(helper), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen, flexibleHelper](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_DepthOnly>(std::move(helper), std::move(pipelineLayout), std::move(flexibleHelper), singleSidedBias, doubleSidedBias, cullMode, faceWinding, shadowGen);
 							});
 					} CATCH (...) {
 						promise.set_exception(std::current_exception());
@@ -662,6 +674,7 @@ namespace RenderCore { namespace Techniques
 
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
+		FlexibleTechniqueHelper _flexibleHelper;
 		RasterizationDesc _rs[2];
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
 		::Assets::DependencyValidation _depVal;
@@ -749,51 +762,63 @@ namespace RenderCore { namespace Techniques
 					nascentDesc->_blend.push_back(CommonResourceBox::s_abOpaque);
 			}
 
-			const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
-			const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
-			std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
-			if (shaderPatches) {
-				nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
+			auto illumType = shaderPatches ? CalculateIllumType(shaderPatches->GetInterface()) : IllumType::NoPerPixel;
+			if (!shaderPatches || illumType != IllumType::SpriteTechnique) {
 
-				auto illumType = CalculateIllumType(shaderPatches->GetInterface());
-				bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+				const TechniqueEntry* psTechEntry = &_techniqueFileHelper._psNoPatchesSrc;
+				const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
+				std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;
+				if (shaderPatches) {
+					nascentDesc->_materialPreconfigurationFile = shaderPatches->GetInterface().GetPreconfigurationFileName();
 
-				switch (illumType) {
-				case IllumType::PerPixel:
-					psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
-					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
-					break;
-				case IllumType::PerPixelAndEarlyRejection:
-					psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
-					psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
-					break;
-				default:
-					break;
+					auto illumType = CalculateIllumType(shaderPatches->GetInterface());
+					bool hasDeformVertex = shaderPatches->GetInterface().HasPatchType(s_vertexPatch);
+
+					switch (illumType) {
+					case IllumType::PerPixel:
+						psTechEntry = &_techniqueFileHelper._psPerPixelSrc;
+						psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixel, &s_patchExp_perPixel[dimof(s_patchExp_perPixel)]);
+						break;
+					case IllumType::PerPixelAndEarlyRejection:
+						psTechEntry = &_techniqueFileHelper._psPerPixelAndEarlyRejection;
+						psPatchExpansions.insert(psPatchExpansions.end(), s_patchExp_perPixelAndEarlyRejection, &s_patchExp_perPixelAndEarlyRejection[dimof(s_patchExp_perPixelAndEarlyRejection)]);
+						break;
+					default:
+						break;
+					}
+
+					if (hasDeformVertex) {
+						vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
+						vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+					}
 				}
 
-				if (hasDeformVertex) {
-					vsTechEntry = &_techniqueFileHelper._vsDeformVertexSrc;
-					vsPatchExpansions.insert(vsPatchExpansions.end(), s_patchExp_deformVertex, &s_patchExp_deformVertex[dimof(s_patchExp_deformVertex)]);
+				nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
+
+				TechniqueEntry mergedTechEntry = *vsTechEntry;
+				mergedTechEntry.MergeIn(*psTechEntry);
+
+				if (_preDepthType == PreDepthType::DepthMotion || _preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation) {
+					mergedTechEntry._selectorFiltering.SetSelector("VSOUT_HAS_PREV_POSITION", 1);
+					mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_MOTION", 1);
 				}
+				if (_preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+					mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_NORMAL", 1);
+				if (_preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+					mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_ROUGHNESS", 1);
+				if (_preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+					mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
+
+				PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
+
+			} else {
+
+				// new style, more flexible approach
+				if (auto i = LowerBound(_flexibleHelper._entries, "depthPlus"_h); i!=_flexibleHelper._entries.end() && i->first == "depthPlus"_h)
+					i->second.Configure(*nascentDesc, shaderPatches, iaAttributes);
+
 			}
 
-			nascentDesc->_depVal = _techniqueFileHelper.GetDependencyValidation();
-
-			TechniqueEntry mergedTechEntry = *vsTechEntry;
-			mergedTechEntry.MergeIn(*psTechEntry);
-
-			if (_preDepthType == PreDepthType::DepthMotion || _preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation) {
-				mergedTechEntry._selectorFiltering.SetSelector("VSOUT_HAS_PREV_POSITION", 1);
-				mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_MOTION", 1);
-			}
-			if (_preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
-				mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_NORMAL", 1);
-			if (_preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
-				mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_ROUGHNESS", 1);
-			if (_preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
-				mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
-
-			PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 			return nascentDesc;
 		}
 
@@ -803,13 +828,14 @@ namespace RenderCore { namespace Techniques
 		TechniqueDelegate_PreDepth(
 			TechniqueFileHelper&& helper,
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
+			const FlexibleTechniqueHelper& flexibleHelper,
 			PreDepthType preDepthType)
-		: _techniqueFileHelper(std::move(helper)), _pipelineLayout(std::move(pipelineLayout)), _preDepthType(preDepthType)
+		: _techniqueFileHelper(std::move(helper)), _flexibleHelper(flexibleHelper), _pipelineLayout(std::move(pipelineLayout)), _preDepthType(preDepthType)
 		{
 			_rs[0x0] = CommonResourceBox::s_rsDefault;
 			_rs[0x1] = CommonResourceBox::s_rsCullDisable;
 
-			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation() };
+			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation(), _flexibleHelper.GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}
 
@@ -818,16 +844,17 @@ namespace RenderCore { namespace Techniques
 			TechniqueSetFileFuture techniqueSet,
 			PreDepthType preDepthType)
 		{
-			::Assets::WhenAll(std::move(techniqueSet)).CheckImmediately().ThenConstructToPromise(
+			auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
+			::Assets::WhenAll(std::move(techniqueSet), ::Assets::GetAssetFuture<Techniques::FlexibleTechniqueHelper>(util, TECH_ENTRY_DEPTHONLY)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
-				[preDepthType](auto&& promise, auto techniqueSetFile) {
+				[preDepthType](auto&& promise, auto techniqueSetFile, const auto& flexibleHelper) {
 					TRY {
 						TechniqueFileHelper helper{techniqueSetFile, preDepthType};
 						auto pipelineLayout = ::Assets::GetAssetFuturePtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 						::Assets::WhenAll(pipelineLayout).ThenConstructToPromise(
 							std::move(promise),
-							[helper=std::move(helper), preDepthType](auto pipelineLayout) mutable {
-								return std::make_shared<TechniqueDelegate_PreDepth>(std::move(helper), std::move(pipelineLayout), preDepthType);
+							[helper=std::move(helper), preDepthType, flexibleHelper](auto pipelineLayout) mutable {
+								return std::make_shared<TechniqueDelegate_PreDepth>(std::move(helper), std::move(pipelineLayout), flexibleHelper, preDepthType);
 							});
 					} CATCH (...) {
 						promise.set_exception(std::current_exception());
@@ -837,6 +864,7 @@ namespace RenderCore { namespace Techniques
 
 	private:
 		TechniqueFileHelper _techniqueFileHelper;
+		FlexibleTechniqueHelper _flexibleHelper;
 		RasterizationDesc _rs[2];
 		PreDepthType _preDepthType;
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
