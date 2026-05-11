@@ -664,11 +664,16 @@ namespace RenderCore { namespace LightingEngine
 
 			mainSequence.CreateStep_RunFragments(_refractionBufferOperator->CreateFragment(fbProps));
 
+			auto srd=_refractionBufferOperator->CreateShaderResourceDelegate();
+			mainSequence.CreateStep_CallFunction([srd](SequenceIterator& iterator) { iterator._parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(srd); });
+
 			mainSequence.CreateStep_RunFragments(
 				CreateBlendingFragment(
 					shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
 					_ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
 					sequencerResources, digest._lightOperatorsMapping));
+
+			mainSequence.CreateStep_CallFunction([srd](SequenceIterator& iterator) { iterator._parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*srd); });
 
 		}
 

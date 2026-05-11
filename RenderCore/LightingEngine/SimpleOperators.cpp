@@ -40,7 +40,7 @@ namespace RenderCore { namespace LightingEngine
 			}
 		}
 
-		RefractionBufferResourceDelegate(RefractionBufferOperatorDesc desc)
+		RefractionBufferResourceDelegate(const RefractionBufferOperatorDesc& desc)
 		: _desc(desc)
 		{
 			_interface.BindResourceView(0, "RefractionBuffer"_h);
@@ -69,7 +69,7 @@ namespace RenderCore { namespace LightingEngine
 				"refraction-buffer"
 			});
 
-		if (_desc._format != Format::Unknown)
+		if (_desc._depthFormat != Format::Unknown)
 			stitchingContext.DefineAttachment(
 				Techniques::PreregisteredAttachment {
 					s_refractionDepthBufferSemantic,
@@ -107,7 +107,6 @@ namespace RenderCore { namespace LightingEngine
 		fragment.AddSubpass(
 			std::move(subpass),
 			[op=this, outputState, doDepth=(_desc._depthFormat != Format::Unknown)](SequenceIterator& iterator) {
-				assert(op->_secondStageConstructionState == 2);
 
 				iterator._rpi.AutoNonFrameBufferBarrier({
 					{0, BindFlag::TransferDst},

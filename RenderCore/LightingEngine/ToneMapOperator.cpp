@@ -348,7 +348,7 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
-					BindFlag::RenderTarget | BindFlag::ShaderResource,
+					BindFlag::RenderTarget | BindFlag::ShaderResource | BindFlag::TransferSrc,
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], _desc._lightAccumulationBufferFormat, fbProps._samples)),
 				"color-hdr"
 			});
@@ -952,7 +952,7 @@ namespace RenderCore { namespace LightingEngine
 			Techniques::PreregisteredAttachment {
 				Techniques::AttachmentSemantics::ColorHDR,
 				CreateDesc(
-					UsePixelShaderPath() ? (BindFlag::RenderTarget | BindFlag::InputAttachment) : (BindFlag::RenderTarget | BindFlag::ShaderResource),
+					BindFlag::RenderTarget | BindFlag::TransferSrc | (UsePixelShaderPath() ? BindFlag::InputAttachment : BindFlag::ShaderResource),
 					TextureDesc::Plain2D(fbSize[0], fbSize[1], (!precisionTargets) ? Format::R16G16B16A16_FLOAT : Format::R32G32B32A32_FLOAT)),
 				"color-hdr"
 			});

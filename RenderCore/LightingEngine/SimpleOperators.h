@@ -41,7 +41,6 @@ namespace RenderCore { namespace LightingEngine
 	private:
 		std::shared_ptr<Techniques::IComputeShaderOperator> _shader;
 		std::shared_ptr<Techniques::PipelineCollection> _pool;
-		unsigned _secondStageConstructionState = 0;		// debug usage only
 		RefractionBufferOperatorDesc _desc;
 	};
 
