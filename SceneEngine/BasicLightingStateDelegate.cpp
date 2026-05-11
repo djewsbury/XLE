@@ -307,6 +307,13 @@ namespace SceneEngine
             cfg.SetOperator(_operatorResolveContext._filmGrainOperator._objects[0].second);
         }
 
+        if (!_operatorResolveContext._refractionBufferOperator._objects.empty()) {
+            if (_operatorResolveContext._refractionBufferOperator._objects.size() != 1)
+                Throw(std::runtime_error("Only one refraction buffer operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._refractionBufferOperator._objects[0].second);
+        }
+
         if (!_operatorResolveContext._forwardLightingOperators._objects.empty()) {
             if (_operatorResolveContext._forwardLightingOperators._objects.size() != 1 || !_operatorResolveContext._deferredLightingOperators._objects.empty() || !_operatorResolveContext._utilityLightingOperator._objects.empty())
                 Throw(std::runtime_error("Only one lighting technique operator allowed in BasicLightingStateDelegate configuration file"));
@@ -808,6 +815,12 @@ namespace SceneEngine
     {
         _ssao._desc = operatorDesc;
         AddToOperatorList(_ssao);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const LightingEngine::RefractionBufferOperatorDesc& operatorDesc)
+    {
+        _refractionBufferOperator._desc = operatorDesc;
+        AddToOperatorList(_refractionBufferOperator);
     }
 
     MergedLightingEngineCfg::MergedLightingEngineCfg() = default;
@@ -1622,6 +1635,22 @@ namespace SceneEngine
                 return true;
             }
             break;
+        }
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::RefractionBufferOperatorDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        using namespace LightingEngine;
+        switch (propertyNameHash) {
+        case "Format"_h:
+            SetViaEnumFn<Format, AsFormat>(desc, &RefractionBufferOperatorDesc::_format, data, type);
+            return true;
+        case "DepthFormat"_h:
+            SetViaEnumFn<Format, AsFormat>(desc, &RefractionBufferOperatorDesc::_depthFormat, data, type);
+            return true;
         }
         return false;
     }

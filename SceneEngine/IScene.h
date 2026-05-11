@@ -17,6 +17,7 @@
 #include "../RenderCore/LightingEngine/AAOperators.h"
 #include "../RenderCore/LightingEngine/PostProcessOperators.h"
 #include "../RenderCore/LightingEngine/ShadowPreparer.h"        // to reserve ShadowOperatorDesc
+#include "../RenderCore/LightingEngine/SimpleOperators.h"
 
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IDrawableSubmitter; class DeformersPacket; } }
@@ -103,6 +104,7 @@ namespace SceneEngine
         void SetOperator(const RenderCore::LightingEngine::TAAOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::SharpenOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::FilmGrainDesc&);
+        void SetOperator(const RenderCore::LightingEngine::RefractionBufferOperatorDesc&);
 
         template<typename T>
             void SetOperator(const T&);
@@ -129,6 +131,7 @@ namespace SceneEngine
         ChainingTemplate<RenderCore::LightingEngine::TAAOperatorDesc> _taaOperator;
         ChainingTemplate<RenderCore::LightingEngine::SharpenOperatorDesc> _sharpenOperator;
         ChainingTemplate<RenderCore::LightingEngine::FilmGrainDesc> _filmGrainOperator;
+        ChainingTemplate<RenderCore::LightingEngine::RefractionBufferOperatorDesc> _refractionBufferOperator;
         ChainingTemplate<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::PositionalLightOperatorDesc>> _reservedLightOperators[8];
         ChainingTemplate<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::ShadowOperatorDesc>> _reservedShadowOperators[8];
         unsigned _reservedLightOperatorCount = 0, _reservedShadowOperatorCount = 0;

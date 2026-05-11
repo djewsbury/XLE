@@ -49,6 +49,7 @@ namespace SceneEngine
 		ObjectTable<RenderCore::LightingEngine::TAAOperatorDesc> _taaOperator;
 		ObjectTable<RenderCore::LightingEngine::SharpenOperatorDesc> _sharpenOperator;
 		ObjectTable<RenderCore::LightingEngine::FilmGrainDesc> _filmGrainOperator;
+		ObjectTable<RenderCore::LightingEngine::RefractionBufferOperatorDesc> _refractionBufferOperator;
 
 		template<typename Formatter>
 			void Deserialize(Formatter& fmttr) 
@@ -134,6 +135,11 @@ namespace SceneEngine
 				case ConstHash64("ScreenSpaceAmbientOcclusion"):
 					RequireBeginElement(fmttr);
 					_ssao.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+					break;
+				case ConstHash64("RefractionBuffer"):
+					RequireBeginElement(fmttr);
+					_refractionBufferOperator.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
 				default:
