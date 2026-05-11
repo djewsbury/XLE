@@ -23,6 +23,7 @@ foreach (metal_macro metal_name IN ZIP_LISTS MetalSelectMacros MetalSelectName)
 		ShadowProbes.cpp
 		ShadowUniforms.cpp
 		SHCoefficients.cpp
+		SimpleOperators.cpp
 		SkyOperator.cpp
 		SSAOOperator.cpp
 		StandardLightScene.cpp

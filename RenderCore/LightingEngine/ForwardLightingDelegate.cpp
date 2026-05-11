@@ -20,6 +20,7 @@
 #include "GBufferOperator.h"
 #include "PostProcessOperators.h"
 #include "StandardLightOperators.h"
+#include "SimpleOperators.h"
 #include "LightTiler.h"
 #include "../Techniques/RenderPass.h"
 #include "../Techniques/PipelineOperators.h"
@@ -64,6 +65,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<PostProcessOperator> _postProcessOperator;
 		std::shared_ptr<ToneMapAcesOperator> _acesOperator;
 		std::shared_ptr<CopyToneMapOperator> _copyToneMapOperator;
+		std::shared_ptr<RefractionBufferOperator> _refractionBufferOperator;
 		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingSemiConstant;
 		std::shared_ptr<ISkyTextureProcessor> _skyTextureProcessor;
 
@@ -239,12 +241,9 @@ namespace RenderCore { namespace LightingEngine
 
 		bool _hasSSR = false, _hasSSAO = false;
 	};
-
-	static RenderStepFragmentInterface CreateForwardSceneFragment(
-		std::shared_ptr<ForwardLightingCaptures> captures,
-		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
+	
+	static ParameterBox ConfigureMainSceneSelectors(
 		bool hasSSR, bool hasSSAO, bool hasDistantIBL,
-		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
 		const ForwardPlusLightScene::LightOperatorsMapping& lightOperatorMapping)
 	{
 		std::optional<ShadowOperatorDesc> dominantShadowOperator;
@@ -252,6 +251,35 @@ namespace RenderCore { namespace LightingEngine
 			if (lightOperatorMapping._dominantLightOperator < lightOperatorMapping._operatorInfos.size() && lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._shadowPreparerId != ~0u)
 				dominantShadowOperator = lightOperatorMapping._priorityShadowPreparers[lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._shadowPreparerId];
 
+		ParameterBox box;
+		if (lightOperatorMapping._dominantLightOperator != ~0u) {
+			auto uniformShapeCode = lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._uniformShapeCode;
+			if (dominantShadowOperator) {
+				// assume the shadow operator that will be associated is index 0
+				Internal::MakeShadowResolveParam(dominantShadowOperator.value()).WriteShaderSelectors(box);
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)uniformShapeCode | 0x20u);
+			} else {
+				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)uniformShapeCode);
+			}
+			if (lightOperatorMapping._staticShadowProbesCfg) box.SetParameter("SHADOW_PROBE", 1);
+			if (lightOperatorMapping._dynamicShadowProbesCfg) box.SetParameter("DYNAMIC_SHADOW_PROBE", 1);
+		}
+
+		if (hasDistantIBL) box.SetParameter("SPECULAR_IBL", 1);
+		if (hasSSR) box.SetParameter("SSR", 1);
+		if (hasSSAO) box.SetParameter("SSAO", 1);
+
+		return box;
+	}
+
+	static RenderStepFragmentInterface CreateForwardSceneFragment(
+		std::shared_ptr<ForwardLightingCaptures> captures,
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
+		bool includeBlending,
+		bool hasSSR, bool hasSSAO, bool hasDistantIBL,
+		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
+		const ForwardPlusLightScene::LightOperatorsMapping& lightOperatorMapping)
+	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 		auto lightResolve = result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR).NoInitialState();
 		auto depth = result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).InitialState(BindFlag::ShaderResource).FinalState(BindFlag::DepthStencil);
@@ -275,6 +303,45 @@ namespace RenderCore { namespace LightingEngine
 		Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;
 		mainSubpass.AppendOutput(lightResolve);
 		mainSubpass.SetDepthStencil(depth);
+		mainSubpass.SetName("MainForward");
+
+		// ShaderResource delegate requires the subpass to have views setup... perhaps we can do this another way if we get the views directly from the attachment reservation in the resource delegate
+		if (hasSSR) {
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSReflection"_h).InitialState(BindFlag::ShaderResource));
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSRConfidence"_h).InitialState(BindFlag::ShaderResource));
+		}
+		if (hasSSAO)
+			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("ao-output"_h).InitialState(BindFlag::ShaderResource));
+		auto resourceDelegate = std::make_shared<Internal::ShaderResourceSplitter>(
+			captures->_lightScene->CreateMainSceneResourceDelegate(),
+			std::make_shared<MainSceneResourceDelegate>(hasSSR, hasSSAO),
+			sequencerResources);
+
+		//
+		Techniques::BatchFlags::BitField batches = Techniques::BatchFlags::Opaque;
+		if (includeBlending) batches |= Techniques::BatchFlags::Blending;
+		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
+		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("sky"_h);
+		result.AddSubpass(
+			std::move(mainSubpass), forwardIllumDelegate, batches, ConfigureMainSceneSelectors(hasSSR, hasSSAO, hasDistantIBL, lightOperatorMapping),
+			std::move(resourceDelegate));
+
+		return result;
+	}
+
+	static RenderStepFragmentInterface CreateBlendingFragment(
+		std::shared_ptr<ForwardLightingCaptures> captures,
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
+		bool hasSSR, bool hasSSAO, bool hasDistantIBL,
+		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
+		const ForwardPlusLightScene::LightOperatorsMapping& lightOperatorMapping)
+	{
+		RenderStepFragmentInterface result { PipelineType::Graphics };
+
+		Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;
+		mainSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR));
+		mainSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+		mainSubpass.SetName("MainBlending");
 
 		if (hasSSR) {
 			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("SSReflection"_h).InitialState(BindFlag::ShaderResource));
@@ -282,37 +349,16 @@ namespace RenderCore { namespace LightingEngine
 		}
 		if (hasSSAO)
 			mainSubpass.AppendNonFrameBufferAttachmentView(result.DefineAttachment("ao-output"_h).InitialState(BindFlag::ShaderResource));
-		mainSubpass.SetName("MainForward");
-
-		ParameterBox box;
-		if (lightOperatorMapping._dominantLightOperator != ~0u) {
-			auto uniformShapeCode = lightOperatorMapping._operatorInfos[lightOperatorMapping._dominantLightOperator]._uniformShapeCode;
-			if (dominantShadowOperator) {
-				// assume the shadow operator that will be associated is index 0
-				Internal::MakeShadowResolveParam(dominantShadowOperator.value()).WriteShaderSelectors(box);
-				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)uniformShapeCode | 0x20u);
-			} else {
-				box.SetParameter("DOMINANT_LIGHT_SHAPE", (unsigned)uniformShapeCode);
-			}
-			if (lightOperatorMapping._staticShadowProbesCfg) box.SetParameter("SHADOW_PROBE", 1);
-			if (lightOperatorMapping._dynamicShadowProbesCfg) box.SetParameter("DYNAMIC_SHADOW_PROBE", 1);
-		}
-
-		if (hasDistantIBL) box.SetParameter("SPECULAR_IBL", 1);
-		if (hasSSR) box.SetParameter("SSR", 1);
-		if (hasSSAO) box.SetParameter("SSAO", 1);
 
 		auto resourceDelegate = std::make_shared<Internal::ShaderResourceSplitter>(
 			captures->_lightScene->CreateMainSceneResourceDelegate(),
 			std::make_shared<MainSceneResourceDelegate>(hasSSR, hasSSAO),
 			sequencerResources);
 
-		auto batches = Techniques::BatchFlags::Opaque|Techniques::BatchFlags::Blending;
-		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
-		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("sky"_h);
 		result.AddSubpass(
-			std::move(mainSubpass), forwardIllumDelegate, batches, std::move(box),
+			std::move(mainSubpass), forwardIllumDelegate, Techniques::BatchFlags::Blending, ConfigureMainSceneSelectors(hasSSR, hasSSAO, hasDistantIBL, lightOperatorMapping),
 			std::move(resourceDelegate));
+
 		return result;
 	}
 
@@ -343,6 +389,7 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<SkyTextureProcessorDesc> _skyTextureProcessor;
 		std::optional<SkyOperatorDesc> _sky;
 		std::optional<PostProcessOperator::CombinedDesc> _postProcess;
+		std::optional<RefractionBufferOperatorDesc> _refractionBuffer;
 		bool _hasPostProcessOperators = false;
 
 		ForwardPlusLightScene::LightOperatorsMapping _lightOperatorsMapping;
@@ -405,6 +452,12 @@ namespace RenderCore { namespace LightingEngine
 						Throw(std::runtime_error("Multiple tiled lighting operators found, where only one expected"));
 					_tilingConfig = Internal::ChainedOperatorCast<RasterizationLightTileOperatorDesc>(*chain);
 					gotTiledLightingConfig = false;
+					break;
+
+				case TypeHashCode<RefractionBufferOperatorDesc>:
+					if (_refractionBuffer)
+						Throw(std::runtime_error("Multiple refraction buffer operators found, where only one expected"));
+					_refractionBuffer = Internal::ChainedOperatorCast<RefractionBufferOperatorDesc>(*chain);
 					break;
 				}
 				chain = chain->_next;
@@ -518,6 +571,7 @@ namespace RenderCore { namespace LightingEngine
 		std::future<std::shared_ptr<ToneMapAcesOperator>> _futureAces;
 		std::future<std::shared_ptr<CopyToneMapOperator>> _futureCopyToneMap;
 		std::future<std::shared_ptr<SkyOperator>> _futureSky;
+		std::future<std::shared_ptr<RefractionBufferOperator>> _futureRefractionBuffer;
 	};
 
 	std::shared_ptr<ForwardLightingCaptures::SecondStageConstructionOperators> ForwardLightingCaptures::ConstructMainSequence(
@@ -541,6 +595,7 @@ namespace RenderCore { namespace LightingEngine
 		if (_ssaoOperator) _ssaoOperator->PreregisterAttachments(stitchingContext, fbProps);
 		if (_taaOperator) _taaOperator->PreregisterAttachments(stitchingContext, fbProps);
 		if (_postProcessOperator) _postProcessOperator->PreregisterAttachments(stitchingContext, fbProps);
+		if (_refractionBufferOperator) _refractionBufferOperator->PreregisterAttachments(stitchingContext, fbProps);
 
 		auto& mainSequence = lightingTechnique.CreateSequence();
 		mainSequence.CreateStep_CallFunction(
@@ -588,11 +643,34 @@ namespace RenderCore { namespace LightingEngine
 			});
 
 		// Draw main scene
-		auto mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
-			CreateForwardSceneFragment(
-				shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
-				_ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
-				sequencerResources, digest._lightOperatorsMapping));
+		Sequence::FragmentInterfaceRegistration mainSceneFragmentRegistration;
+		if (!_refractionBufferOperator) {
+
+			// single subpass for opaque & blending
+			mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
+				CreateForwardSceneFragment(
+					shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
+					true, _ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
+					sequencerResources, digest._lightOperatorsMapping));
+
+		} else {
+
+			// split opaque / blending because we need to do a copy operation in between
+			mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
+				CreateForwardSceneFragment(
+					shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
+					false, _ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
+					sequencerResources, digest._lightOperatorsMapping));
+
+			mainSequence.CreateStep_RunFragments(_refractionBufferOperator->CreateFragment(fbProps));
+
+			mainSequence.CreateStep_RunFragments(
+				CreateBlendingFragment(
+					shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
+					_ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
+					sequencerResources, digest._lightOperatorsMapping));
+
+		}
 
 		// simplify uniforms before going into post processing steps
 		mainSequence.CreateStep_CallFunction(
@@ -635,6 +713,8 @@ namespace RenderCore { namespace LightingEngine
 			ops->_futureAces = Internal::SecondStageConstruction(*_acesOperator, Internal::AsFrameBufferTarget(mainSequence, toneMapReg));
 		if (_copyToneMapOperator)
 			ops->_futureCopyToneMap = Internal::SecondStageConstruction(*_copyToneMapOperator, Internal::AsFrameBufferTarget(mainSequence, toneMapReg));
+		if (_refractionBufferOperator)
+			ops->_futureRefractionBuffer = Internal::SecondStageConstruction(*_refractionBufferOperator, Internal::AsFrameBufferTarget(mainSequence, toneMapReg));
 		return ops;
 	}
 
@@ -732,6 +812,9 @@ namespace RenderCore { namespace LightingEngine
 							captures->_lightScene->_ambientResourcesScheduler->BindSkyTextureProcessor(captures->_skyTextureProcessor);
 					}
 
+					if (digest._refractionBuffer)
+						captures->_refractionBufferOperator = std::make_shared<RefractionBufferOperator>(pipelinePool, *digest._refractionBuffer);
+
 					auto depthMotionNormalRoughnessDelegate = helper->_depthMotionNormalRoughnessDelegate.get();
 					auto depthMotionDelegate = helper->_depthMotionDelegate.get();
 					auto forwardIllumDelegate_DisableDepthWrite = helper->_forwardIllumDelegate.get();
@@ -785,6 +868,7 @@ namespace RenderCore { namespace LightingEngine
 							if (secondStageHelper->_futureAces.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureAces, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureCopyToneMap.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureCopyToneMap, timeoutTime)) return ::Assets::PollStatus::Continue;
 							if (secondStageHelper->_futureSky.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureSky, timeoutTime)) return ::Assets::PollStatus::Continue;
+							if (secondStageHelper->_futureRefractionBuffer.valid() && Internal::MarkerTimesOut(secondStageHelper->_futureRefractionBuffer, timeoutTime)) return ::Assets::PollStatus::Continue;
 							return ::Assets::PollStatus::Finish;
 						},
 						[secondStageHelper, lightingTechnique, captures]() {
@@ -797,23 +881,27 @@ namespace RenderCore { namespace LightingEngine
 							if (secondStageHelper->_futureAces.valid()) secondStageHelper->_futureAces.get();
 							if (secondStageHelper->_futureCopyToneMap.valid()) secondStageHelper->_futureCopyToneMap.get();
 							if (secondStageHelper->_futureSky.valid()) secondStageHelper->_futureSky.get();
+							if (secondStageHelper->_futureRefractionBuffer.valid()) secondStageHelper->_futureRefractionBuffer.get();
 
-							// register dep vals for operators after we've done their second-stage-construction 
-							lightingTechnique->_depVal.RegisterDependency(captures->_hierarchicalDepthsOperator->GetDependencyValidation());
+							// register dep vals for operators after we've done their second-stage-construction
+							auto RegisterDep = [dp=lightingTechnique->_depVal](const ::Assets::DependencyValidation& dp2) mutable { if (dp2) dp.RegisterDependency(dp2); };
+							RegisterDep(captures->_hierarchicalDepthsOperator->GetDependencyValidation());
 							if (captures->_ssrOperator)
-								lightingTechnique->_depVal.RegisterDependency(captures->_ssrOperator->GetDependencyValidation());
+								RegisterDep(captures->_ssrOperator->GetDependencyValidation());
 							if (captures->_ssaoOperator)
-								lightingTechnique->_depVal.RegisterDependency(captures->_ssaoOperator->GetDependencyValidation());
+								RegisterDep(captures->_ssaoOperator->GetDependencyValidation());
 							if (captures->_taaOperator)
-								lightingTechnique->_depVal.RegisterDependency(captures->_taaOperator->GetDependencyValidation());
+								RegisterDep(captures->_taaOperator->GetDependencyValidation());
 							if (captures->_postProcessOperator)
-								lightingTechnique->_depVal.RegisterDependency(captures->_postProcessOperator->GetDependencyValidation());
+								RegisterDep(captures->_postProcessOperator->GetDependencyValidation());
 							if (captures->_acesOperator)
-								lightingTechnique->_depVal.RegisterDependency(captures->_acesOperator->GetDependencyValidation());
+								RegisterDep(captures->_acesOperator->GetDependencyValidation());
 							if (captures->_copyToneMapOperator)
-								lightingTechnique->_depVal.RegisterDependency(captures->_copyToneMapOperator->GetDependencyValidation());
+								RegisterDep(captures->_copyToneMapOperator->GetDependencyValidation());
 							if (captures->_skyOperator)
-								lightingTechnique->_depVal.RegisterDependency(captures->_skyOperator->GetDependencyValidation());
+								RegisterDep(captures->_skyOperator->GetDependencyValidation());
+							if (captures->_refractionBufferOperator)
+								RegisterDep(captures->_refractionBufferOperator->GetDependencyValidation());
 
 							// Everything finally finished
 							return lightingTechnique;
