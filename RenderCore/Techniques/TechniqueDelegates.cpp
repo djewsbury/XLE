@@ -544,11 +544,12 @@ namespace RenderCore { namespace Techniques
 			TechniqueEntry _vsNoPatchesSrc;
 			TechniqueEntry _vsDeformVertexSrc;
 			std::string _pipelineLayout;
+			std::optional<ShadowGenType> _shadowGen;
 
 			const ::Assets::DependencyValidation& GetDependencyValidation() const { return _techniqueSet->GetDependencyValidation(); }
 
 			TechniqueFileHelper(std::shared_ptr<TechniqueSetFile> techniqueSet, std::optional<ShadowGenType> shadowGen)
-			: _techniqueSet(std::move(techniqueSet))
+			: _techniqueSet(std::move(techniqueSet)), _shadowGen(shadowGen)
 			{
 				std::vector<std::pair<const char*, TechniqueEntry*>> entriesToCheck;
 				entriesToCheck.reserve(4);
@@ -588,7 +589,10 @@ namespace RenderCore { namespace Techniques
 			nascentDesc->_depthStencil = CommonResourceBox::s_dsReadWriteCloserThan;
 
 			auto illumType = shaderPatches ? CalculateIllumType(shaderPatches->GetInterface()) : IllumType::NoPerPixel;
-			if (!shaderPatches || illumType != IllumType::SpriteTechnique) {
+			// note -- HLSL vertex shaders have not be configured for shadow gen yet, so we must fall back to the old method for the moment
+			// the SpriteTechnique method is still a little awkward for overriding default behaviour (in this case, we need shadow gen shaders
+			// to calculate SV_Position from WORLDPOSITION differently). We can do it, just not in a very expressive and reliable way
+			if (_techniqueFileHelper._shadowGen || (!shaderPatches || illumType != IllumType::SpriteTechnique)) {
 
 				const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
 				const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
