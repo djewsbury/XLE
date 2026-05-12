@@ -14,16 +14,18 @@ void frameworkEntry()
 	// note -- early rejection isn't supported
 }
 
-#if (VULKAN!=1)
-	[earlydepthstencil]
-#endif
-DepthPlusEncoded frameworkEntry_DepthPlus_PrevPosition(
+void DefaultPrevPosition(
+	out float4 prevPosition : PREVPOSITION,
+	float3 worldPosition : WORLDPOSITION)
+{
+	prevPosition = mul(SysUniform_GetPrevWorldToClip(), float4(worldPosition,1));
+}
+
+DepthPlusEncoded MakeDepthPlusEncoded(
 	float4 position : SV_Position,
 	float4 prevPosition : PREVPOSITION,
-	GBufferValues sample : GBUFFERVALUES)
+	GBufferValues sample : GBUFFERVALUES) : DEPTHPLUSENCODED
 {
-	// note -- early rejection isn't supported
-
 	float3 prevPos;
 	float historyAccumulationWeight = 1;
 	prevPos = prevPosition.xyz / prevPosition.w;
@@ -42,10 +44,28 @@ DepthPlusEncoded frameworkEntry_DepthPlus_PrevPosition(
 	return EncodeDepthPlus(sample, int2(prevPos.xy), historyAccumulationWeight);
 }
 
-DepthPlusEncoded frameworkEntry_DepthPlus(GBufferValues sample : GBUFFERVALUES)
+// Some of the extended modes not supported due to awkwardness in making some of the patches conditional on selector
+#if DEPTH_PLUS_NORMAL
+	#error DEPTH_PLUS_NORMAL Not supported
+#endif
+
+#if DEPTH_PLUS_HISTORY_ACCUMULATION
+	#error DEPTH_PLUS_HISTORY_ACCUMULATION Not supported
+#endif
+
+#if (VULKAN!=1)
+	[earlydepthstencil]
+#endif
+void frameworkEntry_DepthPlus(
+	out int2 motionBuffer : SV_Target0,
+	DepthPlusEncoded encoded : DEPTHPLUSENCODED)
 {
 	// note -- early rejection isn't supported
-	return EncodeDepthPlus(sample, int2(0,0), 1);
+	#if DEPTH_PLUS_MOTION
+		motionBuffer = encoded.motionBuffer;
+	#else
+		motionBuffer = 0;
+	#endif
 }
 
 GBufferValues SampleFallback() : GBUFFERVALUES { return GBufferValues_Default(); }
@@ -75,10 +95,13 @@ ShaderPatchCollection=depthPlus=~
 ManualSelectorFiltering=depthPlus=~
 ShaderPatchCollection=depthPlus=~
 	=~
-		<.>::frameworkEntry_DepthPlus
+		<.>::DefaultPrevPosition
 		Implements=SV_SystemPS
 	=~
-		<.>::frameworkEntry_DepthPlus_PrevPosition
+		<.>::MakeDepthPlusEncoded
+		Implements=SV_SystemPS
+	=~
+		<.>::frameworkEntry_DepthPlus
 		Implements=SV_SystemPS
 	=~
 		<.>::SampleFallback

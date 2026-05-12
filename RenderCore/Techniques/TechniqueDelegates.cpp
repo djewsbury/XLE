@@ -821,6 +821,17 @@ namespace RenderCore { namespace Techniques
 				if (auto i = LowerBound(_flexibleHelper._entries, "depthPlus"_h); i!=_flexibleHelper._entries.end() && i->first == "depthPlus"_h)
 					i->second.Configure(*nascentDesc, shaderPatches, iaAttributes);
 
+				if (_preDepthType == PreDepthType::DepthMotion || _preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation) {
+					nascentDesc->_manualSelectorFiltering.SetSelector("VSOUT_HAS_PREV_POSITION", 1);
+					nascentDesc->_manualSelectorFiltering.SetSelector("DEPTH_PLUS_MOTION", 1);
+				}
+				if (_preDepthType == PreDepthType::DepthMotionNormal || _preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+					nascentDesc->_manualSelectorFiltering.SetSelector("DEPTH_PLUS_NORMAL", 1);
+				if (_preDepthType == PreDepthType::DepthMotionNormalRoughness || _preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+					nascentDesc->_manualSelectorFiltering.SetSelector("DEPTH_PLUS_ROUGHNESS", 1);
+				if (_preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
+					nascentDesc->_manualSelectorFiltering.SetSelector("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
+
 			}
 
 			return nascentDesc;
