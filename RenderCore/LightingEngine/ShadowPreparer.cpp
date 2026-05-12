@@ -91,15 +91,19 @@ namespace RenderCore { namespace LightingEngine
 			{
 				switch (idx) {
 				case 0:
-					assert(_preparer->_workingDMFrustum._cbSource.size() == dst.size());
-					std::memcpy(dst.begin(), _preparer->_workingDMFrustum._cbSource.begin(), dst.size());
+					if (!_preparer->_workingDMFrustum._cbSource.size()) {
+						std::memset(dst.begin(), 0, dst.size()); // dummy values
+					} else {
+						assert(_preparer->_workingDMFrustum._cbSource.size() == dst.size());
+						std::memcpy(dst.begin(), _preparer->_workingDMFrustum._cbSource.begin(), dst.size());
+					}
 					break;
 				case 1:
 					{
 						#if defined(_DEBUG)
 							unsigned projCount = _preparer->_workingDMFrustum._frustumCount;
 							if (_preparer->_workingDMFrustum._enableNearCascade) ++projCount;
-							assert(dst.size() == sizeof(Float4x4)*projCount);
+							assert(dst.size() == sizeof(Float4x4)*std::max(1u, projCount));
 						#endif
 						std::memcpy(dst.begin(), _preparer->_workingDMFrustum._multiViewWorldToClip, dst.size());
 					}
@@ -114,13 +118,14 @@ namespace RenderCore { namespace LightingEngine
 			{
 				switch (idx) {
 				case 0: 
-					assert(_preparer->_workingDMFrustum._cbSource.size());		// we can hit this when the subprojection count is 0
+					if (!_preparer->_workingDMFrustum._cbSource.size())		// we can hit this when the subprojection count is 0
+						return 1024;
 					return _preparer->_workingDMFrustum._cbSource.size();
 				case 1:
 					{
 						unsigned projCount = _preparer->_workingDMFrustum._frustumCount;
 						if (_preparer->_workingDMFrustum._enableNearCascade) ++projCount;
-						return sizeof(Float4x4)*projCount;
+						return sizeof(Float4x4)*std::max(1u, projCount);
 					}
 				default:
 					UNREACHABLE();
@@ -195,7 +200,6 @@ namespace RenderCore { namespace LightingEngine
 			{
 				assert(_projections._mode == ShadowProjectionMode::Ortho);
 				assert(projections.size() < Internal::MaxShadowTexturesPerLight);
-				assert(!projections.empty());
 				auto projCount = std::min((size_t)Internal::MaxShadowTexturesPerLight, projections.size());
 				assert(projCount <= _projections._operatorNormalProjCount);     // a mis-match here means it does not agree with the operator
 				for (unsigned c=0; c<projCount; ++c) {
@@ -326,6 +330,12 @@ namespace RenderCore { namespace LightingEngine
 		return rpi;
 	}
 
+	static IteratorRange<const void*> GetDummyCBSourcePkt()
+	{
+		static std::vector<uint8_t> result(1024, 0);
+		return result;
+	}
+
 	void DMShadowPreparer::End(
 		Techniques::ParsingContext& parsingContext,
 		Techniques::RenderPassInstance& rpi,
@@ -337,7 +347,8 @@ namespace RenderCore { namespace LightingEngine
 		auto srv = _viewPool->GetTextureView(rpi.GetDepthStencilAttachmentResource(), BindFlag::ShaderResource, {});
 		const IResourceView* srvs[] = { srv.get() };
 		IteratorRange<const void*> immediateData[3];
-		immediateData[0] = {_workingDMFrustum._cbSource.begin(), _workingDMFrustum._cbSource.end()};
+		if (_workingDMFrustum._cbSource.size() > 0) immediateData[0] = {_workingDMFrustum._cbSource.begin(), _workingDMFrustum._cbSource.end()};
+		else immediateData[0] = GetDummyCBSourcePkt();
 		immediateData[1] = MakeOpaqueIteratorRange(_workingDMFrustum._resolveParameters);
 		auto screenToShadow = Internal::BuildScreenToShadowProjection(
 			_workingDMFrustum._mode,
@@ -424,8 +435,10 @@ namespace RenderCore { namespace LightingEngine
 		assert(desc._resolveType == ShadowResolveType::DepthTexture);
 
 		unsigned arrayCount = 0u;
-		if (desc._projectionMode != ShadowProjectionMode::ArbitraryCubeMap)
+		if (desc._projectionMode != ShadowProjectionMode::ArbitraryCubeMap) {
 			arrayCount = desc._normalProjCount + (desc._enableNearCascade ? 1 : 0);
+			assert(arrayCount);
+		}
 
 		ParameterBox sequencerSelectors;
 		if (desc._projectionMode == ShadowProjectionMode::Ortho) {

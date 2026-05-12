@@ -1026,6 +1026,15 @@ namespace RenderCore { namespace LightingEngine
                 mainSceneProjectionDesc = _fixedCamera.value();
             auto negativeLightDirection = Normalize(ExtractTranslation(lightLocalToWorld));
 
+            if (IsOrthogonalProjection(mainSceneProjectionDesc._cameraToProjection)) {
+                // We can't calculate this for orthogonal camera projections. The volume inside of an orthogonal projection can be much larger than
+                // a perspective transform, and is not necessarily focused on the interesting part of the scene -- so the concept of cascades breaks
+                // down without further guideance
+                destination.SetOrthoSubProjections({});
+                destination.SetWorldToOrthoView(Identity<Float4x4>());
+                return nullptr;
+            }
+
             assert(!(_settings._flags & SunSourceFrustumSettings::Flags::ArbitraryCascades));
             auto clipSpaceType = RenderCore::Techniques::GetDefaultClipSpaceType();
             auto t = BuildResolutionNormalizedOrthogonalShadowProjections(negativeLightDirection, mainSceneProjectionDesc, _settings, clipSpaceType);

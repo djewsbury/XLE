@@ -1495,13 +1495,25 @@ namespace XLEMath
         return result;
     }
 
-    void ChangeFarClipPlane(Float4x4& perspectiveProjection, float newFarPlane, ClipSpaceType clipSpaceType)
+    static void SetupYZ_Ortho(Float4x4& result, float n, float f, ClipSpaceType clipSpaceType)
     {
-        assert(!IsOrthogonalProjection(perspectiveProjection));     // math here is for perspectiveProjection
-        float f, n;
-        std::tie(n, f) = CalculateNearAndFarPlane(ExtractMinimalProjection(perspectiveProjection), clipSpaceType);
-        f = newFarPlane;
-        SetupYZ_Perspective(perspectiveProjection, n, f, clipSpaceType);
+        if (clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded) {
+                //  This is the D3D view of clip space
+                //      0<z/w<1
+            result(2,2) =  -1.f / (f-n);            // (note z direction flip here)
+            result(2,3) =    -n / (f-n);
+        } else if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
+                // as above, but swap Z/W direction for better depth buffer precision in mid and far distance
+            std::swap(n, f);
+            result(2,2) = -1.f / (f-n);
+            result(2,3) = -n / (f-n);
+        } else {
+            assert(clipSpaceType == ClipSpaceType::StraddlingZero);
+                //  This is the OpenGL view of clip space
+                //      -1<z/w<1
+            result(2,2) =     -2.f / (f-n);
+            result(2,3) =   -(f+n) / (f-n);
+        }
     }
     
     Float4x4 OrthogonalProjection(
@@ -1524,23 +1536,7 @@ namespace XLEMath
         result(1,1) =  2.f / (t-b);
         result(1,3) =  -(t+b) / (t-b);
 
-        if (clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded) {
-                //  This is the D3D view of clip space
-                //      0<z/w<1
-            result(2,2) =  -1.f / (f-n);            // (note z direction flip here)
-            result(2,3) =    -n / (f-n);
-        } else if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) {
-                // as above, but swap Z/W direction for better depth buffer precision in mid and far distance
-            std::swap(n, f);
-            result(2,2) = -1.f / (f-n);
-            result(2,3) = -n / (f-n);
-        } else {
-            assert(clipSpaceType == ClipSpaceType::StraddlingZero);
-                //  This is the OpenGL view of clip space
-                //      -1<z/w<1
-            result(2,2) =     -2.f / (f-n);
-            result(2,3) =   -(f+n) / (f-n);
-        }
+        SetupYZ_Ortho(result, n, f, clipSpaceType);
 
         return result;
     }
@@ -1553,6 +1549,21 @@ namespace XLEMath
         return OrthogonalProjection(
             l, t, r, b, nearClipPlane, farClipPlane,
             GeometricCoordinateSpace::RightHanded, clipSpaceType);
+    }
+
+    void ChangeFarClipPlane(Float4x4& projection, float newFarPlane, ClipSpaceType clipSpaceType)
+    {
+        if (!IsOrthogonalProjection(projection)) {
+            float f, n;
+            std::tie(n, f) = CalculateNearAndFarPlane(ExtractMinimalProjection(projection), clipSpaceType);
+            f = newFarPlane;
+            SetupYZ_Perspective(projection, n, f, clipSpaceType);
+        } else {
+            float f, n;
+            std::tie(n, f) = CalculateNearAndFarPlane_Ortho(ExtractMinimalProjection(projection), clipSpaceType);
+            f = newFarPlane;
+            SetupYZ_Ortho(projection, n, f, clipSpaceType);
+        }
     }
 
     std::pair<float, float> CalculateNearAndFarPlane(
