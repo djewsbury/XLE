@@ -187,11 +187,11 @@ namespace ToolsRig
 					});
 				sequence->CreateStep_RunFragments(forwardLightScene->GetLightTiler()->CreateInitFragment(context._fbProps));
 				sequence->CreateStep_RunFragments(forwardLightScene->GetLightTiler()->CreateFragment(context._fbProps));
+				sequence->ResolvePendingCreateFragmentSteps();
 				sequence->CreateStep_CallFunction(
 					[forwardLightScene](auto& iterator) {
 						forwardLightScene->GetLightTiler()->BarrierToReadingLayout(*iterator._threadContext);
 					});
-				sequence->ResolvePendingCreateFragmentSteps();
 			});
 
 		shaderLab.RegisterOperation(
@@ -214,11 +214,11 @@ namespace ToolsRig
 					});
 				sequence->CreateStep_RunFragments(forwardLightScene->GetDecalTiler()->CreateInitFragment(context._fbProps));
 				sequence->CreateStep_RunFragments(forwardLightScene->GetDecalTiler()->CreateFragment(context._fbProps));
+				sequence->ResolvePendingCreateFragmentSteps();
 				sequence->CreateStep_CallFunction(
 					[forwardLightScene](auto& iterator) {
 						forwardLightScene->GetDecalTiler()->BarrierToReadingLayout(*iterator._threadContext);
 					});
-				sequence->ResolvePendingCreateFragmentSteps();
 			});
 
 		shaderLab.RegisterOperation(
