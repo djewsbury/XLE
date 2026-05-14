@@ -180,21 +180,21 @@ float DitherPatternValue(uint2 pixelCoords)
 
 static inline uint rotl32(uint x, uint k) { return (x << k) | (x >> (32u - k)); }
 
-struct RNGState { uint s[4]; };
+struct RNGState { uint s0, s1, s2, s3; };
 
 uint RNGNext(inout RNGState state)
 {
-	const uint result = state.s[0] + state.s[3];
-	const uint t = state.s[1] << 9u;
+	const uint result = state.s0 + state.s3;
+	const uint t = state.s1 << 9u;
 
-	state.s[2] ^= state.s[0];
-	state.s[3] ^= state.s[1];
-	state.s[1] ^= state.s[2];
-	state.s[0] ^= state.s[3];
+	state.s2 ^= state.s0;
+	state.s3 ^= state.s1;
+	state.s1 ^= state.s2;
+	state.s0 ^= state.s3;
 
-	state.s[2] ^= t;
+	state.s2 ^= t;
 
-	state.s[3] = rotl32(state.s[3], 11u);
+	state.s3 = rotl32(state.s3, 11u);
 
 	return result;
 }
@@ -215,10 +215,10 @@ float RNGNextF(inout RNGState state)
 
 void RNGInitialize(out RNGState state, uint a, uint b, uint c, uint d)
 {
-	state.s[0] = a;
-	state.s[1] = b;
-	state.s[2] = c;
-	state.s[3] = d;
+	state.s0 = a;
+	state.s1 = b;
+	state.s2 = c;
+	state.s3 = d;
 }
 
 #endif
