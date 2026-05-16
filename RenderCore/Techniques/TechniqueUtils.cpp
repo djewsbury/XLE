@@ -243,6 +243,27 @@ namespace RenderCore { namespace Techniques
         return MakeSharedPkt(MakeLocalTransform(localToWorld, worldSpaceCameraPosition));
     }
 
+    SharedPkt MakeLocalTransformPacket(const Float3x4& localToWorld, const CameraDesc& camera)
+    {
+        return MakeLocalTransformPacket(localToWorld, ExtractTranslation(camera._cameraToWorld));
+    }
+
+    LocalTransformConstants MakeLocalTransform(const Float3x4& localToWorld, const Float3& worldSpaceCameraPosition, uint32_t viewMask)
+    {
+        LocalTransformConstants localTransform;
+        localTransform._localToWorld = localToWorld;
+        // note; disabled because many local-to-world transforms have scales, and shaders aren't reading this very frequently, anyway  
+        // localTransform._localSpaceView = TransformPointByOrthonormalInverse(localToWorld, worldSpaceCameraPosition);
+        localTransform._localSpaceView = Float3{0,0,0};
+        localTransform._viewMask = viewMask;
+        return localTransform;
+    }
+
+    SharedPkt MakeLocalTransformPacket(const Float3x4& localToWorld, const Float3& worldSpaceCameraPosition)
+    {
+        return MakeSharedPkt(MakeLocalTransform(localToWorld, worldSpaceCameraPosition));
+    }
+
     bool HasHandinessFlip(const ProjectionDesc& projDesc)
     {
         float det = Determinant(Truncate3x3(projDesc._worldToProjection));
