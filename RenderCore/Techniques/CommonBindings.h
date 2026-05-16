@@ -61,6 +61,7 @@ namespace RenderCore { namespace Techniques
 
         constexpr auto HierarchicalDepths	= ConstHash64("HierarchicalDepths");
         constexpr auto TiledLightBitField	= ConstHash64("TiledLightBitField");
+        constexpr auto TiledDecalBitField	= ConstHash64("TiledDecalBitField");
 
         constexpr auto MultisampleDepthPrev = ConstHash64("MultisampleDepth")+1;
         constexpr auto GBufferNormalPrev    = ConstHash64("GBufferNormal")+1;

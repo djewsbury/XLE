@@ -347,7 +347,11 @@ namespace RenderCore { namespace LightingEngine
 			atLeastOneTilableDecal |= !!(info._flags & OperatorInfo::Flags::TileableDecal);
 		}
 		if (atLeastOneTilable) helper->_lightTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
-		if (atLeastOneTilableDecal) helper->_decalTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, tilerCfg);
+		if (atLeastOneTilableDecal) {
+			auto decalTilerCfg = tilerCfg;
+			decalTilerCfg._attachmentSemantic = Techniques::AttachmentSemantics::TiledDecalBitField;
+			helper->_decalTilerFuture = ::Assets::ConstructToFuturePtr<RasterizationLightTileOperator>(constructionServices._pipelinePool, decalTilerCfg);
+		}
 
 		helper->_glossLUTFuture = ::Assets::GetAssetFuturePtr<Techniques::DeferredShaderResource>(GLOSS_LUT_TEXTURE);
 

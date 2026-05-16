@@ -163,6 +163,7 @@ namespace RenderCore { namespace Techniques
             case ShadowDepthMap: return "ShadowDepthMap";
             case HierarchicalDepths: return "HierarchicalDepths";
             case TiledLightBitField: return "TiledLightBitField";
+            case TiledDecalBitField: return "TiledDecalBitField";
             case HistoryConfidence: return "HistoryConfidence";
             case MultisampleDepthPrev: return "MultisampleDepthPrev";
             case GBufferNormalPrev: return "GBufferNormalPrev";

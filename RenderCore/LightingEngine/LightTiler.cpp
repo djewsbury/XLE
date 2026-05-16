@@ -236,7 +236,7 @@ namespace RenderCore { namespace LightingEngine
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Graphics};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
+		auto tiledLightBitField = result.DefineAttachment(_config._attachmentSemantic).InitialState(BindFlag::UnorderedAccess).FinalState(BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::UnorderedAccess);
 		TextureViewDesc depthBufferView;
 		depthBufferView._mipRange._min = IntegerLog2(s_gridDims) - 1;		// -1 because we don't store the full resolution depth buffer in hierarchicaldepths
@@ -257,7 +257,7 @@ namespace RenderCore { namespace LightingEngine
 		LightingEngine::RenderStepFragmentInterface result{PipelineType::Compute};
 
 		Techniques::FrameBufferDescFragment::SubpassDesc spDesc;
-		auto tiledLightBitField = result.DefineAttachment(Techniques::AttachmentSemantics::TiledLightBitField).NoInitialState().FinalState(BindFlag::UnorderedAccess);
+		auto tiledLightBitField = result.DefineAttachment(_config._attachmentSemantic).NoInitialState().FinalState(BindFlag::UnorderedAccess);
 		spDesc.AppendNonFrameBufferAttachmentView(tiledLightBitField, BindFlag::TransferDst);
 		spDesc.SetName("rasterization-light-tiler-init");
 		result.AddSubpass(
@@ -282,7 +282,7 @@ namespace RenderCore { namespace LightingEngine
 		desc._arrayCount = planesRequired;
 		stitchingContext.DefineAttachment(
 			Techniques::PreregisteredAttachment {
-				Techniques::AttachmentSemantics::TiledLightBitField,
+				_config._attachmentSemantic,
 				CreateDesc(
 					BindFlag::UnorderedAccess|BindFlag::ShaderResource|BindFlag::TransferDst,
 					desc),

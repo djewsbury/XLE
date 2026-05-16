@@ -5,6 +5,7 @@
 #pragma once
 
 #include "StencilingGeometry.h"
+#include "../Techniques/CommonBindings.h"
 #include "../Metal/Forward.h"
 #include "../../Assets/AssetsCore.h"
 #include "../../Math/Vector.h"
@@ -33,6 +34,7 @@ namespace RenderCore { namespace LightingEngine
 		unsigned _maxLightsPerView = 256u;
 		unsigned _depthLookupGradiations = 1024u;
 		bool _copyOutOfSharedMemory = true;			// adds an additional copy for the light table from CPU accessible memory to GPU only memory
+		uint64_t _attachmentSemantic = Techniques::AttachmentSemantics::TiledLightBitField;
 		uint64_t GetHash(uint64_t = DefaultSeed64) const;
 	};
 
