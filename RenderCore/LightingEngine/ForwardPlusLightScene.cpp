@@ -253,7 +253,9 @@ namespace RenderCore { namespace LightingEngine
 					dst[10] = &_lightScene->_tiledDecalScheduler->GetLightDepthTableUAV();
 					dst[11] = &_lightScene->_tiledDecalScheduler->GetLightListUAV();
 					dst[12] = _lightScene->_decalTiler->_outputs._tiledLightBitFieldSRV.get();
-					assert(dst[10] && dst[11] && dst[12]);
+					// note that if _lightScene->_decalTiler->_outputs._tiledLightBitFieldSRV is nullptr, ensure that the Execute step is called for the light tiler (eg, in shaderlab you need PrepareTiledDecals)
+					// the ForwardLightingDelegate should insert it automatically, but other techniques might need extra configuration
+					assert(dst[10] && dst[11] && dst[12]);	
 				} else {
 					dst[10] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
 					dst[11] = context.GetTechniqueContext()._commonResources->_undefinedBufferUAV.get();
