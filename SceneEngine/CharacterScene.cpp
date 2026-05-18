@@ -802,9 +802,12 @@ namespace SceneEngine
 			for (auto o:bind._float4x4ParameterOffsets) *(Float4x4*)PtrAdd(parameterBlock, o) += (*(Float4x4*)PtrAdd(parameterBlockTemp, o) - *(Float4x4*)PtrAdd(paramDefaults.begin(), o)) * w;
 			for (auto o:bind._quaternionParameterOffsets) {
 				// simple multi-slerp. Imperfect blending, but we can afford a little roughness
-				auto existingWeight = cml::dot(*(Quaternion*)PtrAdd(parameterBlock, o), *(Quaternion*)PtrAdd(paramDefaults.begin(), o));
-				existingWeight = 0.5f - 0.5f * existingWeight; assert(existingWeight >= -1e-3f && existingWeight <= (1.f+1e-3f));
-				*(Quaternion*)PtrAdd(parameterBlock, o) = SphericalInterpolate(*(Quaternion*)PtrAdd(parameterBlock, o), *(Quaternion*)PtrAdd(parameterBlockTemp, o), w / (existingWeight+w));
+				// The "existing weight" mechanism here is intended to reduce the influence of rotations after earlier rotations have moved significantly away from the pose. However it's creating
+				// a stronger order dependency for the inputs, and sometimes reduces subsequent rotations almost completely away.
+				// auto existingWeight = cml::dot(*(Quaternion*)PtrAdd(parameterBlock, o), *(Quaternion*)PtrAdd(paramDefaults.begin(), o));
+				// existingWeight = 0.5f - 0.5f * existingWeight; assert(existingWeight >= -1e-3f && existingWeight <= (1.f+1e-3f));
+				// *(Quaternion*)PtrAdd(parameterBlock, o) = SphericalInterpolate(*(Quaternion*)PtrAdd(parameterBlock, o), *(Quaternion*)PtrAdd(parameterBlockTemp, o), w / (existingWeight+w));
+				*(Quaternion*)PtrAdd(parameterBlock, o) = SphericalInterpolate(*(Quaternion*)PtrAdd(parameterBlock, o), *(Quaternion*)PtrAdd(parameterBlockTemp, o), w);
 			}
 		}
 
