@@ -142,6 +142,7 @@ namespace AssetsNew
 		// Note that TryActualize / Actualize return pointers into the heap. These are only
 		// valid during the lifetime of the Iterator, because we need the read lock
 		Type* TryActualize() const;
+		Type TryActualize2() const;
 		Type& Actualize() const;
 
 		// StallWhilePending variants will invalidate this (ie, you must search again for the result in order to use it)
@@ -592,6 +593,17 @@ namespace AssetsNew
 		if (state == ::Assets::AssetState::Invalid)
 			Throw(::Assets::Exceptions::InvalidAsset(_table->_initializers[_index], _table->_completedDepVals[_index], _table->_completedActualizationLogs[_index]));
 		return &_table->_completed[_index];
+	}
+
+	T1(Type) Type AssetHeap::Iterator<Type>::TryActualize2() const
+	{
+		assert(_index < _table->_completed.size());
+		auto state = _table->_states[_index];
+		if (state != ::Assets::AssetState::Ready)
+			return {};
+		if (state == ::Assets::AssetState::Invalid)
+			Throw(::Assets::Exceptions::InvalidAsset(_table->_initializers[_index], _table->_completedDepVals[_index], _table->_completedActualizationLogs[_index]));
+		return _table->_completed[_index];
 	}
 
 	T1(Type) Type& AssetHeap::Iterator<Type>::Actualize() const
