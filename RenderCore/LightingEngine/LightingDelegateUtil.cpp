@@ -1921,7 +1921,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		for (unsigned c=0; c<dimof(_subDelegates); ++c) {
 			if (!_subDelegates[c]) break;
-			_subDelegates[c]->WriteResourceViews(context, objectContext, bindingFlags, {dst.first+_srvOffsets[c], dst.second});
+			_subDelegates[c]->WriteResourceViews(context, objectContext, bindingFlags>>_srvOffsets[c], {dst.first+_srvOffsets[c], dst.second});
 		}
 	}
 
@@ -1929,7 +1929,7 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 	{
 		for (unsigned c=0; c<dimof(_subDelegates); ++c) {
 			if (!_subDelegates[c]) break;
-			_subDelegates[c]->WriteSamplers(context, objectContext, bindingFlags, {dst.first+_samplerOffsets[c], dst.second});
+			_subDelegates[c]->WriteSamplers(context, objectContext, bindingFlags>>_samplerOffsets[c], {dst.first+_samplerOffsets[c], dst.second});
 		}
 	}
 
