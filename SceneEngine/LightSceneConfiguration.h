@@ -50,6 +50,7 @@ namespace SceneEngine
 		ObjectTable<RenderCore::LightingEngine::SharpenOperatorDesc> _sharpenOperator;
 		ObjectTable<RenderCore::LightingEngine::FilmGrainDesc> _filmGrainOperator;
 		ObjectTable<RenderCore::LightingEngine::RefractionBufferOperatorDesc> _refractionBufferOperator;
+		ObjectTable<RenderCore::LightingEngine::DecalPassDesc> _decalPass;
 
 		template<typename Formatter>
 			void Deserialize(Formatter& fmttr) 
@@ -140,6 +141,11 @@ namespace SceneEngine
 				case ConstHash64("RefractionBuffer"):
 					RequireBeginElement(fmttr);
 					_refractionBufferOperator.DeserializeObject(fmttr);
+					RequireEndElement(fmttr);
+					break;
+				case ConstHash64("DecalPass"):
+					RequireBeginElement(fmttr);
+					_decalPass.DeserializeObject(fmttr);
 					RequireEndElement(fmttr);
 					break;
 				default:

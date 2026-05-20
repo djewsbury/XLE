@@ -125,5 +125,9 @@ namespace SceneEngine
     bool SetProperty(
         RenderCore::LightingEngine::RefractionBufferOperatorDesc& desc,
         uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
+
+    bool SetProperty(
+        RenderCore::LightingEngine::DecalPassDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type);
 }
 

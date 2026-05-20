@@ -22,6 +22,11 @@ namespace RenderCore { namespace LightingEngine
 		Format _depthFormat = Format::Unknown; // Leave unknown to disable depth buffer copy, otherwise set to something like Format::R16_UNORM
 	};
 
+	struct DecalPassDesc
+	{
+		bool _exposeRefractionBuffer = false;
+	};
+
 	class RefractionBufferOperator : public std::enable_shared_from_this<RefractionBufferOperator>
 	{
 	public:

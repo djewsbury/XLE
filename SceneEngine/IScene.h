@@ -105,6 +105,7 @@ namespace SceneEngine
         void SetOperator(const RenderCore::LightingEngine::SharpenOperatorDesc&);
         void SetOperator(const RenderCore::LightingEngine::FilmGrainDesc&);
         void SetOperator(const RenderCore::LightingEngine::RefractionBufferOperatorDesc&);
+        void SetOperator(const RenderCore::LightingEngine::DecalPassDesc&);
 
         template<typename T>
             void SetOperator(const T&);
@@ -132,6 +133,7 @@ namespace SceneEngine
         ChainingTemplate<RenderCore::LightingEngine::SharpenOperatorDesc> _sharpenOperator;
         ChainingTemplate<RenderCore::LightingEngine::FilmGrainDesc> _filmGrainOperator;
         ChainingTemplate<RenderCore::LightingEngine::RefractionBufferOperatorDesc> _refractionBufferOperator;
+        ChainingTemplate<RenderCore::LightingEngine::DecalPassDesc> _decalPassDesc;
         ChainingTemplate<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::PositionalLightOperatorDesc>> _reservedLightOperators[8];
         ChainingTemplate<RenderCore::LightingEngine::LightOperatorAssignment<RenderCore::LightingEngine::ShadowOperatorDesc>> _reservedShadowOperators[8];
         unsigned _reservedLightOperatorCount = 0, _reservedShadowOperatorCount = 0;

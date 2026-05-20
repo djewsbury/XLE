@@ -275,7 +275,7 @@ namespace RenderCore { namespace LightingEngine
 	static RenderStepFragmentInterface CreateForwardSceneFragment(
 		std::shared_ptr<ForwardLightingCaptures> captures,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
-		bool includeBlending,
+		bool includeBlending, bool includeDecals,
 		bool hasSSR, bool hasSSAO, bool hasDistantIBL,
 		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
 		const ForwardPlusLightScene::LightOperatorsMapping& lightOperatorMapping)
@@ -320,7 +320,7 @@ namespace RenderCore { namespace LightingEngine
 		//
 		Techniques::BatchFlags::BitField batches = Techniques::BatchFlags::Opaque;
 		if (includeBlending) batches |= Techniques::BatchFlags::Blending;
-		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
+		if (includeDecals) batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
 		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("sky"_h);
 		result.AddSubpass(
 			std::move(mainSubpass), forwardIllumDelegate, batches, ConfigureMainSceneSelectors(hasSSR, hasSSAO, hasDistantIBL, lightOperatorMapping),
@@ -329,6 +329,47 @@ namespace RenderCore { namespace LightingEngine
 		return result;
 	}
 
+	class DecalPassResourceDelegate : public Techniques::IShaderResourceDelegate
+	{
+	public:
+		void WriteResourceViews(Techniques::ParsingContext& context, const void* objectContext, uint64_t bindingFlags, IteratorRange<IResourceView**> dst) override
+		{
+			if (bindingFlags & (1ull<<uint64_t(0)))
+				dst[0] = context._rpi->GetInputAttachmentView(0).get();
+		}
+
+		DecalPassResourceDelegate()
+		{
+			_interface.BindResourceView(0, "DepthTexture"_h);
+		}
+	};
+
+	static RenderStepFragmentInterface CreateDecalFragment(
+		std::shared_ptr<ForwardLightingCaptures> captures,
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
+		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources)
+	{
+		RenderStepFragmentInterface result { PipelineType::Graphics };
+
+		// Special subpass in which the depth buffer is assigned only as a input attachment (ie, we can read from it, but we will never write to it)
+		Techniques::FrameBufferDescFragment::SubpassDesc decalSubpass;
+		decalSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR));
+		decalSubpass.AppendInput(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), TextureViewDesc{TextureViewDesc::Aspect::Depth});
+		decalSubpass.SetName("Decal");
+
+		auto resourceDelegate = std::make_shared<Internal::ShaderResourceSplitter>(
+			captures->_lightScene->CreateMainSceneResourceDelegate(),
+			std::make_shared<DecalPassResourceDelegate>(),
+			sequencerResources);
+
+		auto batchFlags = 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
+		result.AddSubpass(
+			std::move(decalSubpass), forwardIllumDelegate, batchFlags, {},
+			std::move(resourceDelegate));
+
+		return result;
+	}
+	
 	static RenderStepFragmentInterface CreateBlendingFragment(
 		std::shared_ptr<ForwardLightingCaptures> captures,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate,
@@ -390,6 +431,7 @@ namespace RenderCore { namespace LightingEngine
 		std::optional<SkyOperatorDesc> _sky;
 		std::optional<PostProcessOperator::CombinedDesc> _postProcess;
 		std::optional<RefractionBufferOperatorDesc> _refractionBuffer;
+		std::optional<DecalPassDesc> _decalPass;
 		bool _hasPostProcessOperators = false;
 
 		ForwardPlusLightScene::LightOperatorsMapping _lightOperatorsMapping;
@@ -458,6 +500,12 @@ namespace RenderCore { namespace LightingEngine
 					if (_refractionBuffer)
 						Throw(std::runtime_error("Multiple refraction buffer operators found, where only one expected"));
 					_refractionBuffer = Internal::ChainedOperatorCast<RefractionBufferOperatorDesc>(*chain);
+					break;
+
+				case TypeHashCode<DecalPassDesc>:
+					if (_decalPass)
+						Throw(std::runtime_error("Multiple decal pass operators found, where only one expected"));
+					_decalPass = Internal::ChainedOperatorCast<DecalPassDesc>(*chain);
 					break;
 				}
 				chain = chain->_next;
@@ -644,28 +692,39 @@ namespace RenderCore { namespace LightingEngine
 
 		// Draw main scene
 		Sequence::FragmentInterfaceRegistration mainSceneFragmentRegistration;
-		if (!_refractionBufferOperator) {
+		if (!_refractionBufferOperator && !digest._decalPass) {
 
-			// single subpass for opaque & blending
+			// single subpass for opaque, decal & blending
 			mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
 				CreateForwardSceneFragment(
 					shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
-					true, _ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
+					true, true, _ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
 					sequencerResources, digest._lightOperatorsMapping));
 
 		} else {
 
-			// split opaque / blending because we need to do a copy operation in between
+			// split opaque / decal / blending and sort out copies and subpasses that go inbetween
 			mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
 				CreateForwardSceneFragment(
 					shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
-					false, _ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
+					false, !digest._decalPass, _ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
 					sequencerResources, digest._lightOperatorsMapping));
 
-			mainSequence.CreateStep_RunFragments(_refractionBufferOperator->CreateFragment(fbProps));
+			std::shared_ptr<Techniques::IShaderResourceDelegate> refractionsResourceDelegate;
+			if (_refractionBufferOperator) {
+				mainSequence.CreateStep_RunFragments(_refractionBufferOperator->CreateFragment(fbProps));
 
-			auto srd=_refractionBufferOperator->CreateShaderResourceDelegate();
-			mainSequence.CreateStep_CallFunction([srd](SequenceIterator& iterator) { iterator._parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(srd); });
+				auto refractionsResourceDelegate=_refractionBufferOperator->CreateShaderResourceDelegate();
+				mainSequence.CreateStep_CallFunction([refractionsResourceDelegate](SequenceIterator& iterator) { iterator._parsingContext->GetUniformDelegateManager()->BindShaderResourceDelegate(refractionsResourceDelegate); });
+			}
+
+			if (digest._decalPass) {
+				if (digest._decalPass->_exposeRefractionBuffer && !_refractionBufferOperator)
+					Throw(std::runtime_error("Refraction buffer will not be available for decal pass because a refraction buffer operator was not provided"));
+
+				mainSequence.CreateStep_RunFragments(
+					CreateDecalFragment(shared_from_this(), forwardIllumDelegate_DisableDepthWrite, sequencerResources));
+			}
 
 			mainSequence.CreateStep_RunFragments(
 				CreateBlendingFragment(
@@ -673,7 +732,8 @@ namespace RenderCore { namespace LightingEngine
 					_ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
 					sequencerResources, digest._lightOperatorsMapping));
 
-			mainSequence.CreateStep_CallFunction([srd](SequenceIterator& iterator) { iterator._parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*srd); });
+			if (_refractionBufferOperator)
+				mainSequence.CreateStep_CallFunction([refractionsResourceDelegate](SequenceIterator& iterator) { iterator._parsingContext->GetUniformDelegateManager()->UnbindShaderResourceDelegate(*refractionsResourceDelegate); });
 
 		}
 

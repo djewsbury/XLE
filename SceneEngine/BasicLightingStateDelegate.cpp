@@ -314,6 +314,13 @@ namespace SceneEngine
             cfg.SetOperator(_operatorResolveContext._refractionBufferOperator._objects[0].second);
         }
 
+        if (!_operatorResolveContext._decalPass._objects.empty()) {
+            if (_operatorResolveContext._decalPass._objects.size() != 1)
+                Throw(std::runtime_error("Only one decal pass operator allowed in BasicLightingStateDelegate configuration file"));
+
+            cfg.SetOperator(_operatorResolveContext._decalPass._objects[0].second);
+        }
+
         if (!_operatorResolveContext._forwardLightingOperators._objects.empty()) {
             if (_operatorResolveContext._forwardLightingOperators._objects.size() != 1 || !_operatorResolveContext._deferredLightingOperators._objects.empty() || !_operatorResolveContext._utilityLightingOperator._objects.empty())
                 Throw(std::runtime_error("Only one lighting technique operator allowed in BasicLightingStateDelegate configuration file"));
@@ -821,6 +828,12 @@ namespace SceneEngine
     {
         _refractionBufferOperator._desc = operatorDesc;
         AddToOperatorList(_refractionBufferOperator);
+    }
+
+    void MergedLightingEngineCfg::SetOperator(const RenderCore::LightingEngine::DecalPassDesc& decalPassDesc)
+    {
+        _decalPassDesc._desc = decalPassDesc;
+        AddToOperatorList(_decalPassDesc);
     }
 
     MergedLightingEngineCfg::MergedLightingEngineCfg() = default;
@@ -1650,6 +1663,22 @@ namespace SceneEngine
             return true;
         case "DepthFormat"_h:
             SetViaEnumFn<Format, AsFormat>(desc, &RefractionBufferOperatorDesc::_depthFormat, data, type);
+            return true;
+        }
+        return false;
+    }
+
+    bool SetProperty(
+        RenderCore::LightingEngine::DecalPassDesc& desc,
+        uint64_t propertyNameHash, IteratorRange<const void*> data, const Utility::ImpliedTyping::TypeDesc& type)
+    {
+        using namespace LightingEngine;
+        switch (propertyNameHash) {
+        case "ExposeRefractionBuffer"_h:
+            if (auto value = ConvertOrCast<float>(data, type)) {
+                desc._exposeRefractionBuffer = *value;
+                return true;
+            }
             return true;
         }
         return false;
