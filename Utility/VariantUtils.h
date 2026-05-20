@@ -97,6 +97,9 @@ namespace Utility
     template<typename Type>
         Type* VariantArray::Allocate(size_t count)
     {
+        // since we don't take into account alignment, we must ensure there's no padding required between array elements
+        static_assert((sizeof(Type)%alignof(Type)) == 0);
+
         size_t startSize = _dataStoreSize;
         size_t allocationRequired = count*sizeof(Type);
         if ((startSize + allocationRequired) > _dataStoreAllocated) {

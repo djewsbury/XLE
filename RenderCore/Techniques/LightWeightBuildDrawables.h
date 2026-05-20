@@ -7,11 +7,13 @@
 #include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
 
+namespace RenderCore { class UniformsStreamInterface; }
 namespace RenderCore { namespace Techniques
 {
 	class DrawableConstructor;
 	class DrawablesPacket;
 	struct ModelConstructionSkeletonBinding;
+	class RetainedUniformsStream;
 
 	struct LightWeightBuildDrawables
 	{
@@ -31,7 +33,7 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<DrawablesPacket** const> pkts,
 			const Float3x4& objectToWorld,
 			unsigned deformInstanceIdx = 0,
-			uint32_t viewMask= 1);
+			uint32_t viewMask = 1);
 
 		static void SingleInstance(
 			DrawableConstructor& constructor,
@@ -40,7 +42,14 @@ namespace RenderCore { namespace Techniques
 			const ModelConstructionSkeletonBinding& skeletonBinding,
 			IteratorRange<const Float4x4*> animatedSkeletonOutput,
 			unsigned deformInstanceIdx = 0,
-			uint32_t viewMask= 1);
+			uint32_t viewMask = 1);
+
+		static void SingleInstance(
+			DrawableConstructor& constructor,
+			IteratorRange<DrawablesPacket** const> pkts,
+			UniformsStreamInterface& usi,			// usi must out-live the drawables created
+			const RetainedUniformsStream& uniforms,
+			unsigned deformInstanceIdx = 0);
 
 		static unsigned GetDrawableCount(
 			DrawableConstructor& constructor,

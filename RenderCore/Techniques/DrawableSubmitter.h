@@ -25,6 +25,7 @@ namespace RenderCore { namespace Techniques
 	class IPipelineAcceleratorPool;
 	class PipelineAccelerator;
 	class DescriptorSetAccelerator;
+	class ExecuteDrawableContext;
 
 	class RetainedUniformsStream
 	{
@@ -41,6 +42,8 @@ namespace RenderCore { namespace Techniques
 		RetainedUniformsStream& operator=(RetainedUniformsStream&&);
 		~RetainedUniformsStream();
 	};
+
+	void ApplyUniforms(const ExecuteDrawableContext& drawContext, const RetainedUniformsStream& uniforms);
 
 	class ImmediateDrawableMaterial
 	{

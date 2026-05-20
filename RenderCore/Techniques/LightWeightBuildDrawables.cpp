@@ -9,6 +9,7 @@
 #include "DrawableConstructor.h"
 #include "CommonBindings.h"
 #include "SimpleModelRenderer.h"		// for ModelConstructionSkeletonBinding
+#include "DrawableSubmitter.h"			// for RetainedUniformsStream
 #include "../Assets/ModelMachine.h"
 #include "../UniformsStream.h"
 #include "../../Math/Transformations.h"
@@ -315,6 +316,22 @@ namespace RenderCore { namespace Techniques
 			drawFnContext.ApplyLooseUniforms(RenderCore::UniformsStream{{}, immDatas});
 			drawFnContext.DrawIndexedInstances(drawable._indexCount, viewCount, drawable._firstIndex);
 		}
+
+		struct SingleInstanceUniforms_Drawable : public RenderCore::Techniques::Drawable
+		{
+			unsigned _firstIndex, _indexCount;
+			RetainedUniformsStream _uniforms;
+		};
+
+		static void DrawFn_SingleInstanceUniforms(
+			RenderCore::Techniques::ParsingContext& parserContext,
+			const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext,
+			const SingleInstanceUniforms_Drawable& drawable)
+		{
+			assert(drawFnContext.GetBoundLooseImmediateDatas());
+			ApplyUniforms(drawFnContext, drawable._uniforms);
+			drawFnContext.DrawIndexed(drawable._indexCount, drawable._firstIndex);
+		}
 	}
 
 	void LightWeightBuildDrawables::SingleInstance(
@@ -442,6 +459,64 @@ namespace RenderCore { namespace Techniques
 						drawable._localToWorld = localTransform;
 						drawable._deformInstanceIdx = deformInstanceIdx;
 						drawable._viewMask = viewMask;
+					}
+				}
+				break;
+			}
+		}
+	}
+
+	void LightWeightBuildDrawables::SingleInstance(
+		DrawableConstructor& constructor,
+		IteratorRange<DrawablesPacket** const> pkts,
+		UniformsStreamInterface& usi,
+		const RetainedUniformsStream& uniforms,
+		unsigned deformInstanceIdx)
+	{
+		using namespace RenderCore;
+		auto& cmdStream = constructor.GetCmdStream();
+		VLA(Internal::SingleInstanceUniforms_Drawable*, drawables, cmdStream._drawCallCounts.size());
+		assert(pkts.size() >= cmdStream._drawCallCounts.size());
+		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c)
+			drawables[c] = (cmdStream._drawCallCounts[c] && pkts[c]) ? pkts[c]->_drawables.Allocate<Internal::SingleInstanceUniforms_Drawable>(cmdStream._drawCallCounts[c]) : nullptr;
+
+		const Float4x4* geoSpaceToNodeSpace = nullptr;
+		unsigned transformMarker = ~0u;
+		std::pair<unsigned, unsigned> baseTransformsRange { 0, 0 };
+		for (auto cmd:cmdStream.GetCmdStream()) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+				transformMarker = cmd.As<unsigned>();
+				assert(transformMarker+baseTransformsRange.first < baseTransformsRange.second);
+				assert(transformMarker+baseTransformsRange.first < constructor._baseTransforms.size());
+				break;
+			case (uint32_t)DrawableConstructor::Command::BeginElement:
+				baseTransformsRange = constructor._elementBaseTransformRanges[cmd.As<unsigned>()];
+				break;
+			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
+				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
+				break;
+			case (uint32_t)DrawableConstructor::Command::ExecuteDrawCalls:
+				{
+					struct DrawCallsRef { unsigned _start, _end; };
+					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+					assert(transformMarker != ~0u);		// SetTransformMarker must come first
+					
+					// note -- in this variation, we're ignoring the skeleton transformation information entirely
+
+					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
+						if (!drawables[dc._batchFilter]) continue;
+						auto& drawable = *drawables[dc._batchFilter]++;
+						drawable._geo = constructor._drawableGeos[dc._drawableGeoIdx].get();
+						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx].get();
+						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx].get();
+						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&Internal::DrawFn_SingleInstanceUniforms;
+						drawable._looseUniformsInterface = &usi;
+						assert(dc._firstVertex == 0);
+						drawable._firstIndex = dc._firstIndex;
+						drawable._indexCount = dc._indexCount;
+						drawable._uniforms = uniforms;
+						drawable._deformInstanceIdx = deformInstanceIdx;
 					}
 				}
 				break;

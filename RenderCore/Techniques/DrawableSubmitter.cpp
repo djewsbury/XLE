@@ -29,7 +29,7 @@ namespace RenderCore { namespace Techniques
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	static void ApplyUniforms(const ExecuteDrawableContext& drawContext, const RetainedUniformsStream& uniforms)
+	void ApplyUniforms(const ExecuteDrawableContext& drawContext, const RetainedUniformsStream& uniforms)
 	{
 		VLA(const IResourceView*, res, uniforms._resourceViews.size());
 		for (size_t c=0; c<uniforms._resourceViews.size(); ++c) res[c] = uniforms._resourceViews[c].get();
