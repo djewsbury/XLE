@@ -353,11 +353,12 @@ namespace RenderCore { namespace LightingEngine
 		usi.BindImmediateData(1, "ControlParams"_h);
 		_prepareBitFieldBoundUniforms = std::make_unique<Metal::BoundUniforms>(*_prepareBitFieldPipeline, usi);
 
-		auto tileableLightBufferDesc = CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(IntermediateLight)*_config._maxLightsPerView));
+		auto tileableLightBufferDesc = CreateDesc(BindFlag::UnorderedAccess | BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(IntermediateLight)*_config._maxLightsPerView));
 		if (_config._copyOutOfSharedMemory)
 			_unmapTileableLightBuffer = _pipelinePool->GetDevice()->CreateResource(tileableLightBufferDesc, "tileable-lights");
 
 		tileableLightBufferDesc._allocationRules = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
+		tileableLightBufferDesc._bindFlags = BindFlag::UnorderedAccess | BindFlag::TransferSrc;
 		for (unsigned c=0; c<dimof(_tileableLightBuffer); ++c)
 			_tileableLightBuffer[c] = _pipelinePool->GetDevice()->CreateResource(tileableLightBufferDesc, "tileable-lights");
 

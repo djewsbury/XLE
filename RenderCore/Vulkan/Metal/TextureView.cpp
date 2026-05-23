@@ -78,7 +78,7 @@ namespace RenderCore { namespace Metal_Vulkan
         return aspectMask;
     }
 
-    static VkImageViewCreateInfo MakeImageViewCreateInfo(const TextureViewDesc& window, VkImage image, bool isArray)
+    static VkImageViewCreateInfo MakeImageViewCreateInfo(const TextureViewDesc& window, VkImage image, bool isArray, uint32_t imageLayerCount)
     {
         // Note that the arrayCount value is sometimes set to 1 when we want 
         // an array texture with a single array slice (as opposed to 0, meaning no array at all).
@@ -105,7 +105,8 @@ namespace RenderCore { namespace Metal_Vulkan
         if (window._mipRange._count == TextureViewDesc::Unlimited)
             view_info.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
         if (window._arrayLayerRange._count == TextureViewDesc::Unlimited)
-            view_info.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+            view_info.subresourceRange.layerCount = imageLayerCount;         // ideally we want VK_REMAINING_ARRAY_LAYERS, but that requires Vulkan 1.4 maintainence 5
+        assert(view_info.subresourceRange.layerCount <= imageLayerCount);
         view_info.subresourceRange.aspectMask = GetAspectForTextureView(window);
         assert(view_info.subresourceRange.aspectMask != 0);
         return view_info;
@@ -274,7 +275,7 @@ namespace RenderCore { namespace Metal_Vulkan
     {
         // We don't know anything about the "image" in this case. We need to rely on "image" containing all
         // of the relevant information.
-        auto createInfo = MakeImageViewCreateInfo(window, image, true);
+        auto createInfo = MakeImageViewCreateInfo(window, image, true, 1u);     // (can't access the array layer count easily here)
         _imageView = factory.CreateImageView(createInfo);
         static_assert(sizeof(_imageSubresourceRange) >= sizeof(VkImageSubresourceRange));
         ((VkImageSubresourceRange&)_imageSubresourceRange) = createInfo.subresourceRange;
@@ -308,7 +309,7 @@ namespace RenderCore { namespace Metal_Vulkan
                 adjWindow._dimensionality = tDesc._dimensionality;
 
             bool isArray = tDesc._arrayCount != 0u;
-            auto createInfo = MakeImageViewCreateInfo(adjWindow, res->GetImage(), isArray);
+            auto createInfo = MakeImageViewCreateInfo(adjWindow, res->GetImage(), isArray, ActualArrayLayerCount(tDesc));
             if (createInfo.viewType == VK_IMAGE_VIEW_TYPE_CUBE) {
                 if (formatUsage != BindFlag::ShaderResource) {
                     createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;

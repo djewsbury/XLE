@@ -938,6 +938,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		    auto srcAspectMask = AsImageAspectMask(srcDesc._textureDesc._format);
 
 		    assert(ActualArrayLayerCount(srcDesc._textureDesc) == ActualArrayLayerCount(dstDesc._textureDesc));
+			auto arrayLayerCount = ActualArrayLayerCount(dstDesc._textureDesc);
 		
 		    auto mips = (unsigned)std::min(srcDesc._textureDesc._mipCount, dstDesc._textureDesc._mipCount);
 		    assert(mips <= dimof(copyOps));
@@ -951,11 +952,11 @@ namespace RenderCore { namespace Metal_Vulkan
 			    c.srcSubresource.aspectMask = srcAspectMask;
 			    c.srcSubresource.mipLevel = m;
 			    c.srcSubresource.baseArrayLayer = 0;
-			    c.srcSubresource.layerCount = VK_REMAINING_ARRAY_LAYERS;
+			    c.srcSubresource.layerCount = arrayLayerCount;
 			    c.dstSubresource.aspectMask = dstAspectMask;
 			    c.dstSubresource.mipLevel = m;
 			    c.dstSubresource.baseArrayLayer = 0;
-			    c.dstSubresource.layerCount = VK_REMAINING_ARRAY_LAYERS;
+			    c.dstSubresource.layerCount = arrayLayerCount;
 
 			    width = std::max(1u, width>>1);
 			    height = std::max(1u, height>>1);
@@ -2500,7 +2501,7 @@ namespace RenderCore { namespace Metal_Vulkan
 			barrier.subresourceRange.baseMipLevel = 0;
 			barrier.subresourceRange.baseArrayLayer = 0;
 			barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-			barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+			barrier.subresourceRange.layerCount = ActualArrayLayerCount(res->AccessDesc()._textureDesc);
 		}
 		_srcStageMask |= preBarrierUsage._pipelineStageFlags;
 		_dstStageMask |= postBarrierUsage._pipelineStageFlags;

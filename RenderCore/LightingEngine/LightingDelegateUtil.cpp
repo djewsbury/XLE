@@ -1790,8 +1790,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		auto tilerConfig = _lightTiler->GetConfiguration();
 		AllocationRules::BitField allocationRulesForDynamicCBs = AllocationRules::HostVisibleSequentialWrite|AllocationRules::DisableAutoCacheCoherency|AllocationRules::PermanentlyMapped;
 
-		auto lightListDesc = CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(CB_Decal)*tilerConfig._maxLightsPerView, sizeof(CB_Decal)));
-		auto lightDepthTableDesc = CreateDesc(BindFlag::UnorderedAccess, LinearBufferDesc::Create(sizeof(unsigned)*tilerConfig._depthLookupGradiations, sizeof(unsigned)));
+		auto lightListDesc = CreateDesc(BindFlag::UnorderedAccess | BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(CB_Decal)*tilerConfig._maxLightsPerView, sizeof(CB_Decal)));
+		auto lightDepthTableDesc = CreateDesc(BindFlag::UnorderedAccess | BindFlag::TransferDst, LinearBufferDesc::Create(sizeof(unsigned)*tilerConfig._depthLookupGradiations, sizeof(unsigned)));
 
 		if (tilerConfig._copyOutOfSharedMemory) {
 			_unmapLightList = device.CreateResource(lightListDesc, "decal-list");
@@ -1799,6 +1799,8 @@ namespace RenderCore { namespace LightingEngine { namespace Internal
 		}
 
 		lightListDesc._allocationRules = lightDepthTableDesc._allocationRules = allocationRulesForDynamicCBs;
+		lightListDesc._bindFlags = BindFlag::UnorderedAccess | BindFlag::TransferSrc;
+		lightDepthTableDesc._bindFlags = BindFlag::UnorderedAccess | BindFlag::TransferSrc;
 		for (unsigned c=0; c<dimof(_uniforms); c++) {
 			_uniforms[c]._lightList = device.CreateResource(lightListDesc, "decal-list");
 			_uniforms[c]._lightDepthTable = device.CreateResource(lightDepthTableDesc, "decal-depth-table");
