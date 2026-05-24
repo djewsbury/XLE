@@ -469,6 +469,9 @@ namespace RenderCore { namespace Techniques
 
 			}
 
+			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Vertex).IsEmpty())
+				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Vertex));
+
 			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry).IsEmpty())
 				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry));
 
@@ -999,6 +1002,9 @@ namespace RenderCore { namespace Techniques
 				nascentDesc->_manualSelectorFiltering.EnforceSelectorRelevance("UTILITY_SHADER", "1");
 
 			}
+
+			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Vertex).IsEmpty())
+				nascentDesc->_shaders[(unsigned)ShaderStage::Vertex] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Vertex));
 
 			if (shaderPatches && !shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry).IsEmpty())
 				nascentDesc->_shaders[(unsigned)ShaderStage::Geometry] = MakeShaderCompileResourceName(shaderPatches->GetInterface().GetOverrideShader(ShaderStage::Geometry));
