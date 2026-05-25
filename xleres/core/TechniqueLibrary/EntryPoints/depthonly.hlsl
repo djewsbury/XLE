@@ -6,12 +6,9 @@
 #include "../Framework/VSOUT.hlsl"
 #include "../Standard/depth-plus-util.hlsl"
 
-#if (VULKAN!=1)
-	[earlydepthstencil]
-#endif
-void frameworkEntry()
+void frameworkEntry(bool earlyRejection : EARLYREJECTION)
 {
-	// note -- early rejection isn't supported
+	if (earlyRejection) discard;		// not quite as "early" as we like
 }
 
 void DefaultPrevPosition(
@@ -53,14 +50,13 @@ DepthPlusEncoded MakeDepthPlusEncoded(
 	#error DEPTH_PLUS_HISTORY_ACCUMULATION Not supported
 #endif
 
-#if (VULKAN!=1)
-	[earlydepthstencil]
-#endif
 void frameworkEntry_DepthPlus(
 	out int2 motionBuffer : SV_Target0,
+	bool earlyRejection : EARLYREJECTION,
 	DepthPlusEncoded encoded : DEPTHPLUSENCODED)
 {
-	// note -- early rejection isn't supported
+	if (earlyRejection) discard;		// not quite as "early" as we like
+
 	#if DEPTH_PLUS_MOTION
 		motionBuffer = encoded.motionBuffer;
 	#else
@@ -69,6 +65,7 @@ void frameworkEntry_DepthPlus(
 }
 
 GBufferValues SampleFallback() : GBUFFERVALUES { return GBufferValues_Default(); }
+bool EarlyRejectionFallback() : EARLYREJECTION { return false; }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -77,7 +74,7 @@ GBufferValues SampleFallback() : GBUFFERVALUES { return GBufferValues_Default();
 Entity=main
 TechniqueDelegateConfig=main=~
 	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
-	Preconfiguration=xleres/Config/Preconfiguration.hlsl
+	Preconfiguration=xleres/Config/PreconfigurationDepthOnly.hlsl
 RawMaterial=main=~
 ShaderPatchCollection=main=~
 ManualSelectorFiltering=main=~
@@ -89,7 +86,7 @@ ShaderPatchCollection=main=~
 Entity=depthPlus
 TechniqueDelegateConfig=depthPlus=~
 	PipelineLayout=xleres/Config/main.pipeline:GraphicsMain
-	Preconfiguration=xleres/Config/Preconfiguration.hlsl
+	Preconfiguration=xleres/Config/PreconfigurationDepthOnly.hlsl
 RawMaterial=depthPlus=~
 ShaderPatchCollection=depthPlus=~
 ManualSelectorFiltering=depthPlus=~
@@ -105,6 +102,9 @@ ShaderPatchCollection=depthPlus=~
 		Implements=SV_SystemPS
 	=~
 		<.>::SampleFallback
+		Implements=SV_SystemPS
+	=~
+		<.>::EarlyRejectionFallback
 		Implements=SV_SystemPS
 
 )-- */

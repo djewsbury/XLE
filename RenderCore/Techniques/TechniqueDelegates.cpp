@@ -632,6 +632,9 @@ namespace RenderCore { namespace Techniques
 				if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h)
 					i->second.Configure(*nascentDesc, shaderPatches, iaAttributes);
 
+				// important selector -- but since it's read by the SpriteTechnique generated functions, it's not included in the default relevance
+				nascentDesc->_manualSelectorFiltering.EnforceSelectorRelevance("NOEARLYDEPTHSTENCIL", "1");
+
 			}
 
 			return nascentDesc;
@@ -820,6 +823,9 @@ namespace RenderCore { namespace Techniques
 				if (_preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
 					mergedTechEntry._selectorFiltering.SetSelector("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
 
+				// important selector -- but since it's read by the SpriteTechnique generated functions, it's not included in the default relevance
+				nascentDesc->_manualSelectorFiltering.EnforceSelectorRelevance("NOEARLYDEPTHSTENCIL", "1");
+
 				PrepareShadersFromTechniqueEntry(*nascentDesc, mergedTechEntry, shaderPatches, std::move(vsPatchExpansions), std::move(psPatchExpansions));
 
 			} else {
@@ -839,6 +845,8 @@ namespace RenderCore { namespace Techniques
 				if (_preDepthType == PreDepthType::DepthMotionNormalRoughnessAccumulation)
 					nascentDesc->_manualSelectorFiltering.SetSelector("DEPTH_PLUS_HISTORY_ACCUMULATION", 1);
 
+				// important selector -- but since it's read by the SpriteTechnique generated functions, it's not included in the default relevance
+				nascentDesc->_manualSelectorFiltering.EnforceSelectorRelevance("NOEARLYDEPTHSTENCIL", "1");
 			}
 
 			return nascentDesc;

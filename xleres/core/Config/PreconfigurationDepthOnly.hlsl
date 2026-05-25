@@ -56,6 +56,10 @@
 #undef GEO_HAS_COLOR1
 #undef GEO_HAS_PER_VERTEX_AO
 
+#if ENABLE_ALPHA_TEST
+	#define NOEARLYDEPTHSTENCIL 1
+#endif
+
 // disable ENABLE_... defines used only within the Preconfiguration headers
 #undef ENABLE_TANGENT_FRAME
 #undef ENABLE_ALPHA_TEST

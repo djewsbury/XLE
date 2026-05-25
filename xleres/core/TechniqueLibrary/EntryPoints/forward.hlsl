@@ -7,9 +7,6 @@
 #include "../Math/TextureAlgorithm.hlsl" // (for SystemInputs)
 #include "../../Forward/ForwardPlusLighting.hlsl"
 
-#if (VULKAN!=1)
-	[earlydepthstencil]
-#endif
 float4 frameworkEntry(
 	GBufferValues sample : GBUFFERVALUES,
 	float4 position : SV_Position,
@@ -18,8 +15,6 @@ float4 frameworkEntry(
 	// float3 worldViewVector : WORLDVIEWVECTOR,
 	SystemInputs sys : SYSTEMINPUTS) : SV_Target0
 {
-	// note -- early rejection isn't supported
-
 	const bool hasNormal = true;		// todo -- can't detect when there is no normal
 	float3 result =
 		CalculateIllumination(

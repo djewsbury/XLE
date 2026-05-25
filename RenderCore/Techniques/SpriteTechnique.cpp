@@ -1151,7 +1151,7 @@ void WriteBarycentricCoords(
 				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
 					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);
 
-			ps << "[earlydepthstencil] ";
+			ps << "#if !defined(NOEARLYDEPTHSTENCIL) || !NOEARLYDEPTHSTENCIL" << std::endl << "[earlydepthstencil]" << std::endl << "#endif" << std::endl;
 			psSignature = writerHelper.WriteFragment(ps, "PSEntry");
 		}
 
@@ -1398,7 +1398,7 @@ void WriteBarycentricCoords(
 				if (writerHelper.HasAttributeFor(a._semantic, a._semanticIdx))
 					writerHelper.WriteOutputParameter(a._semantic, a._semanticIdx, a._type);
 
-			ps << "[earlydepthstencil] ";
+			ps << "#if !defined(NOEARLYDEPTHSTENCIL) || !NOEARLYDEPTHSTENCIL" << std::endl << "[earlydepthstencil]" << std::endl << "#endif" << std::endl;
 			psSignature = writerHelper.WriteFragment(ps, "PSEntry");
 		}
 
