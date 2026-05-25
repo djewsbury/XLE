@@ -59,6 +59,7 @@ namespace RenderCore { namespace LightingEngine
 
 		using TechniqueDelegateFuture = std::shared_future<std::shared_ptr<Techniques::ITechniqueDelegate>>;
 		TechniqueDelegateFuture GetForwardIllumDelegate_DisableDepthWrite();
+		TechniqueDelegateFuture GetForwardIllumDelegate_EqualDepthTest();
 
 		TechniqueDelegateFuture GetGBufferDelegate(GBufferDelegateType);
 		TechniqueDelegateFuture GetUtilityDelegate(Techniques::UtilityDelegateType);
@@ -78,6 +79,7 @@ namespace RenderCore { namespace LightingEngine
 
 		::Assets::MarkerPtr<Techniques::TechniqueSetFile> _techniqueSetFile;
 		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_DisableDepthWrite;
+		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _forwardIllumDelegate_EqualDepthTest;
 		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _gbufferDelegates[7];		// size must agree with GBufferType
 		::Assets::MarkerPtr<Techniques::ITechniqueDelegate> _utilityDelegates[9];		// size must agree with Techniques::UtilityDelegateType
 

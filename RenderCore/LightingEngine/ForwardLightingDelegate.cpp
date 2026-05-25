@@ -86,7 +86,8 @@ namespace RenderCore { namespace LightingEngine
 			const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
 			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalRoughnessDelegate,
 			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
-			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_DisableDepthWrite) -> std::shared_ptr<SecondStageConstructionOperators>;
+			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_disableDepthWrite,
+			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_equalDepthTest) -> std::shared_ptr<SecondStageConstructionOperators>;
 	};
 
 	void ForwardLightingCaptures::DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence)
@@ -631,7 +632,8 @@ namespace RenderCore { namespace LightingEngine
 		const std::shared_ptr<Techniques::IShaderResourceDelegate>& sequencerResources,
 		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalRoughnessDelegate,
 		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
-		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_DisableDepthWrite)
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_disableDepthWrite,
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_equalDepthTest)
 	{
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice()) };
 		PreregisterAttachments(stitchingContext, fbProps);
@@ -697,7 +699,7 @@ namespace RenderCore { namespace LightingEngine
 			// single subpass for opaque, decal & blending
 			mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
 				CreateForwardSceneFragment(
-					shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
+					shared_from_this(), forwardIllumDelegate_disableDepthWrite,
 					true, true, _ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
 					sequencerResources, digest._lightOperatorsMapping));
 
@@ -706,7 +708,7 @@ namespace RenderCore { namespace LightingEngine
 			// split opaque / decal / blending and sort out copies and subpasses that go inbetween
 			mainSceneFragmentRegistration = mainSequence.CreateStep_RunFragments(
 				CreateForwardSceneFragment(
-					shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
+					shared_from_this(), forwardIllumDelegate_equalDepthTest,
 					false, !digest._decalPass, _ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
 					sequencerResources, digest._lightOperatorsMapping));
 
@@ -723,12 +725,12 @@ namespace RenderCore { namespace LightingEngine
 					Throw(std::runtime_error("Refraction buffer will not be available for decal pass because a refraction buffer operator was not provided"));
 
 				mainSequence.CreateStep_RunFragments(
-					CreateDecalFragment(shared_from_this(), forwardIllumDelegate_DisableDepthWrite, sequencerResources));
+					CreateDecalFragment(shared_from_this(), forwardIllumDelegate_disableDepthWrite, sequencerResources));
 			}
 
 			mainSequence.CreateStep_RunFragments(
 				CreateBlendingFragment(
-					shared_from_this(), forwardIllumDelegate_DisableDepthWrite,
+					shared_from_this(), forwardIllumDelegate_disableDepthWrite,
 					_ssrOperator!=nullptr, _ssaoOperator!=nullptr, digest._skyTextureProcessor.has_value(),
 					sequencerResources, digest._lightOperatorsMapping));
 
@@ -799,7 +801,8 @@ namespace RenderCore { namespace LightingEngine
 			// main technique delegates
 			SharedTechniqueDelegateBox::TechniqueDelegateFuture _depthMotionNormalRoughnessDelegate;
 			SharedTechniqueDelegateBox::TechniqueDelegateFuture _depthMotionDelegate;
-			SharedTechniqueDelegateBox::TechniqueDelegateFuture _forwardIllumDelegate;
+			SharedTechniqueDelegateBox::TechniqueDelegateFuture _forwardIllumDelegate_disableDepthWrite;
+			SharedTechniqueDelegateBox::TechniqueDelegateFuture _forwardIllumDelegate_equalDepthTest;
 
 			std::shared_future<std::shared_ptr<ILightScene>> _lightSceneFuture;
 			std::future<std::shared_ptr<Techniques::IShaderResourceDelegate>> _sequencerResources;
@@ -813,7 +816,8 @@ namespace RenderCore { namespace LightingEngine
 
 		helper->_depthMotionNormalRoughnessDelegate = techDelBox->GetGBufferDelegate(GBufferDelegateType::DepthMotionNormalRoughness);
 		helper->_depthMotionDelegate = techDelBox->GetGBufferDelegate(GBufferDelegateType::DepthMotion);
-		helper->_forwardIllumDelegate = techDelBox->GetForwardIllumDelegate_DisableDepthWrite();
+		helper->_forwardIllumDelegate_disableDepthWrite = techDelBox->GetForwardIllumDelegate_DisableDepthWrite();
+		helper->_forwardIllumDelegate_equalDepthTest = techDelBox->GetForwardIllumDelegate_EqualDepthTest();
 
 		auto resolution = Internal::ExtractOutputResolution(preregisteredAttachmentsInit);
 
@@ -826,7 +830,8 @@ namespace RenderCore { namespace LightingEngine
 				if (Internal::MarkerTimesOut(helper->_lightSceneFuture, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_depthMotionNormalRoughnessDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_depthMotionDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
-				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate_disableDepthWrite, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate_equalDepthTest, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_sequencerResources, timeoutTime)) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
@@ -882,14 +887,16 @@ namespace RenderCore { namespace LightingEngine
 
 					auto depthMotionNormalRoughnessDelegate = helper->_depthMotionNormalRoughnessDelegate.get();
 					auto depthMotionDelegate = helper->_depthMotionDelegate.get();
-					auto forwardIllumDelegate_DisableDepthWrite = helper->_forwardIllumDelegate.get();
+					auto forwardIllumDelegate_disableDepthWrite = helper->_forwardIllumDelegate_disableDepthWrite.get();
+					auto forwardIllumDelegate_equalDepthTest = helper->_forwardIllumDelegate_equalDepthTest.get();
 					auto sequencerResources = helper->_sequencerResources.get();
 
 					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>();
 					lightingTechnique->_depVal = ::Assets::GetDepValSys().Make();
 					lightingTechnique->_depVal.RegisterDependency(depthMotionNormalRoughnessDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(depthMotionDelegate->GetDependencyValidation());
-					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_DisableDepthWrite->GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_disableDepthWrite->GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_equalDepthTest->GetDependencyValidation());
 
 					captures->_lightScene->_queryInterfaceHelper = lightingTechnique->_queryInterfaceHelper =
 						[captures=captures.get()](uint64_t typeCode) -> void* {
@@ -919,7 +926,8 @@ namespace RenderCore { namespace LightingEngine
 						*lightingTechnique,
 						pipelineAccelerators,
 						preregisteredAttachments, fbProps, digest, sequencerResources,
-						depthMotionNormalRoughnessDelegate, depthMotionDelegate, forwardIllumDelegate_DisableDepthWrite);
+						depthMotionNormalRoughnessDelegate, depthMotionDelegate,
+						forwardIllumDelegate_disableDepthWrite, forwardIllumDelegate_equalDepthTest);
 
 					::Assets::PollToPromise(
 						std::move(thatPromise),

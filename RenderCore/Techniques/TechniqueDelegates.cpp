@@ -498,6 +498,10 @@ namespace RenderCore { namespace Techniques
 				_depthStencil = CommonResourceBox::s_dsReadWrite;
 			}
 
+			// Use "equal" when writing over geometry that has had a pre-depth pass. This avoid having to redo any alpha testing
+			if (flags & TechniqueDelegateForwardFlags::DepthTestEqual)
+				_depthStencil._depthTest = CompareOp::Equal;
+
 			::Assets::DependencyValidationMarker depVals[] { _techniqueFileHelper.GetDependencyValidation(), _pipelineLayout->GetDependencyValidation(), _flexibleHelper.GetDependencyValidation() };
 			_depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 		}

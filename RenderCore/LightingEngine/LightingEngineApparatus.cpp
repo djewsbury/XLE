@@ -32,6 +32,15 @@ namespace RenderCore { namespace LightingEngine
 		return _forwardIllumDelegate_DisableDepthWrite.ShareFuture();
 	}
 
+	auto SharedTechniqueDelegateBox::GetForwardIllumDelegate_EqualDepthTest() -> TechniqueDelegateFuture
+	{
+		if (::Assets::IsInvalidated(_forwardIllumDelegate_EqualDepthTest)) {
+			_forwardIllumDelegate_EqualDepthTest = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
+			Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_EqualDepthTest.AdoptPromise(), GetTechniqueSetFile(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite|Techniques::TechniqueDelegateForwardFlags::DepthTestEqual);
+		}
+		return _forwardIllumDelegate_EqualDepthTest.ShareFuture();
+	}
+
 	auto SharedTechniqueDelegateBox::GetGBufferDelegate(GBufferDelegateType type) -> TechniqueDelegateFuture
 	{
 		assert(unsigned(type) < dimof(_gbufferDelegates));
@@ -114,6 +123,7 @@ namespace RenderCore { namespace LightingEngine
 		_depVal = ::Assets::GetDepValSys().Make();
 		::Assets::AutoConstructToPromise(_techniqueSetFile.AdoptPromise(), ILLUM_TECH);
 		Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DisableDepthWrite.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
+		Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_EqualDepthTest.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite|Techniques::TechniqueDelegateForwardFlags::DepthTestEqual);
 		for (unsigned c=0; c<dimof(_gbufferDelegates); ++c)
 			LoadGBufferDelegate(GBufferDelegateType(c));
 		for (unsigned c=0; c<dimof(_utilityDelegates); ++c)
