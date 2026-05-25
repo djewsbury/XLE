@@ -67,11 +67,13 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<InputElementDesc> BuildFinalIA(
 			const Assets::RawGeometryDesc& geo,
+			const DrawableConstructor::CustomConstructionRules& customRules,
 			const DeformerToRendererBinding::GeoBinding* deformStream = nullptr,
 			unsigned deformInputSlot = ~0u)
 		{
 			auto suppressed = deformStream ? MakeIteratorRange(deformStream->_suppressedElements) : IteratorRange<const uint64_t*>{};
 			std::vector<InputElementDesc> result = MakeIA(MakeIteratorRange(geo._vb._ia._elements), suppressed, 0);
+			result.insert(result.end(), customRules._additionalInputElements.begin(), customRules._additionalInputElements.end());
 			if (deformStream) {
 				auto t = MakeIA(MakeIteratorRange(deformStream->_generatedElements), deformInputSlot);
 				result.insert(result.end(), t.begin(), t.end());
@@ -81,9 +83,11 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<InputElementDesc> BuildFinalIA(
 			const Assets::RawGeometryDesc& geo,
+			const DrawableConstructor::CustomConstructionRules& customRules,
 			const Assets::SkinningDataDesc& skinningData)
 		{
 			auto part0 = MakeIA(MakeIteratorRange(geo._vb._ia._elements), {}, 0);
+			part0.insert(part0.end(), customRules._additionalInputElements.begin(), customRules._additionalInputElements.end());
 			auto part1 = MakeIA(MakeIteratorRange(skinningData._animatedVertexElements._ia._elements), {}, 1);
 			part0.insert(part0.end(), part1.begin(), part1.end());
 			return part0;
@@ -175,6 +179,7 @@ namespace RenderCore { namespace Techniques
 				const std::shared_ptr<Assets::ModelScaffold>& scaffold,
 				const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 				const DeformerToRendererBinding::GeoBinding* deformerBinding,
+				const DrawableConstructor::CustomConstructionRules& customRules,
 				std::string modelScaffoldName)
 			{
 				GeoRequest request;
@@ -216,12 +221,19 @@ namespace RenderCore { namespace Techniques
 				AddStaticLoadRequest(LoadBuffer::VB, DrawableStream::Vertex0, scaffoldIdx, drawableGeoIdx, rg._vb._offset, rg._vb._size, requiredStartAlignment);
 				drawableGeo->_vertexStreamCount = 1;
 
+				if (!customRules._additionalInputElements.empty()) {
+					// Leave a stream for the "additionalInputElements". The IA must agree with the stream index
+					for (const auto& a:customRules._additionalInputElements)
+						assert(a._inputSlot == drawableGeo->_vertexStreamCount);
+					++drawableGeo->_vertexStreamCount;
+				}
+
 				// Attach those vertex streams that come from the deform operation
 				if (!request._deformerBinding._generatedElements.empty()) {
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._type = DrawableGeo::StreamType::Deform;
 					drawableGeo->_vertexStreams[drawableGeo->_vertexStreamCount]._vbOffset = request._deformerBinding._postDeformBufferOffset;
 					drawableGeo->_deformAccelerator = deformAccelerator;
-					_geosLayout.push_back(BuildFinalIA(rg, &request._deformerBinding, drawableGeo->_vertexStreamCount));
+					_geosLayout.push_back(BuildFinalIA(rg, customRules, &request._deformerBinding, drawableGeo->_vertexStreamCount));
 					++drawableGeo->_vertexStreamCount;
 				} else {
 					if (request._skinningData) {
@@ -229,9 +241,9 @@ namespace RenderCore { namespace Techniques
 							LoadBuffer::VB, DrawableStream((unsigned)DrawableStream::Vertex0+drawableGeo->_vertexStreamCount), scaffoldIdx, drawableGeoIdx, 
 							request._skinningData->_animatedVertexElements._offset, request._skinningData->_animatedVertexElements._size, requiredStartAlignment);
 						++drawableGeo->_vertexStreamCount;
-						_geosLayout.push_back(BuildFinalIA(rg, *request._skinningData));
+						_geosLayout.push_back(BuildFinalIA(rg, customRules, *request._skinningData));
 					} else
-						_geosLayout.push_back(BuildFinalIA(rg));
+						_geosLayout.push_back(BuildFinalIA(rg, customRules));
 				}
 
 				// hack -- we might need this for material deform, as well
@@ -250,6 +262,7 @@ namespace RenderCore { namespace Techniques
 
 			void LoadPendingStaticResources(
 				std::promise<BufferUploads::CommandListID>&& completionCmdListPromise,
+				const DrawableConstructor::CustomConstructionRules& customRules,
 				ResourceConstructionContext* constructionContext)
 			{
 				// collect all of the various uploads we need to make, and engage!
@@ -328,14 +341,14 @@ namespace RenderCore { namespace Techniques
 							constructionContext,
 							MakeIteratorRange(localLoadRequests),
 							offset, _registeredScaffolds[start->_scaffoldIdx],
-							BindFlag::VertexBuffer,
+							BindFlag::VertexBuffer | (customRules._enableUnorderedAccessBinding ? BindFlag::UnorderedAccess : 0),
 							(StringMeld<128>() << "[vb] " << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
 					} else {
 						transMarker = LoadStaticResourceFullyAsync(
 							constructionContext,
 							MakeIteratorRange(localLoadRequests),
 							offset, _registeredScaffolds[start->_scaffoldIdx],
-							BindFlag::IndexBuffer,
+							BindFlag::IndexBuffer | (customRules._enableUnorderedAccessBinding ? BindFlag::UnorderedAccess : 0),
 							(StringMeld<128>() << "[ib] " << _registeredScaffoldNames[start->_scaffoldIdx]).AsStringSection());
 					}
 					pendingTransactions->_markers.emplace_back(std::move(transMarker));
@@ -594,6 +607,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<::Assets::DependencyValidation> _pendingDepVals;
 		std::vector<Float4x4> _pendingBaseTransforms;
 		std::vector<std::pair<unsigned, unsigned>> _pendingBaseTransformsPerElement;
+		CustomConstructionRules _customRules;
 
 		struct PendingCmdStream
 		{
@@ -722,6 +736,7 @@ namespace RenderCore { namespace Techniques
 									geoMachine, modelScaffold,
 									deformAccelerator,
 									FindDeformerBinding(deformerBinding, deformElementIdx, geoCallDesc._geoId),		// deformElementIdx considers modelScaffold reuse and matches against the first usage
+									_customRules,
 									modelScaffoldName);
 								if (pendingGeoIdx != ~0u)
 									modelGeoIdToPendingGeoIndex.emplace_back(geoCallDesc._geoId, pendingGeoIdx);
@@ -782,6 +797,7 @@ namespace RenderCore { namespace Techniques
 									drawCall._firstIndex = dc._firstIndex;
 									drawCall._indexCount = dc._indexCount;
 									drawCall._firstVertex = dc._firstVertex;
+									drawCall._materialGuid = workingMaterial->_guid;
 									dstCmdStream->_drawCalls.push_back(drawCall);
 								}
 
@@ -976,16 +992,18 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 		std::shared_ptr<ResourceConstructionContext> constructionContext,
 		const Assets::ModelRendererConstruction& construction,
+		CustomConstructionRules&& customRules,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{
 		_completionCommandList = 0;
 		_pimpl = std::make_unique<Pimpl>(std::move(drawablesPool), std::move(pipelineAccelerators), constructionContext);
+		_pimpl->_customRules = std::move(customRules);
 		TRY {
 			Add(construction, deformAcceleratorPool, deformAccelerator);
 			std::promise<BufferUploads::CommandListID> uploadPromise;
 			_pimpl->_uploadFuture = uploadPromise.get_future();
-			_pimpl->_pendingGeos.LoadPendingStaticResources(std::move(uploadPromise), constructionContext.get());
+			_pimpl->_pendingGeos.LoadPendingStaticResources(std::move(uploadPromise), _pimpl->_customRules, constructionContext.get());
 		} CATCH (const std::exception& e) {
 			std::vector<::Assets::DependencyValidationMarker> depValMarkers;
 			depValMarkers.reserve(_pimpl->_pendingDepVals.size());
