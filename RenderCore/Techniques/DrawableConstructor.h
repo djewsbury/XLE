@@ -24,6 +24,17 @@ namespace RenderCore { namespace Techniques
 	class DeformAccelerator;
 	class ResourceConstructionContext;
 
+	struct CustomDrawableConstructorRules
+	{
+		// Specify additional input elements, which are added to all input assemblies. Typically used
+		// for instancing. All extra elements must be in stream 1. When not empty, the created DrawableGeos will have an
+		// uninitialized space reserved for a stream 1 VB binding.
+		std::vector<InputElementDesc> _additionalInputElements;
+
+		// When enabled, created VBs and IBs will have the UnorderedAccess bind flag enabled
+		bool _enableUnorderedAccessBinding = false;
+	};
+
 	class DrawableConstructor : public std::enable_shared_from_this<DrawableConstructor>
 	{
 	public:
@@ -72,23 +83,12 @@ namespace RenderCore { namespace Techniques
 		void FulfillWhenNotPending(std::promise<std::shared_ptr<DrawableConstructor>>&& promise);
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
-		struct CustomConstructionRules
-		{
-			// Specify additional input elements, which are added to all input assemblies. Typically used
-			// for instancing. All extra elements must be in stream 1. When not empty, the created DrawableGeos will have an
-			// uninitialized space reserved for a stream 1 VB binding.
-			std::vector<InputElementDesc> _additionalInputElements;
-
-			// When enabled, created VBs and IBs will have the UnorderedAccess bind flag enabled
-			bool _enableUnorderedAccessBinding = false;
-		};
-
 		DrawableConstructor(
 			std::shared_ptr<IDrawablesPool> drawablesPool,
 			std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 			std::shared_ptr<ResourceConstructionContext> constructionContext,
 			const Assets::ModelRendererConstruction&,
-			CustomConstructionRules&& ={},
+			CustomDrawableConstructorRules&& ={},
 			const std::shared_ptr<IDeformAcceleratorPool>& =nullptr,
 			const std::shared_ptr<DeformAccelerator>& =nullptr);
 		~DrawableConstructor();

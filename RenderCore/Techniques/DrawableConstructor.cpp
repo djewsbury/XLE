@@ -67,7 +67,7 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<InputElementDesc> BuildFinalIA(
 			const Assets::RawGeometryDesc& geo,
-			const DrawableConstructor::CustomConstructionRules& customRules,
+			const CustomDrawableConstructorRules& customRules,
 			const DeformerToRendererBinding::GeoBinding* deformStream = nullptr,
 			unsigned deformInputSlot = ~0u)
 		{
@@ -83,7 +83,7 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<InputElementDesc> BuildFinalIA(
 			const Assets::RawGeometryDesc& geo,
-			const DrawableConstructor::CustomConstructionRules& customRules,
+			const CustomDrawableConstructorRules& customRules,
 			const Assets::SkinningDataDesc& skinningData)
 		{
 			auto part0 = MakeIA(MakeIteratorRange(geo._vb._ia._elements), {}, 0);
@@ -179,7 +179,7 @@ namespace RenderCore { namespace Techniques
 				const std::shared_ptr<Assets::ModelScaffold>& scaffold,
 				const std::shared_ptr<DeformAccelerator>& deformAccelerator,
 				const DeformerToRendererBinding::GeoBinding* deformerBinding,
-				const DrawableConstructor::CustomConstructionRules& customRules,
+				const CustomDrawableConstructorRules& customRules,
 				std::string modelScaffoldName)
 			{
 				GeoRequest request;
@@ -262,7 +262,7 @@ namespace RenderCore { namespace Techniques
 
 			void LoadPendingStaticResources(
 				std::promise<BufferUploads::CommandListID>&& completionCmdListPromise,
-				const DrawableConstructor::CustomConstructionRules& customRules,
+				const CustomDrawableConstructorRules& customRules,
 				ResourceConstructionContext* constructionContext)
 			{
 				// collect all of the various uploads we need to make, and engage!
@@ -607,7 +607,7 @@ namespace RenderCore { namespace Techniques
 		std::vector<::Assets::DependencyValidation> _pendingDepVals;
 		std::vector<Float4x4> _pendingBaseTransforms;
 		std::vector<std::pair<unsigned, unsigned>> _pendingBaseTransformsPerElement;
-		CustomConstructionRules _customRules;
+		CustomDrawableConstructorRules _customRules;
 
 		struct PendingCmdStream
 		{
@@ -992,7 +992,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<IPipelineAcceleratorPool> pipelineAccelerators,
 		std::shared_ptr<ResourceConstructionContext> constructionContext,
 		const Assets::ModelRendererConstruction& construction,
-		CustomConstructionRules&& customRules,
+		CustomDrawableConstructorRules&& customRules,
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const std::shared_ptr<DeformAccelerator>& deformAccelerator)
 	{

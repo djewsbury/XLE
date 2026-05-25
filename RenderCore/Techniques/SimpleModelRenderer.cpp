@@ -733,7 +733,7 @@ namespace RenderCore { namespace Techniques
 							helper->_deformAcceleratorInitFuture = geoInfrastructure->GetInitializationFuture();
 					}
 
-					helper->_drawableConstructor = std::make_shared<DrawableConstructor>(drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext), *completedConstruction, deformAcceleratorPool, deformAccelerator);
+					helper->_drawableConstructor = std::make_shared<DrawableConstructor>(drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext), *completedConstruction, CustomDrawableConstructorRules{}, deformAcceleratorPool, deformAccelerator);
 					helper->_drawableConstructorFuture = ToFuture(*helper->_drawableConstructor);
 				} CATCH(...) {
 					promise.set_exception(std::current_exception());

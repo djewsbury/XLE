@@ -278,7 +278,8 @@ namespace SceneEngine
 
 							auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
 								drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
-								*completedConstruction, deformAcceleratorPool, deformAccelerator);
+								*completedConstruction, RenderCore::Techniques::CustomDrawableConstructorRules{},
+								deformAcceleratorPool, deformAccelerator);
 
 							if (geoDeformer) {
 								::Assets::WhenAll(RenderCore::Techniques::ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
