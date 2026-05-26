@@ -1495,6 +1495,67 @@ namespace XLEMath
         return result;
     }
 
+    void ChangeNearAndFarClipPlane(Float4x4& projection, float newNearPlane, float newFarPlane, ClipSpaceType clipSpaceType);
+
+    void BroadenXYZ_Perspective(
+        Float4x4& input,
+        float expansion,
+        ClipSpaceType clipSpaceType)
+    {
+        // Here, we broaden the XY planes of the frustum by moving them away from the camera by the given "expansion" distance. This distance is expressed
+        // in the input coordinate space. Positive values expand the volume of the frustum
+        // Note that the planes move in a direction orthogonal to the near clip space -- ie, not along the plane's particular normal.
+
+        assert(!IsOrthogonalProjection(input));
+
+        float n, f;
+        std::tie(n, f) = CalculateNearAndFarPlane(ExtractMinimalProjection(input), clipSpaceType);
+
+        const bool rotatePlanes = false;
+        if (rotatePlanes) {
+
+            // This method rotates the planes so that they still go through the camera position
+            // but the camera position, the fulcrum of the projection, remains unchanged
+            // (though we can end up with a negative near clip plane)
+            float rml = (2.f * n) / input(0,0);
+            input(0,0) *= rml / (rml+2.f*expansion);
+            input(0,2)  = input(0,2) * rml / (rml+2.f*expansion) + (2.f * expansion) / (rml+2.f*expansion);
+
+            if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
+                input(1,1) = -input(1,1);
+
+            float tmb = (2.f * n) / input(1,1);
+            input(1,1) *= tmb / (tmb+2.f*expansion);
+            input(1,2)  = input(1,2) * tmb / (tmb+2.f*expansion) + (2.f * expansion) / (tmb+2.f*expansion);
+
+            if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
+                input(1,1) = -input(1,1);
+
+            ChangeNearAndFarClipPlane(input, n-expansion, f+expansion, clipSpaceType);
+
+        } else {
+
+            // We need to shift the fulcrum of the frustum backwards in order to expand the side planes without
+            // actually rotating them. To do this, we must effectively redefine camera space slightly. 
+            // We'll measure the expansion along the old near clip plane.
+            // This still rotates the side planes -- perhaps we could calculate a new convergence point for the planes after they've
+            // shifted along their normal, and use this for the new fulcrum point
+
+            float rml = (2.f * n) / input(0,0);
+            float tmb = (2.f * n) / input(1,1);
+            if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) tmb = -tmb;
+
+            Float4x4 cameraToNewCameraSpace {
+                rml/(rml+2.f*expansion), 0.f, 0.f, 0.f,
+                0.f, tmb/(tmb+2.f*expansion), 0.f, 0.f,
+                0.f, 0.f, f/(f+expansion), expansion*(f/(f+expansion)),
+                0.f, 0.f, 0.f, 1.f
+            };
+
+            Combine_IntoRHS(cameraToNewCameraSpace, input);
+        }
+    }
+
     static void SetupYZ_Ortho(Float4x4& result, float n, float f, ClipSpaceType clipSpaceType)
     {
         if (clipSpaceType == ClipSpaceType::Positive || clipSpaceType == ClipSpaceType::PositiveRightHanded) {
@@ -1561,6 +1622,23 @@ namespace XLEMath
         } else {
             float f, n;
             std::tie(n, f) = CalculateNearAndFarPlane_Ortho(ExtractMinimalProjection(projection), clipSpaceType);
+            f = newFarPlane;
+            SetupYZ_Ortho(projection, n, f, clipSpaceType);
+        }
+    }
+
+    void ChangeNearAndFarClipPlane(Float4x4& projection, float newNearPlane, float newFarPlane, ClipSpaceType clipSpaceType)
+    {
+        if (!IsOrthogonalProjection(projection)) {
+            float f, n;
+            std::tie(n, f) = CalculateNearAndFarPlane(ExtractMinimalProjection(projection), clipSpaceType);
+            n = newNearPlane;
+            f = newFarPlane;
+            SetupYZ_Perspective(projection, n, f, clipSpaceType);
+        } else {
+            float f, n;
+            std::tie(n, f) = CalculateNearAndFarPlane_Ortho(ExtractMinimalProjection(projection), clipSpaceType);
+            n = newNearPlane;
             f = newFarPlane;
             SetupYZ_Ortho(projection, n, f, clipSpaceType);
         }
