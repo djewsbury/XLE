@@ -1497,63 +1497,148 @@ namespace XLEMath
 
     void ChangeNearAndFarClipPlane(Float4x4& projection, float newNearPlane, float newFarPlane, ClipSpaceType clipSpaceType);
 
-    void BroadenXYZ_Perspective(
+    void BroadenProjectionMatrix_Approximate(
         Float4x4& input,
         float expansion,
         ClipSpaceType clipSpaceType)
     {
-        // Here, we broaden the XY planes of the frustum by moving them away from the camera by the given "expansion" distance. This distance is expressed
-        // in the input coordinate space. Positive values expand the volume of the frustum
-        // Note that the planes move in a direction orthogonal to the near clip space -- ie, not along the plane's particular normal.
-
-        assert(!IsOrthogonalProjection(input));
+        assert(clipSpaceType != ClipSpaceType::StraddlingZero);     // this case not implemented
 
         float n, f;
         std::tie(n, f) = CalculateNearAndFarPlane(ExtractMinimalProjection(input), clipSpaceType);
 
-        const bool rotatePlanes = false;
-        if (rotatePlanes) {
+        // Decompose the projection matrix into the clipping planes it defines.
+        // These are defined by x = +/-w, y = +/-w, (various cases for Z), so we can get a "A, B, C, D" plane equation form out fairly easily
+        // this may work even when applied to a world-to-projection (as opposed to an isolated projection matrix)
+        Float4 planes[6] {
+            {
+                input(3, 0) + input(0, 0),
+                input(3, 1) + input(0, 1),
+                input(3, 2) + input(0, 2),
+                input(3, 3) + input(0, 3)
+            },
+            {
+                input(3, 0) - input(0, 0),
+                input(3, 1) - input(0, 1),
+                input(3, 2) - input(0, 2),
+                input(3, 3) - input(0, 3)
+            },
+            {
+                input(3, 0) + input(1, 0),
+                input(3, 1) + input(1, 1),
+                input(3, 2) + input(1, 2),
+                input(3, 3) + input(1, 3)
+            },
+            {
+                input(3, 0) - input(1, 0),
+                input(3, 1) - input(1, 1),
+                input(3, 2) - input(1, 2),
+                input(3, 3) - input(1, 3)
+            },
+            {
+                input(2, 0),        // note clip space variations for near plane
+                input(2, 1),
+                input(2, 2),
+                input(2, 3)
+            },
+            {
+                input(3, 0) - input(2, 0),
+                input(3, 1) - input(2, 1),
+                input(3, 2) - input(2, 2),
+                input(3, 3) - input(2, 3)
+            }
+        };
 
-            // This method rotates the planes so that they still go through the camera position
-            // but the camera position, the fulcrum of the projection, remains unchanged
-            // (though we can end up with a negative near clip plane)
-            float rml = (2.f * n) / input(0,0);
-            input(0,0) *= rml / (rml+2.f*expansion);
-            input(0,2)  = input(0,2) * rml / (rml+2.f*expansion) + (2.f * expansion) / (rml+2.f*expansion);
-
-            if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
-                input(1,1) = -input(1,1);
-
-            float tmb = (2.f * n) / input(1,1);
-            input(1,1) *= tmb / (tmb+2.f*expansion);
-            input(1,2)  = input(1,2) * tmb / (tmb+2.f*expansion) + (2.f * expansion) / (tmb+2.f*expansion);
-
-            if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
-                input(1,1) = -input(1,1);
-
-            ChangeNearAndFarClipPlane(input, n-expansion, f+expansion, clipSpaceType);
-
-        } else {
-
-            // We need to shift the fulcrum of the frustum backwards in order to expand the side planes without
-            // actually rotating them. To do this, we must effectively redefine camera space slightly. 
-            // We'll measure the expansion along the old near clip plane.
-            // This still rotates the side planes -- perhaps we could calculate a new convergence point for the planes after they've
-            // shifted along their normal, and use this for the new fulcrum point
-
-            float rml = (2.f * n) / input(0,0);
-            float tmb = (2.f * n) / input(1,1);
-            if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) tmb = -tmb;
-
-            Float4x4 cameraToNewCameraSpace {
-                rml/(rml+2.f*expansion), 0.f, 0.f, 0.f,
-                0.f, tmb/(tmb+2.f*expansion), 0.f, 0.f,
-                0.f, 0.f, f/(f+expansion), expansion*(f/(f+expansion)),
-                0.f, 0.f, 0.f, 1.f
-            };
-
-            Combine_IntoRHS(cameraToNewCameraSpace, input);
+        // Move the planes along their normals
+        if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
+            expansion = -expansion;
+        for (auto& p : planes) {
+            p /= Magnitude(Truncate(p));
+            p[3] -= expansion;
         }
+
+        Float3 initialFrustumCorners[8];
+        CalculateAbsFrustumCorners(initialFrustumCorners, input, clipSpaceType);
+
+        // Reform the projection matrix from the plane equations, so that the initial clipping plane decomposition still holds
+        // However, there are a number of disadvantages here:
+        //      * the 'w' row is selected based on a compromise between horizontal and vertical fov, and ends up imperfect for either
+        //      * far clip plane distance may not be well respected (so we do that separately below)
+        for (int i = 0; i < 4; ++i) {
+            float A = 
+                    0.25f * (planes[0][i] + planes[1][i])
+                +   0.25f * (planes[2][i] + planes[3][i]);
+            input(0, i) = planes[0][i] - A;
+            input(1, i) = planes[2][i] - A;
+            // input(2, i) = planes[5][i] + A;     // note different pattern here because we're using the other side, due to non-straddling Z clip range
+            input(3, i) = A;
+        }
+
+        // Custom solution for the z-row to try to get the near and far clip planes as close as possible to 
+        // where we want them.
+        f += expansion; n -= expansion;
+        if (clipSpaceType == ClipSpaceType::Positive_ReverseZ || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
+            std::swap(f, n);
+
+        float wAtFarClipPlane = input(3, 2) * -f + input(3, 3);
+
+        input(2,0) = 0;
+        input(2,1) = 0;
+        input(2,2) = (-wAtFarClipPlane) / (f - n);
+        input(2,3) = (-wAtFarClipPlane * n) / (f - n);
+
+        #if 0       // alternative approaches, which rotate the side planes rather than just pushing them out
+            assert(!IsOrthogonalProjection(input));
+
+            float n, f;
+            std::tie(n, f) = CalculateNearAndFarPlane(ExtractMinimalProjection(input), clipSpaceType);
+
+            const bool rotatePlanes = false;
+            if (rotatePlanes) {
+
+                // This method rotates the planes so that they still go through the camera position
+                // but the camera position, the fulcrum of the projection, remains unchanged
+                // (though we can end up with a negative near clip plane)
+                float rml = (2.f * n) / input(0,0);
+                input(0,0) *= rml / (rml+2.f*expansion);
+                input(0,2)  = input(0,2) * rml / (rml+2.f*expansion) + (2.f * expansion) / (rml+2.f*expansion);
+
+                if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
+                    input(1,1) = -input(1,1);
+
+                float tmb = (2.f * n) / input(1,1);
+                input(1,1) *= tmb / (tmb+2.f*expansion);
+                input(1,2)  = input(1,2) * tmb / (tmb+2.f*expansion) + (2.f * expansion) / (tmb+2.f*expansion);
+
+                if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ)
+                    input(1,1) = -input(1,1);
+
+                ChangeNearAndFarClipPlane(input, n-expansion, f+expansion, clipSpaceType);
+
+            } else {
+
+                // We need to shift the fulcrum of the frustum backwards in order to expand the side planes without
+                // actually rotating them. To do this, we must effectively redefine camera space slightly. 
+                // We'll measure the expansion along the old near clip plane.
+                // This still rotates the side planes -- perhaps we could calculate a new convergence point for the planes after they've
+                // shifted along their normal, and use this for the new fulcrum point
+
+                float rml = (2.f * n) / input(0,0);
+                float tmb = (2.f * n) / input(1,1);
+                if (clipSpaceType == ClipSpaceType::PositiveRightHanded || clipSpaceType == ClipSpaceType::PositiveRightHanded_ReverseZ) tmb = -tmb;
+
+                Float4x4 cameraToNewCameraSpace {
+                    rml/(rml+2.f*expansion), 0.f, 0.f, 0.f,
+                    0.f, tmb/(tmb+2.f*expansion), 0.f, 0.f,
+                    0.f, 0.f, f/(f+expansion), expansion*(f/(f+expansion)),
+                    0.f, 0.f, 0.f, 1.f
+                };
+
+                Combine_IntoRHS(cameraToNewCameraSpace, input);
+
+            } 
+            return;
+        #endif
     }
 
     static void SetupYZ_Ortho(Float4x4& result, float n, float f, ClipSpaceType clipSpaceType)

@@ -176,6 +176,14 @@ namespace XLEMath
 
     void ChangeFarClipPlane(Float4x4& projection, float newFarPlane, ClipSpaceType clipSpaceType);
 
+    /// Here, we broaden the XY planes of the frustum by moving them away from the camera by the given "expansion" distance.
+    /// This distance is expressed in the input coordinate space. Positive values expand the volume of the frustum
+    /// The planes move along their normals
+    /// This approach creates a good matrix for culling & clipping -- however the matrix will not have the same form as a matrix created by PerspectiveProjection or OrthogonalProjection.
+    /// It may not work with related function (CalculateNearAndFarPlane, etc)
+    /// Also, it cannot handle the aspect ratio between vertical and horizontal fov perfectly (because it doesn't rotate the clip plane. This results in only an approximate expansion
+    void BroadenProjectionMatrix_Approximate(Float4x4& input, float expansion, ClipSpaceType clipSpaceType);
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     std::pair<Float4x4, Float4x4> CubemapViewAndProjection(
