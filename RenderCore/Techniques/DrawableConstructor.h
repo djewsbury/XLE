@@ -26,13 +26,16 @@ namespace RenderCore { namespace Techniques
 
 	struct CustomDrawableConstructorRules
 	{
-		// Specify additional input elements, which are added to all input assemblies. Typically used
-		// for instancing. All extra elements must be in stream 1. When not empty, the created DrawableGeos will have an
-		// uninitialized space reserved for a stream 1 VB binding.
+		/// Specify additional input elements, which are added to all input assemblies. Typically used
+		/// for instancing. All extra elements must be in stream 1. When not empty, the created DrawableGeos will have an
+		/// uninitialized space reserved for a stream 1 VB binding.
 		std::vector<InputElementDesc> _additionalInputElements;
 
-		// When enabled, created VBs and IBs will have the UnorderedAccess bind flag enabled
+		/// When enabled, created VBs and IBs will have the UnorderedAccess bind flag enabled
 		bool _enableUnorderedAccessBinding = false;
+
+		/// When enabled, won't instantiate the descriptor set accelerators
+		bool _disableDescriptorSetAccelerators = false;
 	};
 
 	class DrawableConstructor : public std::enable_shared_from_this<DrawableConstructor>

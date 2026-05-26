@@ -470,7 +470,8 @@ namespace RenderCore { namespace Techniques
 				const std::shared_ptr<Assets::CompiledMaterialSet>& materialScaffold,
 				unsigned elementIdx, uint64_t materialGuid, std::string&& materialName,
 				Techniques::IDeformAcceleratorPool* deformAcceleratorPool,
-				const IUniformsDeformerConductor* parametersDeformInfrastructure)
+				const IUniformsDeformerConductor* parametersDeformInfrastructure,
+				bool disableDescriptorSetAccelerators)
 			{
 				std::shared_ptr<DeformerToDescriptorSetBinding> deformBinding;
 				if (parametersDeformInfrastructure && deformAcceleratorPool) {
@@ -505,16 +506,18 @@ namespace RenderCore { namespace Techniques
 					if (decomposed._materialDescriptorSetLayout != ~0ull)
 						i->_materialDescriptorSetLayout = materialScaffold->GetMaterialDescriptorSetLayout(decomposed._materialDescriptorSetLayout);
 
-					// Descriptor set accelerator
-					auto descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
-						_constructionContext,
-						i->_patchCollection, i->_materialDescriptorSetLayout,
-						materialMachine,
-						materialScaffold,
-						std::move(materialName),
-						deformBinding);
+					if (!disableDescriptorSetAccelerators) {
+						// Descriptor set accelerator
+						auto descSet = _pipelineAcceleratorPool->CreateDescriptorSetAccelerator(
+							_constructionContext,
+							i->_patchCollection, i->_materialDescriptorSetLayout,
+							materialMachine,
+							materialScaffold,
+							std::move(materialName),
+							deformBinding);
+						i->_descriptorSetAcceleratorIdx = AddDescriptorSetAccelerator(std::move(descSet));
+					}
 
-					i->_descriptorSetAcceleratorIdx = AddDescriptorSetAccelerator(std::move(descSet));
 					i->_batchFilter = decomposed._batch ? Services::GetInstance().ExtendedBatchCode(decomposed._batch) : (unsigned)CalculateBatchForStateSet(i->_stateSet);
 					return AsPointer(i);
 				}
@@ -782,7 +785,7 @@ namespace RenderCore { namespace Techniques
 										materialMachine,
 										materialScaffold,
 										elementIdx, matAssignment, materialScaffold->DehashMaterialName(matAssignment).AsString(),
-										deformAcceleratorPool.get(), deformParametersAttachment);
+										deformAcceleratorPool.get(), deformParametersAttachment, _customRules._disableDescriptorSetAccelerators);
 									auto compiledPipeline = _pendingPipelines.MakePipeline(
 										*workingMaterial, workingMaterial->_materialDescriptorSetLayout,
 										_pendingGeos._geosLayout[pendingGeoIdx],
