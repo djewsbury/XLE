@@ -1565,9 +1565,7 @@ namespace XLEMath
         //      * the 'w' row is selected based on a compromise between horizontal and vertical fov, and ends up imperfect for either
         //      * far clip plane distance may not be well respected (so we do that separately below)
         for (int i = 0; i < 4; ++i) {
-            float A = 
-                    0.25f * (planes[0][i] + planes[1][i])
-                +   0.25f * (planes[2][i] + planes[3][i]);
+            float A = 0.5f * (planes[0][i] + planes[1][i]);
             input(0, i) = planes[0][i] - A;
             input(1, i) = planes[2][i] - A;
             // input(2, i) = planes[5][i] + A;     // note different pattern here because we're using the other side, due to non-straddling Z clip range
