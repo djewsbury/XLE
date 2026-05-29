@@ -433,7 +433,7 @@ namespace Assets
 				if (firstInitializer.empty())
 					firstInitializer = initializers.GetInitializer<std::string>(0);		// first initializer is assumed to be a string
 				auto asStringView = cx::make_string_view(a.second._matchPattern.data(), a.second._matchPattern.size());
-				passMatchPattern = wildcards::match(firstInitializer, asStringView);
+				passMatchPattern = wildcards::match(MakeFileNameSplitter(firstInitializer).AllExceptParameters(), asStringView);
 			}
 			if (passMatchPattern) {
 				// find the associated delegate and use that
@@ -459,7 +459,7 @@ namespace Assets
 			if (i == a.second._compileRequestCodes.end())
 				continue;
 			auto asStringView = cx::make_string_view(a.second._matchPattern.data(), a.second._matchPattern.size());
-			if (!a.second._matchPattern.empty() && wildcards::match(firstInitializer, asStringView))
+			if (!a.second._matchPattern.empty() && wildcards::match(MakeFileNameSplitter(firstInitializer).AllExceptParameters(), asStringView))
 				return true;
 		}
 		return false;
