@@ -90,7 +90,15 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			if (cmd.second._localToModel == bindingPoint) {
 				auto* geo = FindGeometryBlock(cmd.second._geometryBlock);
 				assert(geo);
-				Transform(*geo->_mesh, transform);
+
+				// We can't combine directly into the vertices if there is a geo space to node space transform
+				// Potentially we can combine this transform into _geoSpaceToNodeSpace... but since the 
+				// typically intention of this function is to neutralize transforms, it's probably more
+				// practical to actually merge geoSpaceToNodeSpace into the geometry along with the transform we're given
+				auto combinedTransform = Combine(geo->_geoSpaceToNodeSpace, transform);
+				const_cast<GeometryBlock*>(geo)->_geoSpaceToNodeSpace = Identity<Float4x4>();
+				Transform(*geo->_mesh, combinedTransform);
+
 				cmd.second._localToModel = "identity";
 			}
 		}
