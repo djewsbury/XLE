@@ -573,11 +573,15 @@ namespace RenderCore { namespace Techniques
 		auto futureCompoundObject = RenderCore::Assets::GetResolvedCompoundObjectScaffoldFuture(util, compoundObjectSrc);
 		::Assets::WhenAll(std::move(futureCompoundObject)).ThenConstructToPromise(
 			std::move(promise),
-			[util, dp=std::move(dp), pa=std::move(pa)](const auto& actualMrc) mutable {
+			[util, dp=std::move(dp), pa=std::move(pa)](const auto& futureMrc) mutable {
+				auto f = Assets::ToFuture(*futureMrc.get());
+				YieldToPool(f);
+				auto actualMrc = f.get();
+
 				auto dc = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
 					std::move(dp), std::move(pa), nullptr,
 					*actualMrc.get());
-				dc->AddAdditionalDepVal(std::get<::Assets::DependencyValidation>(actualMrc));		// dep val for the compound object src
+				dc->AddAdditionalDepVal(std::get<::Assets::DependencyValidation>(futureMrc));		// dep val for the compound object src
 				auto future = RenderCore::Techniques::ToFuture(*dc);
 				YieldToPool(future);
 				return future.get();
