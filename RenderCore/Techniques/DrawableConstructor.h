@@ -95,6 +95,8 @@ namespace RenderCore { namespace Techniques
 			const std::shared_ptr<IDeformAcceleratorPool>& =nullptr,
 			const std::shared_ptr<DeformAccelerator>& =nullptr);
 		~DrawableConstructor();
+
+		void AddAdditionalDepVal(const ::Assets::DependencyValidation& depVal);
 	private:
 		class Pimpl;
 		std::unique_ptr<Pimpl> _pimpl;

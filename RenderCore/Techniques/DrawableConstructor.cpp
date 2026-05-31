@@ -884,8 +884,12 @@ namespace RenderCore { namespace Techniques
 				depValMarkers.erase(std::unique(depValMarkers.begin(), depValMarkers.end()), depValMarkers.end());
 				dst._depVal = ::Assets::GetDepValSys().MakeOrReuse(depValMarkers);
 			} else {
+				// We have to start a new dep val, because it's possible our previous one was reused from a shared dep val
+				auto newDepVal = ::Assets::GetDepValSys().Make();
+				newDepVal.RegisterDependency(dst._depVal);
 				for (const auto& d:_pendingDepVals)
-					dst._depVal.RegisterDependency(d);
+					newDepVal.RegisterDependency(d);
+				dst._depVal = std::move(newDepVal);
 			}
 			
 			_pendingGeos = {};
@@ -988,6 +992,12 @@ namespace RenderCore { namespace Techniques
 				strongThis->_completionCommandList = std::max(strongThis->_completionCommandList, cmdList);
 				return strongThis;
 			});
+	}
+
+	void DrawableConstructor::AddAdditionalDepVal(const ::Assets::DependencyValidation& depVal)
+	{
+		assert(!_pimpl->_fulfillWhenNotPendingCalled.load());
+		_pimpl->_pendingDepVals.emplace_back(depVal);
 	}
 
 	DrawableConstructor::DrawableConstructor(

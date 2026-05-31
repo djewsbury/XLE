@@ -6,14 +6,19 @@
 
 #include "../../Math/Matrix.h"
 #include "../../Utility/IteratorUtils.h"
+#include "../../Utility/StringUtils.h"
 
 namespace RenderCore { class UniformsStreamInterface; }
+namespace std { template<typename T> class future; }
+
 namespace RenderCore { namespace Techniques
 {
 	class DrawableConstructor;
 	class DrawablesPacket;
 	struct ModelConstructionSkeletonBinding;
 	class RetainedUniformsStream;
+	class IDrawablesPool;
+	class IPipelineAcceleratorPool;
 
 	struct LightWeightBuildDrawables
 	{
@@ -55,4 +60,14 @@ namespace RenderCore { namespace Techniques
 			DrawableConstructor& constructor,
 			unsigned pktIndex);
 	};
+
+	std::future<std::shared_ptr<DrawableConstructor>> CreateDrawableConstructorFromModelAndMaterial(
+		std::shared_ptr<IDrawablesPool> dp,
+		std::shared_ptr<IPipelineAcceleratorPool> pa,
+		StringSection<> model, StringSection<> material = {});
+
+	std::future<std::shared_ptr<DrawableConstructor>> CreateDrawableConstructorFromCompoundObject(
+		std::shared_ptr<IDrawablesPool> dp,
+		std::shared_ptr<IPipelineAcceleratorPool> pa,
+		StringSection<> compoundObject);
 }}

@@ -11,9 +11,14 @@
 #include "SimpleModelRenderer.h"		// for ModelConstructionSkeletonBinding
 #include "DrawableSubmitter.h"			// for RetainedUniformsStream
 #include "../Assets/ModelMachine.h"
+#include "../Assets/ModelRendererConstruction.h"
+#include "../Assets/CompoundObject.h"
 #include "../UniformsStream.h"
 #include "../../Math/Transformations.h"
+#include "../../Assets/Continuation.h"
+#include "../../Assets/CompoundAsset.h"
 #include "../../Utility/ArithmeticUtils.h"
+#include "../../Utility/Threading/CompletionThreadPool.h"
 
 namespace RenderCore { namespace Techniques
 {
@@ -532,4 +537,52 @@ namespace RenderCore { namespace Techniques
 		auto& cmdStream = constructor.GetCmdStream();
 		return (pktIndex < cmdStream._drawCallCounts.size()) ? cmdStream._drawCallCounts[pktIndex] : 0;
 	}
+
+	std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>> CreateDrawableConstructorFromModelAndMaterial(
+		std::shared_ptr<RenderCore::Techniques::IDrawablesPool> dp,
+		std::shared_ptr<RenderCore::Techniques::IPipelineAcceleratorPool> pa,
+		StringSection<> model, StringSection<> material)
+	{
+		std::promise<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>> promise;
+		auto result = promise.get_future();
+
+		auto mrc = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
+		mrc->AddElement().SetModelAndMaterials(model, material);
+		::Assets::WhenAll(RenderCore::Assets::ToFuture(*mrc)).ThenConstructToPromise(
+			std::move(promise),
+			[mrc, dp=std::move(dp), pa=std::move(pa)](auto actualMrc) mutable {
+				auto dc = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
+					std::move(dp), std::move(pa), nullptr,
+					*actualMrc);
+				auto future = RenderCore::Techniques::ToFuture(*dc);
+				YieldToPool(future);
+				return future.get();
+			});
+		return result;
+	}
+
+	std::future<std::shared_ptr<DrawableConstructor>> CreateDrawableConstructorFromCompoundObject(
+		std::shared_ptr<IDrawablesPool> dp,
+		std::shared_ptr<IPipelineAcceleratorPool> pa,
+		StringSection<> compoundObjectSrc)
+	{
+		std::promise<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>> promise;
+		auto result = promise.get_future();
+
+		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>();
+		auto futureCompoundObject = RenderCore::Assets::GetResolvedCompoundObjectScaffoldFuture(util, compoundObjectSrc);
+		::Assets::WhenAll(std::move(futureCompoundObject)).ThenConstructToPromise(
+			std::move(promise),
+			[util, dp=std::move(dp), pa=std::move(pa)](const auto& actualMrc) mutable {
+				auto dc = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
+					std::move(dp), std::move(pa), nullptr,
+					*actualMrc.get());
+				dc->AddAdditionalDepVal(std::get<::Assets::DependencyValidation>(actualMrc));		// dep val for the compound object src
+				auto future = RenderCore::Techniques::ToFuture(*dc);
+				YieldToPool(future);
+				return future.get();
+			});
+		return result;
+	}
+
 }}
