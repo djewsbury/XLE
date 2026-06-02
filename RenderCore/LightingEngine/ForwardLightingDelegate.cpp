@@ -380,9 +380,12 @@ namespace RenderCore { namespace LightingEngine
 	{
 		RenderStepFragmentInterface result { PipelineType::Graphics };
 
+		// HACK -- when combined with the decal pass, there's ambiguity in the render pass for layouts for the depth stencil texture
+		// the decal pass specifically asks for the depth aspect, which implies to the underlying code that the attachment only has a depth
+		// aspect. We need to reference the stencil aspect here to ensure it's included in the layout flags (even though we technically don't know if there's actually a stencil aspect going to be present)
 		Techniques::FrameBufferDescFragment::SubpassDesc mainSubpass;
 		mainSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::ColorHDR));
-		mainSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth));
+		mainSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth), TextureViewDesc{TextureViewDesc::Aspect::DepthStencil});
 		mainSubpass.SetName("MainBlending");
 
 		if (hasSSR) {

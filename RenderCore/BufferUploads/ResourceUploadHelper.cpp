@@ -508,6 +508,7 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 
         auto allocationId = _nextAllocationId++;
         _activeAllocations.push_back({allocationId, stagingAllocation+byteCount, true});
+        assert(stagingAllocation%alignment == 0);
         return {*this, stagingAllocation, byteCount, allocationId};
     }
 

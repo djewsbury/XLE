@@ -204,7 +204,7 @@ namespace RenderCore { namespace Techniques
 
 		CreateGraphicsPipelineInternal(
 			std::move(promise),
-			std::move(pipelineLayout), 
+			std::move(pipelineLayout),
 			std::move(pipelineFuture),
 			selectors, inputStates, fbTarget);
 	}
@@ -223,7 +223,7 @@ namespace RenderCore { namespace Techniques
 
 		CreateGraphicsPipelineInternal(
 			std::move(promise),
-			std::move(pipelineLayout), 
+			std::move(pipelineLayout),
 			std::move(pipelineFuture),
 			selectors, inputStates, fbTarget);
 	}
