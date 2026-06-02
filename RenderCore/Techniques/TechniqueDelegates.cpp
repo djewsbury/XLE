@@ -601,6 +601,10 @@ namespace RenderCore { namespace Techniques
 			// to calculate SV_Position from WORLDPOSITION differently). We can do it, just not in a very expressive and reliable way
 			if (_techniqueFileHelper._shadowGen || (!shaderPatches || illumType != IllumType::SpriteTechnique)) {
 
+				// SV_SpritePS aren't supported via this path, and generate Vulkan warnings. Let's just suppress them
+				if (shaderPatches->GetInterface().HasPatchType("SV_SpritePS"_h))
+					return nullptr;
+
 				const TechniqueEntry* psTechEntry = &_techniqueFileHelper._noPatches;
 				const TechniqueEntry* vsTechEntry = &_techniqueFileHelper._vsNoPatchesSrc;
 				std::vector<uint64_t> vsPatchExpansions, psPatchExpansions;

@@ -188,6 +188,13 @@ namespace RenderCore { namespace Techniques
 	{
 		auto iaAttributes = MakeIAAttributes(_inputAssembly, _miniInputAssembly);
 		auto pipelineDesc = cfg->_delegate->GetPipelineDesc(compiledPatchCollection, iaAttributes, _stateSet);
+		if (!pipelineDesc) {
+			IPipelineAcceleratorPool::Pipeline result;
+			if (compiledPatchCollection) result._depVal = compiledPatchCollection->GetDependencyValidation();
+			resultPromise.set_value(std::move(result));
+			return;
+		}
+
 		std::promise<Techniques::GraphicsPipelineAndLayout> metalPipelinePromise;
 		auto metalPipelineFuture = metalPipelinePromise.get_future();
 
