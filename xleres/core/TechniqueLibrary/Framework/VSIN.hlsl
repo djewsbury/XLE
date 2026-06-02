@@ -117,7 +117,7 @@ struct VSIN //////////////////////////////////////////////////////
 #if GEO_HAS_TEXCOORD /////////////////////////////////////////////
 	float2 VSIN_GetTexCoord0(VSIN input) { return input.texCoord; }
 #elif GEO_HAS_FONTTABLE
-	float2 VSIN_GetTexCoord0(VSIN input) { return float2((input.fontTable.x & 0xff) / float(0xff), (input.fontTable.x >> 8) / float(0xff)); }
+	float2 VSIN_GetTexCoord0(VSIN input) { return float2((input.fontTable.x & 0xffu) / float(0xffu), (input.fontTable.x >> 8u) / float(0xffu)); }
 #else
 	float2 VSIN_GetTexCoord0(VSIN input) { return 0.0.xx; }
 #endif //////////////////////////////////////////////////////////////

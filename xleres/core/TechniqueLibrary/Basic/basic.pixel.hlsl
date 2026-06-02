@@ -14,8 +14,14 @@
 Texture2D		InputTexture;
 [[vk::input_attachment_index(0)]] SubpassInput<float4> SubpassInputAttachment;
 #if VSOUT_HAS_FONTTABLE && defined(FONT_RENDERER)
-	Buffer<float> 	FontResource : register(t5);
+	ByteAddressBuffer FontResource : register(t5);
+	float FontResourceLoad(uint offset)
+	{
+		uint raw = FontResource.Load(offset&~3u);
+		return ((raw>>((offset&3)*8)) & 0xffu) / 255.f; 
+	}
 #endif
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,7 +35,7 @@ Texture2D		InputTexture;
 				int qy = int(vsout.fontTable.z*vsout.texCoord.y)+2*(y-2);
 				if (qx >= 0 && qx < vsout.fontTable.y && qy >= 0 && qy < vsout.fontTable.z) {
 					uint idx = vsout.fontTable.x + (qy * vsout.fontTable.y + qx);
-					float sample = FontResource[idx].r;
+					float sample = FontResourceLoad(idx);
 					filteredX += ScharrHoriz5x5[x][y] * sample;
 					filteredY += ScharrHoriz5x5[y][x] * sample;
 				}
@@ -45,10 +51,10 @@ Texture2D		InputTexture;
 		uint2 xy2 = uint2(min(vsout.fontTable.y-1, xy.x+1), min(vsout.fontTable.z-1, xy.y+1));
 
 		AB -= xy;
-		float s0 = FontResource[vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy.x)].r;
-		float s1 = FontResource[vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy2.x)].r;
-		float s2 = FontResource[vsout.fontTable.x + (xy2.y * vsout.fontTable.y + xy.x)].r;
-		float s3 = FontResource[vsout.fontTable.x + (xy2.y * vsout.fontTable.y + xy2.x)].r;
+		float s0 = FontResourceLoad(vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy.x));
+		float s1 = FontResourceLoad(vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy2.x));
+		float s2 = FontResourceLoad(vsout.fontTable.x + (xy2.y * vsout.fontTable.y + xy.x));
+		float s3 = FontResourceLoad(vsout.fontTable.x + (xy2.y * vsout.fontTable.y + xy2.x));
 
 		return 
 			  s0 * (1.f - AB.x) * (1.f - AB.y)
@@ -63,7 +69,7 @@ Texture2D		InputTexture;
 		// we could do morton order style swizzling here -- but I'm not sure how useful it would be, given the src should be fairly small...? Might be better off just try to compress the src as much as possible
 		uint2 xy = uint2(vsout.fontTable.y * vsout.texCoord.x, vsout.fontTable.z * vsout.texCoord.y);
 		uint idx = vsout.fontTable.x + (xy.y * vsout.fontTable.y + xy.x);
-		return FontResource[idx].r;
+		return FontResourceLoad(idx);
 	}
 
 #endif
