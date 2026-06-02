@@ -62,14 +62,14 @@ namespace Utility
     {
             // returns "input", or the next largest multiple of the number "multiple"
             // Here, we assume "multiple" is a power of 2
-        assert(IsPowerOfTwo(multiple));
+        assert(IsPowerOfTwo(multiple) && multiple > 0);
         return (input + multiple - 1) & ~(Type(multiple) - 1);
     }
 
     template <typename Type>
         inline constexpr Type FloorToMultiplePow2(Type input, unsigned multiple)
     {
-        assert(IsPowerOfTwo(multiple));
+        assert(IsPowerOfTwo(multiple) && multiple > 0);
         return input & ~(multiple - 1);
     }
 
@@ -77,7 +77,9 @@ namespace Utility
         inline constexpr Type CeilToMultiple(Type input, unsigned multiple)
     {
         assert(multiple > 0);
-        return input + multiple - 1 - (input - 1) % multiple;
+        auto Q = input + multiple - 1;
+        assert(Q >= input);
+        return Q - Q % multiple;
     }
 
     inline uint32_t InterleaveBits(uint16_t ix, uint16_t iy)

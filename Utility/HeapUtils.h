@@ -1742,6 +1742,7 @@ namespace Utility
         assert(alignment);
         if (_start == _end) return ~0u;
 		auto alignedEnd = CeilToMultiple(_end, alignment);
+		assert(alignedEnd%alignment == 0 && (alignedEnd-_end) < alignment);
         if (_start > _end) {
 			if ((_start - alignedEnd) >= size) {
 				auto result = alignedEnd;
