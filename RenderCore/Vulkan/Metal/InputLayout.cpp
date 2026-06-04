@@ -1577,7 +1577,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		}
 
 		for (auto def:_group[groupIdx]._defaultDescriptorSetRules)
-			encoder.BindDescriptorSet(def, _pipelineLayout->GetBlankDescriptorSet(def).get(), {});
+			encoder.BindDescriptorSet(def, _pipelineLayout->GetBlankDescriptorSet(def).get(), _pipelineLayout->GetBlankDescriptorSetDynamicOffsets(def));
 
 		for (const auto&pushConstants:_group[groupIdx]._pushConstantsRules) {
 			auto cb = stream._immediateData[pushConstants._inputCBSlot];
