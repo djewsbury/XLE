@@ -78,7 +78,7 @@ DescriptorSet Numeric {};
 
 PipelineLayout LightingOperator
 {
-	DescriptorSet Numeric;					// 0
+	DescriptorSet Numeric;						// 0
 	DescriptorSet PerLightDescriptors;			// 1
 	DescriptorSet SharedDescriptors;			// 2
 	DescriptorSet ShadowTemplate;				// 3

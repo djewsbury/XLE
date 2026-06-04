@@ -138,9 +138,9 @@ namespace RenderCore { namespace Techniques
 					++boundUniformLookupCount;
 					++pipelineLookupCount;
 
-					if (currentPipelineLayout != pipeline->_pipelineLayout.get()) {
-						encoder.BindPipelineLayout(*pipeline->_pipelineLayout);
-						currentPipelineLayout = pipeline->_pipelineLayout.get();
+					if (currentPipelineLayout != currentPipeline->_pipelineLayout.get()) {
+						encoder.BindPipelineLayout(*currentPipeline->_pipelineLayout);
+						currentPipelineLayout = currentPipeline->_pipelineLayout.get();
 						++pipelineLayoutChangeCount;
 					}
 				} else if (currentLooseUniformsInterface != drawable._looseUniformsInterface) {

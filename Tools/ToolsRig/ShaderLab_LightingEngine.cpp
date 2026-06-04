@@ -36,7 +36,6 @@ using namespace Utility::Literals;
 namespace ToolsRig
 {
 	using namespace RenderCore;
-	constexpr uint64_t s_shadowTemplate = "ShadowTemplate"_h;
 
 	class PrepareForwardLightScene : public std::enable_shared_from_this<PrepareForwardLightScene>
 	{
@@ -51,7 +50,7 @@ namespace ToolsRig
 			bool enableSSR = false;
 			_lightScene->ConfigureParsingContext(parsingContext, enableSSR);
 			if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
-				parsingContext.GetUniformDelegateManager()->BindFixedDescriptorSet(s_shadowTemplate, *dominantShadow->GetDescriptorSet());
+				parsingContext.GetUniformDelegateManager()->BindFixedDescriptorSet("ShadowTemplate"_h, *dominantShadow->GetDescriptorSet());
 			if (_lightSceneResourceDelegate)
 				parsingContext.GetUniformDelegateManager()->BindShaderResourceDelegate(_lightSceneResourceDelegate);
 		}
