@@ -46,9 +46,6 @@ using namespace Utility::Literals;
 namespace RenderCore { namespace LightingEngine
 {
 
-	constexpr uint64_t s_shadowTemplate = "ShadowTemplate"_h;
-	constexpr uint64_t s_forwardLighting = "ForwardLighting"_h;
-
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	struct OperatorDigest;
@@ -67,6 +64,7 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<CopyToneMapOperator> _copyToneMapOperator;
 		std::shared_ptr<RefractionBufferOperator> _refractionBufferOperator;
 		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingSemiConstant;
+		std::shared_ptr<Techniques::SemiConstantDescriptorSet> _forwardLightingDecalSemiConstant;
 		std::shared_ptr<ISkyTextureProcessor> _skyTextureProcessor;
 
 		void DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence);
@@ -87,7 +85,8 @@ namespace RenderCore { namespace LightingEngine
 			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalRoughnessDelegate,
 			std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
 			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_disableDepthWrite,
-			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_equalDepthTest) -> std::shared_ptr<SecondStageConstructionOperators>;
+			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_equalDepthTest,
+			std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_decalPass) -> std::shared_ptr<SecondStageConstructionOperators>;
 	};
 
 	void ForwardLightingCaptures::DoShadowPrepare(SequenceIterator& iterator, Sequence& sequence)
@@ -109,16 +108,18 @@ namespace RenderCore { namespace LightingEngine
 		_lightScene->ConfigureParsingContext(parsingContext, _ssrOperator != nullptr);
 		if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow()) {
 			// find the prepared shadow associated with the dominant light (if it exists) and make sure it's descriptor set is accessible
-			parsingContext.GetUniformDelegateManager()->BindFixedDescriptorSet(s_shadowTemplate, *dominantShadow->GetDescriptorSet());
+			parsingContext.GetUniformDelegateManager()->BindFixedDescriptorSet("ShadowTemplate"_h, *dominantShadow->GetDescriptorSet());
 		}
 		assert(_forwardLightingSemiConstant);
-		parsingContext.GetUniformDelegateManager()->BindSemiConstantDescriptorSet(s_forwardLighting, _forwardLightingSemiConstant);
+		parsingContext.GetUniformDelegateManager()->BindSemiConstantDescriptorSet("ForwardLighting"_h, _forwardLightingSemiConstant);
+		if (_forwardLightingDecalSemiConstant) parsingContext.GetUniformDelegateManager()->BindSemiConstantDescriptorSet("DecalPass"_h, _forwardLightingDecalSemiConstant);
 	}
 
 	void ForwardLightingCaptures::ReleaseParsingContext(Techniques::ParsingContext& parsingContext)
 	{
 		if (auto* dominantShadow = _lightScene->GetDominantPreparedShadow())
 			parsingContext.GetUniformDelegateManager()->UnbindFixedDescriptorSet(*dominantShadow->GetDescriptorSet());
+		if (_forwardLightingDecalSemiConstant) parsingContext.GetUniformDelegateManager()->UnbindSemiConstantDescriptorSet(*_forwardLightingDecalSemiConstant);
 		parsingContext.GetUniformDelegateManager()->UnbindSemiConstantDescriptorSet(*_forwardLightingSemiConstant);
 		if (_lightScene->_dynamicProbeScheduler)
 			_lightScene->_dynamicProbeScheduler->ClearPreparedShadows();
@@ -636,7 +637,8 @@ namespace RenderCore { namespace LightingEngine
 		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionNormalRoughnessDelegate,
 		std::shared_ptr<Techniques::ITechniqueDelegate> depthMotionDelegate,
 		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_disableDepthWrite,
-		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_equalDepthTest)
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_equalDepthTest,
+		std::shared_ptr<Techniques::ITechniqueDelegate> forwardIllumDelegate_decalPass)
 	{
 		Techniques::FragmentStitchingContext stitchingContext { preregisteredAttachments, Techniques::CalculateDefaultSystemFormats(*pipelineAccelerators->GetDevice()) };
 		PreregisterAttachments(stitchingContext, fbProps);
@@ -728,7 +730,7 @@ namespace RenderCore { namespace LightingEngine
 					Throw(std::runtime_error("Refraction buffer will not be available for decal pass because a refraction buffer operator was not provided"));
 
 				mainSequence.CreateStep_RunFragments(
-					CreateDecalFragment(shared_from_this(), forwardIllumDelegate_disableDepthWrite, sequencerResources));
+					CreateDecalFragment(shared_from_this(), forwardIllumDelegate_decalPass, sequencerResources));
 			}
 
 			mainSequence.CreateStep_RunFragments(
@@ -806,6 +808,7 @@ namespace RenderCore { namespace LightingEngine
 			SharedTechniqueDelegateBox::TechniqueDelegateFuture _depthMotionDelegate;
 			SharedTechniqueDelegateBox::TechniqueDelegateFuture _forwardIllumDelegate_disableDepthWrite;
 			SharedTechniqueDelegateBox::TechniqueDelegateFuture _forwardIllumDelegate_equalDepthTest;
+			SharedTechniqueDelegateBox::TechniqueDelegateFuture _forwardIllumDelegate_decalPass;
 
 			std::shared_future<std::shared_ptr<ILightScene>> _lightSceneFuture;
 			std::future<std::shared_ptr<Techniques::IShaderResourceDelegate>> _sequencerResources;
@@ -821,6 +824,7 @@ namespace RenderCore { namespace LightingEngine
 		helper->_depthMotionDelegate = techDelBox->GetGBufferDelegate(GBufferDelegateType::DepthMotion);
 		helper->_forwardIllumDelegate_disableDepthWrite = techDelBox->GetForwardIllumDelegate_DisableDepthWrite();
 		helper->_forwardIllumDelegate_equalDepthTest = techDelBox->GetForwardIllumDelegate_EqualDepthTest();
+		helper->_forwardIllumDelegate_decalPass = techDelBox->GetForwardIllumDelegate_DecalPass();
 
 		auto resolution = Internal::ExtractOutputResolution(preregisteredAttachmentsInit);
 
@@ -835,6 +839,7 @@ namespace RenderCore { namespace LightingEngine
 				if (Internal::MarkerTimesOut(helper->_depthMotionDelegate, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate_disableDepthWrite, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate_equalDepthTest, timeoutTime)) return ::Assets::PollStatus::Continue;
+				if (Internal::MarkerTimesOut(helper->_forwardIllumDelegate_decalPass, timeoutTime)) return ::Assets::PollStatus::Continue;
 				if (Internal::MarkerTimesOut(helper->_sequencerResources, timeoutTime)) return ::Assets::PollStatus::Continue;
 				return ::Assets::PollStatus::Finish;
 			},
@@ -847,6 +852,9 @@ namespace RenderCore { namespace LightingEngine
 
 					captures->_forwardLightingSemiConstant = Techniques::CreateSemiConstantDescriptorSet(
 						*techDelBox->_forwardLightingDescSetTemplate, "ForwardLighting", PipelineType::Graphics, *pipelinePool->GetDevice());
+					if (digest._decalPass)
+						captures->_forwardLightingDecalSemiConstant = Techniques::CreateSemiConstantDescriptorSet(
+							*techDelBox->_decalPassDescSetTemplate, "ForwardLightingDecal", PipelineType::Graphics, *pipelinePool->GetDevice());
 
 					// operators
 					auto msaaSamples = digest._msaa ? digest._msaa->_samples : TextureSamples::Create(); 
@@ -892,6 +900,7 @@ namespace RenderCore { namespace LightingEngine
 					auto depthMotionDelegate = helper->_depthMotionDelegate.get();
 					auto forwardIllumDelegate_disableDepthWrite = helper->_forwardIllumDelegate_disableDepthWrite.get();
 					auto forwardIllumDelegate_equalDepthTest = helper->_forwardIllumDelegate_equalDepthTest.get();
+					auto forwardIllumDelegate_decalPass = helper->_forwardIllumDelegate_decalPass.get();
 					auto sequencerResources = helper->_sequencerResources.get();
 
 					auto lightingTechnique = std::make_shared<CompiledLightingTechnique>();
@@ -900,6 +909,7 @@ namespace RenderCore { namespace LightingEngine
 					lightingTechnique->_depVal.RegisterDependency(depthMotionDelegate->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_disableDepthWrite->GetDependencyValidation());
 					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_equalDepthTest->GetDependencyValidation());
+					lightingTechnique->_depVal.RegisterDependency(forwardIllumDelegate_decalPass->GetDependencyValidation());
 
 					captures->_lightScene->_queryInterfaceHelper = lightingTechnique->_queryInterfaceHelper =
 						[captures=captures.get()](uint64_t typeCode) -> void* {
@@ -930,7 +940,7 @@ namespace RenderCore { namespace LightingEngine
 						pipelineAccelerators,
 						preregisteredAttachments, fbProps, digest, sequencerResources,
 						depthMotionNormalRoughnessDelegate, depthMotionDelegate,
-						forwardIllumDelegate_disableDepthWrite, forwardIllumDelegate_equalDepthTest);
+						forwardIllumDelegate_disableDepthWrite, forwardIllumDelegate_equalDepthTest, forwardIllumDelegate_decalPass);
 
 					::Assets::PollToPromise(
 						std::move(thatPromise),

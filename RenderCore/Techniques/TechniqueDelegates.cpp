@@ -464,8 +464,13 @@ namespace RenderCore { namespace Techniques
 			} else {
 
 				// new style, more flexible approach
-				if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h)
-					i->second.Configure(*nascentDesc, shaderPatches, iaAttributes);
+				if (!(_flags & TechniqueDelegateForwardFlags::DecalPass)) {
+					if (auto i = LowerBound(_flexibleHelper._entries, "main"_h); i!=_flexibleHelper._entries.end() && i->first == "main"_h)
+						i->second.Configure(*nascentDesc, shaderPatches, iaAttributes);
+				} else {
+					if (auto i = LowerBound(_flexibleHelper._entries, "decalpass"_h); i!=_flexibleHelper._entries.end() && i->first == "decalpass"_h)
+						i->second.Configure(*nascentDesc, shaderPatches, iaAttributes);
+				}
 
 			}
 
@@ -491,6 +496,7 @@ namespace RenderCore { namespace Techniques
 			std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout,
 			TechniqueDelegateForwardFlags::BitField flags)
 		: _techniqueFileHelper(std::move(helper)), _flexibleHelper(flexibleHelper), _pipelineLayout(std::move(pipelineLayout))
+		, _flags(flags)
 		{
 			if (flags & TechniqueDelegateForwardFlags::DisableDepthWrite) {
 				_depthStencil = CommonResourceBox::s_dsReadOnly;
@@ -515,8 +521,12 @@ namespace RenderCore { namespace Techniques
 			::Assets::WhenAll(std::move(techniqueSet), ::Assets::GetAssetFuture<Techniques::FlexibleTechniqueHelper>(util, TECH_ENTRY_FORWARD)).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
 				[flags, util](auto techniqueSetFile, const auto& flexibleHelper) {
+					std::shared_ptr<Assets::PredefinedPipelineLayout> pipelineLayout;
+					uint64_t entryForPipelineLayout = (flags & TechniqueDelegateForwardFlags::DecalPass) ? "decalpass"_h : "main"_h;
+					if (auto i = LowerBound(flexibleHelper._entries, entryForPipelineLayout); i!=flexibleHelper._entries.end() && i->first == entryForPipelineLayout)
+						pipelineLayout = i->second._pipelineLayout;
+
 					TechniqueFileHelper helper{techniqueSetFile};
-					auto pipelineLayout = ::Assets::ActualizeAssetPtr<Assets::PredefinedPipelineLayout>(helper._pipelineLayout);
 					return std::make_shared<TechniqueDelegate_Forward>(std::move(helper), flexibleHelper, std::move(pipelineLayout), flags);
 				});
 		}
@@ -527,6 +537,7 @@ namespace RenderCore { namespace Techniques
 		std::shared_ptr<Assets::PredefinedPipelineLayout> _pipelineLayout;
 		::Assets::DependencyValidation _depVal;
 		DepthStencilDesc _depthStencil;
+		TechniqueDelegateForwardFlags::BitField _flags;
 	};
 
 	void CreateTechniqueDelegate_Forward(
@@ -1553,15 +1564,13 @@ namespace RenderCore { namespace Techniques
 									return ::Assets::PollStatus::Continue;
 							return ::Assets::PollStatus::Finish;
 						},
-						[helper, src, util]() {
+						[helper, util]() {
 							FlexibleTechniqueHelper result;
 							std::vector<::Assets::DependencyValidationMarker> depVals;
 							depVals.reserve(helper->_futures.size());
 							result._entries.reserve(helper->_futures.size());
 
-							StringSection<> pipelineLayoutName;
-							auto additionalPrepatchesFragment = Concatenate("#include \"", src, "\"");
-
+							std::vector<std::pair<StringSection<>, unsigned>> pipelineLayoutNames;
 							for (auto& f:helper->_futures) {
 								result._entries.emplace_back(f.first, f.second.get());
 								depVals.emplace_back(result._entries.back().second._depVal);
@@ -1570,21 +1579,25 @@ namespace RenderCore { namespace Techniques
 								//		actual TechniqueDelegate. However, each technique delegate can only have a single pipeline layout
 								//		(note that they can still have varied material descriptor set, via the mechanisms for that)
 								//		So, we'll require that all entries use the same pipeline layout
-								auto entryPipelineLayout = result._entries.back().second._delegateConfig.GetPipelineLayout();
-								if (!entryPipelineLayout.IsEmpty()) {
-									if (!pipelineLayoutName.IsEmpty() && !XlEqString(entryPipelineLayout, pipelineLayoutName))
-										Throw(std::runtime_error("Pipeline layout name disagreement in technique delegate file: " + pipelineLayoutName.AsString() + ", and " + entryPipelineLayout.AsString()));
-									pipelineLayoutName = entryPipelineLayout;
-								}
+								if (auto entryPipelineLayout = result._entries.back().second._delegateConfig.GetPipelineLayout(); !entryPipelineLayout.IsEmpty())
+									pipelineLayoutNames.emplace_back(entryPipelineLayout, unsigned(result._entries.size()-1));
 							}
 
-							if (!pipelineLayoutName.IsEmpty()) {
-								auto pipelineLayoutFuture = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(pipelineLayoutName);
+							std::sort(
+								pipelineLayoutNames.begin(), pipelineLayoutNames.end(),
+								[](const auto& lhs, const auto& rhs) { return XlCompareString(lhs.first, rhs.first) < 0; });
+
+							for (auto i=pipelineLayoutNames.begin(); i!=pipelineLayoutNames.end();) {
+								auto start = i;
+								while (i!=pipelineLayoutNames.end() && XlCompareString(start->first, i->first) == 0) ++i;
+
+								auto pipelineLayoutFuture = ::Assets::GetAssetFuturePtr<RenderCore::Assets::PredefinedPipelineLayout>(start->first);
 								YieldToPool(pipelineLayoutFuture);
-								result._pipelineLayout = pipelineLayoutFuture.get();
-								depVals.emplace_back(result._pipelineLayout->GetDependencyValidation());
+								auto pipelineLayout = pipelineLayoutFuture.get();
+								for (auto i2=start; i2!=i; ++i2) result._entries[i2->second].second._pipelineLayout = pipelineLayout;
+								depVals.emplace_back(pipelineLayout->GetDependencyValidation());
 							}
-							
+
 							result._depVal = ::Assets::GetDepValSys().MakeOrReuse(depVals);
 							return result;
 						});

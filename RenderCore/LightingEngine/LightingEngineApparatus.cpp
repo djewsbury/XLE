@@ -41,6 +41,15 @@ namespace RenderCore { namespace LightingEngine
 		return _forwardIllumDelegate_EqualDepthTest.ShareFuture();
 	}
 
+	auto SharedTechniqueDelegateBox::GetForwardIllumDelegate_DecalPass() -> TechniqueDelegateFuture
+	{
+		if (::Assets::IsInvalidated(_forwardIllumDelegate_DecalPass)) {
+			_forwardIllumDelegate_EqualDepthTest = ::Assets::MarkerPtr<Techniques::ITechniqueDelegate>{};
+			Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DecalPass.AdoptPromise(), GetTechniqueSetFile(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite|Techniques::TechniqueDelegateForwardFlags::DecalPass);
+		}
+		return _forwardIllumDelegate_DecalPass.ShareFuture();
+	}
+
 	auto SharedTechniqueDelegateBox::GetGBufferDelegate(GBufferDelegateType type) -> TechniqueDelegateFuture
 	{
 		assert(unsigned(type) < dimof(_gbufferDelegates));
@@ -124,6 +133,7 @@ namespace RenderCore { namespace LightingEngine
 		::Assets::AutoConstructToPromise(_techniqueSetFile.AdoptPromise(), ILLUM_TECH);
 		Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DisableDepthWrite.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite);
 		Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_EqualDepthTest.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite|Techniques::TechniqueDelegateForwardFlags::DepthTestEqual);
+		Techniques::CreateTechniqueDelegate_Forward(_forwardIllumDelegate_DecalPass.AdoptPromise(), _techniqueSetFile.ShareFuture(), Techniques::TechniqueDelegateForwardFlags::DisableDepthWrite|Techniques::TechniqueDelegateForwardFlags::DecalPass);
 		for (unsigned c=0; c<dimof(_gbufferDelegates); ++c)
 			LoadGBufferDelegate(GBufferDelegateType(c));
 		for (unsigned c=0; c<dimof(_utilityDelegates); ++c)
@@ -148,6 +158,11 @@ namespace RenderCore { namespace LightingEngine
 		if (i == forwardPipelineLayout->_descriptorSets.end())
 			Throw(std::runtime_error("Missing ForwardLighting entry in pipeline layout file"));
 		_forwardLightingDescSetTemplate = i->second;
+
+		i = forwardPipelineLayout->_descriptorSets.find("DecalPass");
+		if (i == forwardPipelineLayout->_descriptorSets.end())
+			Throw(std::runtime_error("Missing DecalPass entry in pipeline layout file"));
+		_decalPassDescSetTemplate = i->second;
 	}
 
 	LightingEngineApparatus::LightingEngineApparatus(std::shared_ptr<Techniques::DrawingApparatus> drawingApparatus)

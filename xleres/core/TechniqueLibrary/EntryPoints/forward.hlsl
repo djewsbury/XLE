@@ -58,4 +58,8 @@ ShaderPatchCollection=main=~
 		<.>::InitializeSystemInputs
 		Implements=SV_SystemPS
 
+Entity=decalpass
+TechniqueDelegateConfig=decalpass=~
+	PipelineLayout=xleres/Forward/forward.pipeline:GraphicsForwardPlusDecal
+
 )-- */

@@ -79,7 +79,7 @@ namespace RenderCore { namespace Techniques
 		unsigned gbufferTypeCode);
 
 	namespace TechniqueDelegateForwardFlags { 
-		enum { DisableDepthWrite = 1u<<0u, DepthTestEqual = 1u<<1u };
+		enum { DisableDepthWrite = 1u<<0u, DepthTestEqual = 1u<<1u, DecalPass = 1u<<2u };
 		using BitField = unsigned;
 	}
 	void CreateTechniqueDelegate_Forward(

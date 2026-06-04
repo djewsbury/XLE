@@ -29,6 +29,7 @@ namespace RenderCore { namespace Techniques
 			std::vector<std::tuple<std::string, GraphLanguage::NodeGraphSignature, uint64_t>> _patchDelegateInput;
 			std::string _additionalPrePatchesFragment;
 			std::shared_ptr<ShaderSourceParser::SelectorFilteringRules> _additionalSelectorFiltering;
+			std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> _pipelineLayout;
 			::Assets::DependencyValidation _depVal;
 
 			void Configure(
@@ -38,7 +39,6 @@ namespace RenderCore { namespace Techniques
 		};
 
 		std::vector<std::pair<uint64_t, Entry>> _entries;
-		std::shared_ptr<RenderCore::Assets::PredefinedPipelineLayout> _pipelineLayout;
 		::Assets::DependencyValidation _depVal;
 
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }

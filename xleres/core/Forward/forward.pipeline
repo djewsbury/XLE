@@ -41,6 +41,12 @@ DescriptorSet ForwardLighting
 	};
 };
 
+DescriptorSet DecalPass
+{
+	SubpassInput DepthTexture;			// 0
+	SampledTexture RefractionBuffer;	// 1
+};
+
 DescriptorSet ProbePrepareLighting
 {
 	UniformBuffer EnvironmentProps;						// 0
@@ -53,6 +59,23 @@ PipelineLayout GraphicsForwardPlus
 	DescriptorSet ForwardLighting;			// 2
 	DescriptorSet ShadowTemplate;			// 3
 	DescriptorSet Material;					// 4
+
+	VSPushConstants LocalTransform
+	{
+		float3x4 LocalToWorld;
+		float3 LocalSpaceView;
+		uint Dummy;
+	};
+};
+
+PipelineLayout GraphicsForwardPlusDecal
+{
+	AutoDescriptorSet Numeric;				// 0
+	DescriptorSet Sequencer;				// 1
+	DescriptorSet ForwardLighting;			// 2
+	DescriptorSet ShadowTemplate;			// 3
+	DescriptorSet Material;					// 4
+	DescriptorSet DecalPass;				// 5
 
 	VSPushConstants LocalTransform
 	{
