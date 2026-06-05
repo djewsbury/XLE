@@ -327,6 +327,21 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
         return Metal::ResourceMap::CanMap(*_device, resource, Metal::ResourceMap::Mode::WriteDiscardPrevious);
     }
 
+    static unsigned LeastCommonMultiple(unsigned a, unsigned b)
+	{
+		// The least common multiple is product/greatest-common-divisor
+		// we can calculate greatest common divisor using Euclid's method
+		auto rm2 = a, rm1 = b;		// doesn't matter if a or b is smaller (though will complete 1 iteration quicker if a is the larger)
+		for (;;) {
+			auto r0 = rm2%rm1;
+			if (!r0) break;
+			rm2=rm1;
+			rm1=r0;
+		}
+		auto gcd = rm1;
+		return a / gcd * b;
+	}
+
     unsigned ResourceUploadHelper::CalculateStagingBufferOffsetAlignment(const ResourceDesc& desc)
     {
         using namespace RenderCore;
@@ -337,7 +352,11 @@ namespace RenderCore { namespace BufferUploads { namespace PlatformInterface
 				alignment = std::max(alignment, compressionParam._blockBytes);
 			} else {
 				// non-blocked format -- alignment requirement is a multiple of the texel size
-				alignment = std::max(alignment, BitsPerPixel(desc._textureDesc._format)/8u);
+                auto requiredAlignment = BitsPerPixel(desc._textureDesc._format)/8u;
+                auto newAlignment = LeastCommonMultiple(alignment, requiredAlignment);
+                assert(newAlignment >= alignment && (newAlignment % alignment) == 0);
+                assert(newAlignment >= requiredAlignment && (newAlignment % requiredAlignment) == 0);
+                alignment = newAlignment;
 			}
 		}
 		return alignment;
