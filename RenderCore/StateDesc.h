@@ -42,6 +42,7 @@ namespace RenderCore
     enum class FilterMode
     {
         Point = 0,                  // D3D11_FILTER_MIN_MAG_MIP_POINT
+        PointLinearMip = 1,         // D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR
         Trilinear = 0x15,           // D3D11_FILTER_MIN_MAG_MIP_LINEAR
         Anisotropic = 0x55,         // D3D11_FILTER_ANISOTROPIC
         Bilinear = 0x14,            // D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT

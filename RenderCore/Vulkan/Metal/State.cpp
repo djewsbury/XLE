@@ -323,10 +323,15 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		switch (desc._filter) {
 		default:
-		case FilterMode::Point:                 
+		case FilterMode::Point:
 			samplerCreateInfo.magFilter = VK_FILTER_NEAREST;
 			samplerCreateInfo.minFilter = VK_FILTER_NEAREST;
 			samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+			break;
+		case FilterMode::PointLinearMip:
+			samplerCreateInfo.magFilter = VK_FILTER_NEAREST;
+			samplerCreateInfo.minFilter = VK_FILTER_NEAREST;
+			samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 			break;
 		case FilterMode::Anisotropic:
 			if (!objectFactory.GetXLEFeatures()._samplerAnisotropy)

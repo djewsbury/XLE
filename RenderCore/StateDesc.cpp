@@ -143,6 +143,7 @@ namespace RenderCore
     {
         switch (filterMode) {
         case FilterMode::Point: return "Point";
+        case FilterMode::PointLinearMip: return "PointLinearMip";
         case FilterMode::Trilinear: return "Trilinear";
         case FilterMode::Anisotropic: return "Anisotropic";
         case FilterMode::Bilinear: return "Bilinear";
@@ -229,6 +230,7 @@ namespace RenderCore
 	std::optional<FilterMode> AsFilterMode(StringSection<> input)
     {
         if (XlEqString(input, "Point")) return FilterMode::Point;
+        if (XlEqString(input, "PointLinearMip")) return FilterMode::PointLinearMip;
         if (XlEqString(input, "Trilinear")) return FilterMode::Trilinear;
         if (XlEqString(input, "Anisotropic")) return FilterMode::Anisotropic;
         if (XlEqString(input, "Bilinear")) return FilterMode::Bilinear;
