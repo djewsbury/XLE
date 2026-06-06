@@ -585,6 +585,10 @@ namespace RenderCore { namespace Assets
 		while (fmttr.TryKeyedItem(kn)) {
 			if (XlEqString(kn, "SourceFile")) {
 				dst._srcFile = Formatters::RequireStringValue(fmttr);
+				#if defined(_DEBUG)
+					if (!MakeFileNameSplitter(dst._srcFile).ParametersWithDivider().IsEmpty())
+						Throw(std::runtime_error("Don't include parameters on SourceFile request: " + dst._srcFile + ". These aren't interpreted here."));
+				#endif
 			} else
 				Formatters::SkipValueOrElement(fmttr);
 		}
