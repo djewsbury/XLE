@@ -22,12 +22,16 @@
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Techniques { class ProjectionDesc; class DrawablesPacket; class ParsingContext; class IDrawableSubmitter; class DeformersPacket; } }
 namespace RenderCore { namespace LightingEngine { class ILightScene; struct ShadowOperatorDesc; class IProbeRenderingInstance; }}
-namespace RenderOverlays { class FontRenderingManager; }
+namespace RenderOverlays { class FontRenderingManager; class IOverlayContext; }
 namespace Assets { class DependencyValidation; }
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; }}
 namespace Assets { class OperationContext; }
 namespace std { template<typename T> class future; }
+
+#if defined(_DEBUG) && !defined(XLE_PENDING_OVERLAYS)
+    #define XLE_PENDING_OVERLAYS 1
+#endif
 
 namespace SceneEngine
 {
@@ -40,6 +44,10 @@ namespace SceneEngine
 		const XLEMath::ArbitraryConvexVolumeTester* _complexCullingVolume = nullptr;
         char _quickMetrics[4096];
         RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
+
+        #if XLE_PENDING_OVERLAYS
+            std::vector<std::function<void(RenderOverlays::IOverlayContext&)>> _pendingOverlays;
+        #endif
 
         ExecuteSceneContext(
             IteratorRange<RenderCore::Techniques::DrawablesPacket**> destinationPkts,
