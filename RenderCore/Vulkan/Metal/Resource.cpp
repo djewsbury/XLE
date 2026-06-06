@@ -440,8 +440,11 @@ namespace RenderCore { namespace Metal_Vulkan
 						}
 					}
 
-					if (fallback)
+					if (fallback) {
+						if (image_create_info.imageType != VK_IMAGE_TYPE_2D)
+							Throw(std::runtime_error("Attempting to fallback to linear format tiling for non-2D texture (" + name.AsString() + "). The driver explicitly doesn't support optimal tiling. This is unreliable as drivers are not required to support linear tiling for non-2D textures (see 12.4 Images)."));
 						image_create_info.tiling = VK_IMAGE_TILING_LINEAR;
+					}
 				}
 
 				// After deciding final tiling mode, check to ensure all features are going to be supported (don't check to check the image_create_info.tiling == VK_IMAGE_TILING_OPTIMAL, because if we didn't fallback, it's supported)
