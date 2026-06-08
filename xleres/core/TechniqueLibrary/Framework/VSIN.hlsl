@@ -87,9 +87,10 @@ struct VSIN //////////////////////////////////////////////////////
 	#endif
 
 	#if GEO_HAS_INSTANCE_TO_LOCAL
-		half4 instanceToLocalA : INSTANCE_TO_LOCAL;
-		half4 instanceToLocalB : INSTANCE_TO_LOCAL1;
-		half4 instanceToLocalC : INSTANCE_TO_LOCAL2;
+		// todo -- in Vulkan to make these half4, we need to check for storageInputOutput16 capability
+		float4 instanceToLocalA : INSTANCE_TO_LOCAL;
+		float4 instanceToLocalB : INSTANCE_TO_LOCAL1;
+		float4 instanceToLocalC : INSTANCE_TO_LOCAL2;
 	#endif
 
 	#if GEO_HAS_FONTTABLE

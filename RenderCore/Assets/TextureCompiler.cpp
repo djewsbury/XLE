@@ -722,7 +722,7 @@ namespace RenderCore { namespace Assets
 		TextureCompilationRequest result;
 		result._subCompiler = registrar.TryBeginCompile(util, indexer);
 		if (!result._subCompiler) {
-			assert(0);
+			assert(0);		// note that we can hit this during shutdown, because a pending texture compile require can still be queued while the texture compiler is deregistered
 			return {};		// invalid compile
 		}
 

@@ -25,14 +25,17 @@ float4 frameworkEntry(
 	return float4(result, sample.blendingAlpha);
 }
 
+float4 frameworkEntry_CustomLighting(float4 position : SV_Position, float4 customLighting : CUSTOMLIGHTING) : SV_Target0 { return customLighting; }
+
 GBufferValues SampleFallback() : GBUFFERVALUES { return GBufferValues_Default(); }
 
-SystemInputs InitializeSystemInputs(uint sampleIndex : SV_SampleIndex) : SYSTEMINPUTS
+SystemInputs InitializeSystemInputs() : SYSTEMINPUTS
 {
 	SystemInputs result;
 	#if MSAA_SAMPLES > 1
-        result.sampleIndex = sampleIndex;
-    #endif
+		#error MSAA sample index query deprecated -- awkwardness because we only want to check the SV_SampleIndex input when the MSAA_SAMPLES selector is set
+		result.sampleIndex = 0;
+	#endif
 	return result;
 }
 
@@ -52,6 +55,9 @@ ShaderPatchCollection=main=~
 		<.>::frameworkEntry
 		Implements=SV_SystemPS
 	=~
+		<.>::frameworkEntry_CustomLighting
+		Implements=SV_SystemPS
+	=~
 		<.>::SampleFallback
 		Implements=SV_SystemPS
 	=~
@@ -59,6 +65,7 @@ ShaderPatchCollection=main=~
 		Implements=SV_SystemPS
 
 Entity=decalpass
+Inherit=decalpass=~;main
 TechniqueDelegateConfig=decalpass=~
 	PipelineLayout=xleres/Forward/forward.pipeline:GraphicsForwardPlusDecal
 

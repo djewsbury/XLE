@@ -1381,7 +1381,7 @@ namespace RenderOverlays
 			_srv = _resource->CreateTextureView();
 		} else {
 			assert(BitsPerPixel(pixelFormat) == 8);
-			_resource = dev.CreateResource(CreateDesc(BindFlag::ShaderResource | BindFlag::TransferDst | BindFlag::TransferSrc, LinearBufferDesc::Create(width*height)), "Font");
+			_resource = dev.CreateResource(CreateDesc(BindFlag::UnorderedAccess | BindFlag::TransferDst | BindFlag::TransferSrc, LinearBufferDesc::Create(width*height)), "Font");
 			_srv = _resource->CreateBufferView();
 		}
 	}
