@@ -1423,6 +1423,7 @@ namespace RenderCore { namespace ImplVulkan
 				appender = (VkBaseInStructure*)&shaderSubgroupFeatures;
 			}
 		#endif
+		enabledFeatures2.features.shaderInt16 = xleFeatures._shaderInt16;
 
 		// texture compression types
 		enabledFeatures2.features.textureCompressionETC2 = xleFeatures._textureCompressionETC2;
@@ -1757,6 +1758,7 @@ namespace RenderCore { namespace ImplVulkan
 		result._pixelShaderStoresAndAtomics = features.features.fragmentStoresAndAtomics;
 		result._vertexGeoTessellationShaderStoresAndAtomics = features.features.vertexPipelineStoresAndAtomics;
 		result._shaderFloat16 = VkPhysicalDeviceShaderFloat16Int8Features_inst.shaderFloat16 && VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures_inst.shaderSubgroupExtendedTypes;		// we don't actually enable any float16 types unless shader subgroups can also support them
+		result._shaderInt16 = features.features.shaderInt16;
 
 		// texture compression types
 		result._textureCompressionETC2 = features.features.textureCompressionETC2;
