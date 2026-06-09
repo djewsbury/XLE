@@ -366,7 +366,7 @@ namespace RenderCore { namespace LightingEngine
 
 		auto batchFlags = 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("decal"_h);
 		result.AddSubpass(
-			std::move(decalSubpass), forwardIllumDelegate, batchFlags, {},
+			std::move(decalSubpass), forwardIllumDelegate, batchFlags, {{"DECAL_PASS", "1"}},
 			std::move(resourceDelegate));
 
 		return result;
