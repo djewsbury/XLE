@@ -12,6 +12,7 @@
 #include "../Techniques/ParsingContext.h"
 #include "../Techniques/CommonBindings.h"
 #include "../Techniques/DeferredShaderResource.h"
+#include "../DeviceInitialization.h"
 #include "../Assets/TextureCompiler.h"
 #include "../UniformsStream.h"
 #include "../../Assets/Continuation.h"
@@ -118,6 +119,11 @@ namespace RenderCore { namespace LightingEngine
 		assert(_secondStageConstructionState == 0);
 		assert(_uniformsHelper);		// CreateFragment must have already been called
 		_secondStageConstructionState = 1;
+
+		if (!_pool->GetDevice()->GetDeviceFeatures()._shaderInt16) {
+			promise.set_exception(std::make_exception_ptr(std::runtime_error("ShaderInt16 support is required for postprocessing support.")));
+			return;
+		}
 
 		ParameterBox selectors;
 		selectors.SetParameter("SHARPEN", _desc._sharpen.has_value());
