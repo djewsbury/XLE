@@ -4,7 +4,7 @@
 
 #include "../Math/MathConstants.hlsl"
 
-RWTexture2D<float3> OutputTexture : register(u1, space0);
+RWTexture2D<float4> OutputTexture : register(u1, space0);
 Texture2D<float3> InputTexture : register(t3, space0);
 
 cbuffer BloomParameters : register(b5, space0)
@@ -190,7 +190,7 @@ float GaussianWeight1D(float offset, float stdDevSq)
 			v *= BloomSmallRadiusBrightness;
 
 			// vertical & horizontal parts done -- just write out
-			OutputTexture[srcTextureOffset + uint2(x+BLOCK_BORDER, y)] = v;
+			OutputTexture[srcTextureOffset + uint2(x+BLOCK_BORDER, y)] = float4(v, 1);
 		}
 	}
 }
