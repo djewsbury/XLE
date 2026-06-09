@@ -50,6 +50,7 @@ namespace SceneEngine
 
 		virtual std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> GetModelRendererConstruction(OpaquePtr model) = 0;
 		virtual std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformAccelerator>> GetDeformAccelerator(OpaquePtr renderer) = 0;		// note that the opaque pointer is "renderer", not "deformers"
+		virtual std::shared_future<void> GetFutureForRenderer(OpaquePtr renderer) = 0;
 
 		virtual void OnFrameBarrier() = 0;
 		virtual void CancelConstructions() = 0;

@@ -142,6 +142,7 @@ namespace SceneEngine
 		std::shared_future<SkeletonMachine> GetSkeletonMachine(OpaquePtr renderer) override;
 		std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> GetModelRendererConstruction(OpaquePtr model) override;
 		std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformAccelerator>> GetDeformAccelerator(OpaquePtr renderer) override;
+		std::shared_future<void> GetFutureForRenderer(OpaquePtr renderer) override;
 		RenderCore::BufferUploads::CommandListID GetCompletionCommandList(void* renderer) override;
 
 		std::shared_ptr<Assets::OperationContext> GetLoadingContext() override;
@@ -569,6 +570,22 @@ namespace SceneEngine
 				});
 		} else
 			promise.set_value(rendererEntry._renderer._deformAccelerator);
+		return result;
+	}
+
+	std::shared_future<void> CharacterScene::GetFutureForRenderer(OpaquePtr renderer)
+	{
+		assert(renderer);
+		ScopedLock(_poolLock);
+
+		std::promise<void> promise;
+		auto result = promise.get_future();
+
+		auto& rendererEntry = *((const CharacterSceneInternal::RendererEntry*)renderer.get());
+		if (rendererEntry._pendingRenderer.valid()) {
+			::Assets::WhenAll(rendererEntry._pendingRenderer).ThenConstructToPromise(std::move(promise));
+		} else
+			promise.set_value();
 		return result;
 	}
 
