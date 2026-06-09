@@ -1118,8 +1118,17 @@ namespace RenderOverlays
                         patchesInterface.emplace_back(RenderCore::Techniques::PatchDelegateInput{p._originalEntryPointName, p._originalEntryPointSignature.get(), p._implementsHash});
                     for (auto& out:RenderCore::Techniques::BuildSpritePipeline(patchesInterface, iaAttributes)) {
                         if (unsigned(out._stage) >= dimof(nascentDesc->_shaders)) continue;
-                        if (!out._resource._patchCollectionExpansions.empty())
-                            out._resource._patchCollection = shaderPatches;
+                        {
+                            // We only need to attach the patch collection if there's an overlap between the patch expansions and what's provided by the shader patches
+                            // some sequencer configs (eg, pre-depth) frequently don't require any of the shader patches
+                            bool shaderPatchesOverlap = false;
+                            for (auto p=out._resource._patchCollectionExpansions.begin(); p!=out._resource._patchCollectionExpansions.end() && !shaderPatchesOverlap; ++p)
+                                for (const auto& exp:shaderPatches->GetInterface().GetPatches())
+                                    shaderPatchesOverlap |= *p == exp._implementsHash || *p == exp._originalEntryPointHash;
+
+                            if (shaderPatchesOverlap)
+                                out._resource._patchCollection = shaderPatches;
+                        }
                         nascentDesc->_shaders[unsigned(out._stage)] = std::move(out._resource);
                     }
 
@@ -1134,8 +1143,17 @@ namespace RenderOverlays
                         patchesInterface.emplace_back(RenderCore::Techniques::PatchDelegateInput{p._originalEntryPointName, p._originalEntryPointSignature.get(), p._implementsHash});
                     for (auto& out:RenderCore::Techniques::BuildAutoPipeline(patchesInterface, iaAttributes)) {
                         if (unsigned(out._stage) >= dimof(nascentDesc->_shaders)) continue;
-                        if (!out._resource._patchCollectionExpansions.empty())
-                            out._resource._patchCollection = shaderPatches;
+                        {
+                            // We only need to attach the patch collection if there's an overlap between the patch expansions and what's provided by the shader patches
+                            // some sequencer configs (eg, pre-depth) frequently don't require any of the shader patches
+                            bool shaderPatchesOverlap = false;
+                            for (auto p=out._resource._patchCollectionExpansions.begin(); p!=out._resource._patchCollectionExpansions.end() && !shaderPatchesOverlap; ++p)
+                                for (const auto& exp:shaderPatches->GetInterface().GetPatches())
+                                    shaderPatchesOverlap |= *p == exp._implementsHash || *p == exp._originalEntryPointHash;
+
+                            if (shaderPatchesOverlap)
+                                out._resource._patchCollection = shaderPatches;
+                        }
                         nascentDesc->_shaders[unsigned(out._stage)] = std::move(out._resource);
                     }
 
