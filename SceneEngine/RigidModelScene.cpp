@@ -698,6 +698,7 @@ namespace SceneEngine
 	bool IRigidModelScene::BuildDrawablesHelper::SetRenderer(void* renderer)
 	{
 		_activeRenderer = (RigidModelSceneInternal::Renderer*)renderer;
+		_completionCmdList = std::max(_completionCmdList, _activeRenderer->_completionCmdList);
 		return _activeRenderer->_drawableConstructor != nullptr;
 	}
 

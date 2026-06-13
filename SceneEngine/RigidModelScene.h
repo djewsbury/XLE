@@ -112,6 +112,8 @@ namespace SceneEngine
 		unsigned GetDrawableCount(unsigned pktIndex) const;
 		void LookupMetadataProvider(DrawableMetadataLookupContext& context);
 
+		RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
+
 		BuildDrawablesHelper(
 			IRigidModelScene& scene,
 			IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
