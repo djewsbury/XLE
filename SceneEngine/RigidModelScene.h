@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "../RenderCore/Types.h"
 #include "../Assets/AssetsCore.h"
 #include "../Assets/AssetHeap.h"		// for IAssetTracking
 #include "../Math/Matrix.h"
@@ -41,9 +42,17 @@ namespace SceneEngine
 	{
 	public:
 		using OpaquePtr = std::shared_ptr<void>;
+		struct RendererRules
+		{
+			// When _additionalInputElements is set, BuildDrawablesHelper will expect an additional
+			// input stream containing the given vertex stream elements. This is typically used
+			// for per-instance vertex stream elements
+			std::vector<RenderCore::InputElementDesc> _additionalInputElements;
+		};
+
 		virtual OpaquePtr CreateModel(std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>) = 0;
 		virtual OpaquePtr CreateDeformers(std::shared_ptr<RenderCore::Techniques::DeformerConstruction>) = 0;
-		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers) = 0;
+		virtual OpaquePtr CreateRenderer(OpaquePtr model, OpaquePtr deformers, const RendererRules& ={}) = 0;
 
 		struct BuildDrawablesHelper;
 		BuildDrawablesHelper BeginBuildDrawables(
@@ -102,6 +111,11 @@ namespace SceneEngine
 
 		void BuildDrawablesInstancedFixedSkeleton(
 			IteratorRange<const Float3x4*> objectToWorlds,
+			uint64_t cmdStream = 0);
+
+		void BuildDrawablesVertexStreamInstancedFixedSkeleton(
+			unsigned instanceCount,
+			IteratorRange<const void*> vertexStream1Data,
 			uint64_t cmdStream = 0);
 
 		void CullAndBuildDrawables(

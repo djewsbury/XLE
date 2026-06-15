@@ -31,6 +31,8 @@ namespace SceneEngine
 	using BoundingBox = std::pair<Float3, Float3>;
 	namespace RigidModelSceneInternal
 	{
+		static uint64_t HashRules(const IRigidModelScene::RendererRules&, uint64_t seed=DefaultSeed64);
+
 		struct ModelEntry
 		{
 			std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> _completedConstruction;
@@ -49,8 +51,9 @@ namespace SceneEngine
 			std::shared_ptr<RenderCore::Techniques::DeformAccelerator> _deformAccelerator;
 			std::shared_ptr<RenderCore::Assets::SkeletonScaffold> _skeletonScaffold;
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> _firstModelScaffold;
-			RenderCore::BufferUploads::CommandListID _completionCmdList;
+			RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
 			std::pair<Float3, Float3> _aabb = { Float3{FLT_MAX, FLT_MAX, FLT_MAX}, Float3{-FLT_MAX, -FLT_MAX, -FLT_MAX} };
+			bool _requiresAdditionalVertexStream = false;
 
 			const RenderCore::Assets::SkeletonMachine& GetSkeletonMachine() const
 			{
@@ -69,6 +72,8 @@ namespace SceneEngine
 			std::shared_ptr<DeformerEntry> _deformer;
 			std::weak_ptr<Renderer> _renderer;
 			std::shared_future<Renderer> _pendingRenderer;
+			IRigidModelScene::RendererRules _rules;		// (for reconstruction)
+			uint64_t _rulesHash = HashRules({});
 			::Assets::DependencyValidation _depVal;
 		};
 
@@ -222,15 +227,17 @@ namespace SceneEngine
 			return std::move(newEntry);
 		}
 
-		std::shared_ptr<void> CreateRenderer(std::shared_ptr<void> model, OpaquePtr deformers) override
+		std::shared_ptr<void> CreateRenderer(std::shared_ptr<void> model, OpaquePtr deformers, const RendererRules& rules) override
 		{
 			ScopedLock(_poolLock);
-			return CreateRendererAlreadyLocked(std::move(model), std::move(deformers));
+			return CreateRendererAlreadyLocked(std::move(model), std::move(deformers), rules);
 		}
 
-		std::shared_ptr<void> CreateRendererAlreadyLocked(std::shared_ptr<void> model, OpaquePtr deformers)
+		std::shared_ptr<void> CreateRendererAlreadyLocked(std::shared_ptr<void> model, OpaquePtr deformers, const RendererRules& rules)
 		{
-			auto i = std::find_if(_renderers.begin(), _renderers.end(), [m=model.get(), d=deformers.get()](const auto& q) { return q._model.get()==m && q._deformer.get()==d; });
+			auto rulesHash = RigidModelSceneInternal::HashRules(rules);
+
+			auto i = std::find_if(_renderers.begin(), _renderers.end(), [m=model.get(), d=deformers.get(), rulesHash](const auto& q) { return q._model.get()==m && q._deformer.get()==d && q._rulesHash == rulesHash; });
 			if (i != _renderers.end() && i->_depVal.GetValidationIndex() == 0)
 				if (auto l = i->_renderer.lock())
 					return l;
@@ -253,6 +260,13 @@ namespace SceneEngine
 			if (i != _renderers.end()) newRenderer = i->_renderer.lock();		// attempt to use the existing one if we're rebuilding an invalidated renderer
 			if (!newRenderer) newRenderer = std::make_shared<RigidModelSceneInternal::Renderer>();
 			newEntry._renderer = newRenderer;
+			newEntry._rules = rules;
+			newEntry._rulesHash = rulesHash;
+
+			#if defined(_DEBUG)
+				for (const auto& ia:rules._additionalInputElements)
+					assert(ia._inputSlot == 1);
+			#endif
 
 			std::promise<RigidModelSceneInternal::Renderer> rendererPromise;
 			newEntry._pendingRenderer = rendererPromise.get_future();
@@ -262,7 +276,7 @@ namespace SceneEngine
 				assert(newEntry._model->_completedConstruction.valid() && newEntry._deformer->_completedConstruction.valid());
 				::Assets::WhenAll(newEntry._model->_completedConstruction, newEntry._deformer->_completedConstruction).ThenConstructToPromise(
 					std::move(rendererPromise),
-					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext, deformAcceleratorPool=_deformAcceleratorPool](
+					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext, deformAcceleratorPool=_deformAcceleratorPool, rules](
 						auto&& promise, 
 						auto completedConstruction, auto completedDeformerConstruction) mutable {
 
@@ -276,15 +290,19 @@ namespace SceneEngine
 								deformAcceleratorPool->Attach(*deformAccelerator, geoDeformer);
 							}
 
+							RenderCore::Techniques::CustomDrawableConstructorRules dcRules;
+							dcRules._additionalInputElements = std::move(rules._additionalInputElements);
+							bool additionalVS = !dcRules._additionalInputElements.empty();
+
 							auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
 								drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
-								*completedConstruction, RenderCore::Techniques::CustomDrawableConstructorRules{},
+								*completedConstruction, std::move(dcRules),
 								deformAcceleratorPool, deformAccelerator);
 
 							if (geoDeformer) {
 								::Assets::WhenAll(RenderCore::Techniques::ToFuture(*drawableConstructor), geoDeformer->GetInitializationFuture()).ThenConstructToPromiseWithFutures(
 									std::move(promise),
-									[geoDeformer, deformAccelerator, completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
+									[geoDeformer, deformAccelerator, completedConstruction, additionalVS](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture, std::shared_future<void>&& deformerInitFuture) mutable {
 										deformerInitFuture.get();	// propagate exceptions
 
 										RigidModelSceneInternal::Renderer renderer;
@@ -297,12 +315,13 @@ namespace SceneEngine
 											if (renderer._firstModelScaffold)
 												renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 										}
+										renderer._requiresAdditionalVertexStream = additionalVS;
 										return renderer;
 									});
 							} else {
 								::Assets::WhenAll(RenderCore::Techniques::ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
 									std::move(promise),
-									[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
+									[completedConstruction, additionalVS](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
 										RigidModelSceneInternal::Renderer renderer;
 										renderer._drawableConstructor = drawableConstructorFuture.get();
 										renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
@@ -312,6 +331,7 @@ namespace SceneEngine
 											if (renderer._firstModelScaffold)
 												renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 										}
+										renderer._requiresAdditionalVertexStream = additionalVS;
 										return renderer;
 									});
 							}
@@ -324,18 +344,22 @@ namespace SceneEngine
 				assert(newEntry._model->_completedConstruction.valid());
 				::Assets::WhenAll(newEntry._model->_completedConstruction).ThenConstructToPromise(
 					std::move(rendererPromise),
-					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext](
+					[drawablesPool=_drawablesPool, pipelineAcceleratorPool=_pipelineAcceleratorPool, constructionContext=_constructionContext, rules](
 						auto&& promise, 
 						auto completedConstruction) mutable {
 
 						TRY {
+							RenderCore::Techniques::CustomDrawableConstructorRules dcRules;
+							dcRules._additionalInputElements = std::move(rules._additionalInputElements);
+							bool additionalVS = !dcRules._additionalInputElements.empty();
+
 							auto drawableConstructor = std::make_shared<RenderCore::Techniques::DrawableConstructor>(
 								drawablesPool, std::move(pipelineAcceleratorPool), std::move(constructionContext),
-								*completedConstruction);
+								*completedConstruction, std::move(dcRules));
 
 							::Assets::WhenAll(RenderCore::Techniques::ToFuture(*drawableConstructor)).ThenConstructToPromiseWithFutures(
 								std::move(promise),
-								[completedConstruction](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
+								[completedConstruction, additionalVS](std::future<std::shared_ptr<RenderCore::Techniques::DrawableConstructor>>&& drawableConstructorFuture) mutable {
 									RigidModelSceneInternal::Renderer renderer;
 									renderer._drawableConstructor = drawableConstructorFuture.get();
 									renderer._completionCmdList = renderer._drawableConstructor->_completionCommandList;
@@ -345,6 +369,7 @@ namespace SceneEngine
 										if (renderer._firstModelScaffold)
 											renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
 									}
+									renderer._requiresAdditionalVertexStream = additionalVS;
 									return renderer;
 								});
 						} CATCH (...) {
@@ -449,7 +474,7 @@ namespace SceneEngine
 				for (const auto& r:_renderers) {
 					if (r._depVal.GetValidationIndex() != 0) {
 						// call CreateRenderer again to reconstruct this renderer
-						auto res = CreateRendererAlreadyLocked(r._model, r._deformer);
+						auto res = CreateRendererAlreadyLocked(r._model, r._deformer, r._rules);
 						assert(!res.owner_before(r._renderer) && !r._renderer.owner_before(res)); (void)res;
 					}
 				}
@@ -604,6 +629,7 @@ namespace SceneEngine
 		const Float3x4& localToWorld, uint32_t viewMask, uint64_t cmdStream)
 	{
 		assert(cmdStream == 0);
+		assert(!_activeRenderer->_requiresAdditionalVertexStream);
 		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
@@ -617,6 +643,7 @@ namespace SceneEngine
 		uint64_t cmdStream)
 	{
 		assert(cmdStream == 0);
+		assert(!_activeRenderer->_requiresAdditionalVertexStream);
 		RenderCore::Techniques::LightWeightBuildDrawables::InstancedFixedSkeleton(
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
@@ -628,10 +655,24 @@ namespace SceneEngine
 		uint64_t cmdStream)
 	{
 		assert(cmdStream == 0);
+		assert(!_activeRenderer->_requiresAdditionalVertexStream);
 		RenderCore::Techniques::LightWeightBuildDrawables::InstancedFixedSkeleton(
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			objectToWorlds);
+	}
+
+	void IRigidModelScene::BuildDrawablesHelper::BuildDrawablesVertexStreamInstancedFixedSkeleton(
+		unsigned instanceCount,
+		IteratorRange<const void*> vertexStream1Data,
+		uint64_t cmdStream)
+	{
+		assert(cmdStream == 0);
+		assert(_activeRenderer->_requiresAdditionalVertexStream);
+		RenderCore::Techniques::LightWeightBuildDrawables::VertexStreamInstancedFixedSkeleton(
+			*_activeRenderer->_drawableConstructor,
+			_pkts,
+			instanceCount, vertexStream1Data);
 	}
 
 	void IRigidModelScene::BuildDrawablesHelper::CullAndBuildDrawables(
@@ -646,6 +687,7 @@ namespace SceneEngine
 		}
 		if (!viewMask) return;
 
+		assert(!_activeRenderer->_requiresAdditionalVertexStream);
 		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
@@ -738,6 +780,14 @@ namespace SceneEngine
 			std::move(drawablesPool), std::move(pipelineAcceleratorPool), std::move(deformAcceleratorPool),
 			std::move(bufferUploads), std::move(loadingContext),
 			cfg);
+	}
+
+	namespace RigidModelSceneInternal
+	{
+		static uint64_t HashRules(const IRigidModelScene::RendererRules& rules, uint64_t seed)
+		{
+			return RenderCore::HashInputAssembly(rules._additionalInputElements, seed);
+		}
 	}
 
 }

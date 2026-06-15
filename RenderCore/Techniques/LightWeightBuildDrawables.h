@@ -33,6 +33,12 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const Float3x4*> objectToWorlds,
 			IteratorRange<const unsigned*> viewMasks);
 
+		static void VertexStreamInstancedFixedSkeleton(
+			DrawableConstructor& constructor,
+			IteratorRange<DrawablesPacket** const> pkts,
+			unsigned instanceCount,
+			IteratorRange<const void*> vertexStream1Data);
+
 		static void SingleInstance(
 			DrawableConstructor& constructor,
 			IteratorRange<DrawablesPacket** const> pkts,

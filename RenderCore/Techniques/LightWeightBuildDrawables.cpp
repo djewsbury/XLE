@@ -295,6 +295,117 @@ namespace RenderCore { namespace Techniques
 		#endif
 	}
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	namespace Internal
+	{
+		struct VertexStreamInstancedFixedSkeletonViewMask_Drawable : public RenderCore::Techniques::Drawable
+		{
+			unsigned _firstIndex, _indexCount;
+			unsigned _instanceCount;
+		};
+
+		static void DrawFn_VertexStreamInstancedFixedSkeletonViewMask(
+			RenderCore::Techniques::ParsingContext& parserContext,
+			const RenderCore::Techniques::ExecuteDrawableContext& drawFnContext,
+			const VertexStreamInstancedFixedSkeletonViewMask_Drawable& drawable)
+		{
+			drawFnContext.DrawIndexedInstances(drawable._indexCount, drawable._instanceCount, drawable._firstIndex);
+		}
+	}
+
+	void LightWeightBuildDrawables::VertexStreamInstancedFixedSkeleton(
+		RenderCore::Techniques::DrawableConstructor& constructor,
+		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
+		unsigned instanceCount,
+		IteratorRange<const void*> vertexStream1Data)
+	{
+		using namespace RenderCore;
+		auto& cmdStream = constructor.GetCmdStream();
+		VLA(Internal::VertexStreamInstancedFixedSkeletonViewMask_Drawable*, drawables, cmdStream._drawCallCounts.size());
+		RenderCore::Techniques::DrawablesPacket* pktForAllocations = nullptr;
+		assert(pkts.size() >= cmdStream._drawCallCounts.size());
+		for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c) {
+			if (cmdStream._drawCallCounts[c] && pkts[c]) {
+				drawables[c] = pkts[c]->_drawables.Allocate<Internal::VertexStreamInstancedFixedSkeletonViewMask_Drawable>(cmdStream._drawCallCounts[c]);
+				pktForAllocations = pkts[c];
+			} else {
+				drawables[c] = nullptr;
+			}
+		}
+		if (!pktForAllocations) return;		// no overlap between our output pkts and what's in 'pkts'
+
+		auto storageAllocation = pktForAllocations->AllocateStorage(Techniques::DrawablesPacket::Storage::Vertex, vertexStream1Data.size());
+		assert(storageAllocation._data.size() == vertexStream1Data.size());
+		if (storageAllocation._data.size() != vertexStream1Data.size()) return;
+
+		std::memcpy(storageAllocation._data.data(), vertexStream1Data.data(), storageAllocation._data.size());
+
+		// We must duplicate the DrawableGeos and update the vertex stream locations in each. Bit awkward, but the Drawable itself doesn't
+		// have any vertex stream offsets/pointers -- only the DrawableGeo
+		// Note that we're going to assume that all geos are actually going to be used (though, perhaps, some are for other geo streams)
+		VLA(Techniques::DrawableGeo*, copiedGeos, constructor._drawableGeos.size());
+		for (unsigned c=0; c<constructor._drawableGeos.size(); ++c) {
+			copiedGeos[c] = pktForAllocations->CreateTemporaryGeo();
+			*copiedGeos[c] = *constructor._drawableGeos[c];
+			assert(copiedGeos[c]->_vertexStreamCount >= 2);
+			assert(!copiedGeos[c]->_vertexStreams[1]._resource);
+			copiedGeos[c]->_vertexStreams[1]._type = Techniques::DrawableGeo::StreamType::PacketStorage;
+			copiedGeos[c]->_vertexStreams[1]._vbOffset += storageAllocation._startOffset;
+		}
+
+		#if defined(_DEBUG)
+			VLA(Internal::VertexStreamInstancedFixedSkeletonViewMask_Drawable*, starts, cmdStream._drawCallCounts.size());
+			for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c) starts[c] = drawables[c];
+		#endif
+
+		const unsigned deformInstanceIdx = ~0u;
+
+		const Float4x4* geoSpaceToNodeSpace = nullptr;
+		unsigned transformMarker = ~0u;
+		std::pair<unsigned, unsigned> baseTransformsRange { 0, 0 };
+		for (auto cmd:cmdStream.GetCmdStream()) {
+			switch (cmd.Cmd()) {
+			case (uint32_t)Assets::ModelCommand::SetTransformMarker:
+				transformMarker = cmd.As<unsigned>();
+				assert(transformMarker+baseTransformsRange.first < baseTransformsRange.second);
+				assert(transformMarker+baseTransformsRange.first < constructor._baseTransforms.size());
+				break;
+			case (uint32_t)DrawableConstructor::Command::BeginElement:
+				baseTransformsRange = constructor._elementBaseTransformRanges[cmd.As<unsigned>()];
+				break;
+			case (uint32_t)DrawableConstructor::Command::SetGeoSpaceToNodeSpace:
+				geoSpaceToNodeSpace = (!cmd.RawData().empty()) ? &cmd.As<Float4x4>() : nullptr;
+				break;
+			case (uint32_t)DrawableConstructor::Command::ExecuteDrawCalls:
+				{
+					struct DrawCallsRef { unsigned _start, _end; };
+					auto& drawCallsRef = cmd.As<DrawCallsRef>();
+
+					for (const auto& dc:MakeIteratorRange(cmdStream._drawCalls.begin()+drawCallsRef._start, cmdStream._drawCalls.begin()+drawCallsRef._end)) {
+						if (!drawables[dc._batchFilter]) continue;
+						auto& drawable = *drawables[dc._batchFilter]++;
+						drawable._geo = copiedGeos[dc._drawableGeoIdx];
+						drawable._pipeline = constructor._pipelineAccelerators[dc._pipelineAcceleratorIdx].get();
+						drawable._descriptorSet = constructor._descriptorSetAccelerators[dc._descriptorSetAcceleratorIdx].get();
+						drawable._drawFn = (Techniques::ExecuteDrawableFn*)&Internal::DrawFn_VertexStreamInstancedFixedSkeletonViewMask;
+						drawable._looseUniformsInterface = &Internal::s_localTransformUSI;
+						assert(dc._firstVertex == 0);
+						drawable._firstIndex = dc._firstIndex;
+						drawable._indexCount = dc._indexCount;
+						drawable._instanceCount = instanceCount;
+						drawable._deformInstanceIdx = deformInstanceIdx;
+					}
+				}
+				break;
+			}
+		}
+
+		#if defined(_DEBUG)
+			for (unsigned c=0; c<cmdStream._drawCallCounts.size(); ++c) assert(((drawables[c] - starts[c]) == cmdStream._drawCallCounts[c]) || !pkts[c]);		// expecting draw call count to match promised count
+		#endif
+	}
+
 	namespace Internal
 	{
 		struct SingleInstanceViewMask_Drawable : public RenderCore::Techniques::Drawable
