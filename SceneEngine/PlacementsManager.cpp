@@ -892,7 +892,7 @@ namespace SceneEngine
                 // cull per-object -- typically used for dynamic placements (eg, in the editor), where we
                 // don't have a quad tree and we allow for more flexibility related to when the bounding volume is calculated
                 if constexpr (DoLateCulling)
-                    if (!buildDrawablesHelper.IntersectViewFrustumTest(*localToWorldI))
+                    if (!buildDrawablesHelper.CalculateViewMask(*localToWorldI))
                         continue;
 
                 ++localToWorldI;
@@ -962,7 +962,7 @@ namespace SceneEngine
             for (auto idx:MakeIteratorRange(start, i)) {
                 *localToWorldI = Combine(objRef[idx]._localToCell, cellToWorld);
                 if constexpr (DoLateCulling)
-                    if (!buildDrawablesHelper.IntersectViewFrustumTest(*localToWorldI))
+                    if (!buildDrawablesHelper.CalculateViewMask(*localToWorldI))
                         continue;
                 ++localToWorldI;
             }

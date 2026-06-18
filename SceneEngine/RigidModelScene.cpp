@@ -637,6 +637,19 @@ namespace SceneEngine
 		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
+	void IRigidModelScene::BuildDrawablesHelper::BuildDrawables(
+		unsigned instanceIdx,
+		RenderCore::UniformsStreamInterface& usi,
+		const RenderCore::Techniques::RetainedUniformsStream& uniforms,
+		uint64_t cmdStream)
+	{
+		assert(cmdStream == 0);
+		assert(!_activeRenderer->_requiresAdditionalVertexStream);
+		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
+			*_activeRenderer->_drawableConstructor, _pkts, usi, uniforms);
+		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
+	}
+
 	void IRigidModelScene::BuildDrawablesHelper::BuildDrawablesInstancedFixedSkeleton(
 		IteratorRange<const Float3x4*> objectToWorlds,
 		IteratorRange<const unsigned*> viewMasks,
@@ -724,17 +737,16 @@ namespace SceneEngine
 			modelRendererConstruction);
 	}
 
-	bool IRigidModelScene::BuildDrawablesHelper::IntersectViewFrustumTest(const Float3x4& localToWorld)
+	uint32_t IRigidModelScene::BuildDrawablesHelper::CalculateViewMask(const Float3x4& localToWorld)
 	{
 		if (_complexCullingVolume && _complexCullingVolume->TestAABB(localToWorld, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second) == CullTestResult::Culled)
-			return false;
+			return 0;
 		uint32_t viewMask = 0;
 		for (unsigned v=0; v<_views.size(); ++v) {
 			auto localToClip = Combine(localToWorld, _views[v]._worldToProjection);
 			viewMask |= (!CullAABB(localToClip, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second, RenderCore::Techniques::GetDefaultClipSpaceType())) << v;
 		}
-		if (!viewMask) return false;
-		return true;
+		return viewMask;
 	}
 
 	bool IRigidModelScene::BuildDrawablesHelper::SetRenderer(void* renderer)

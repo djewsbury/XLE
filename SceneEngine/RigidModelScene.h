@@ -20,7 +20,7 @@ namespace RenderCore { namespace Assets
 
 namespace Assets { class AssetHeapRecord; class OperationContext; }
 namespace RenderCore { namespace BufferUploads { class IManager; class IBatchedResources; using CommandListID = uint32_t; }}
-namespace RenderCore { class IThreadContext; }
+namespace RenderCore { class IThreadContext; class UniformsStreamInterface; }
 namespace RenderCore { namespace Techniques
 {
 	class DrawableConstructor;
@@ -31,6 +31,7 @@ namespace RenderCore { namespace Techniques
 	class ProjectionDesc;
 	class DrawablesPacket;
 	class DeformersPacket;
+	class RetainedUniformsStream;
 }}
 namespace XLEMath { class ArbitraryConvexVolumeTester; }
 namespace std { template<class T> class future; }
@@ -104,6 +105,12 @@ namespace SceneEngine
 			unsigned instanceIdx,
 			const Float3x4& localToWorld, uint32_t viewMask = 1, uint64_t cmdStream = 0);
 
+		void BuildDrawables(
+			unsigned instanceIdx,
+			RenderCore::UniformsStreamInterface& usi,			// usi must out-live the drawables created
+			const RenderCore::Techniques::RetainedUniformsStream& uniforms,
+			uint64_t cmdStream = 0);
+
 		void BuildDrawablesInstancedFixedSkeleton(
 			IteratorRange<const Float3x4*> objectToWorlds,
 			IteratorRange<const unsigned*> viewMasks,
@@ -121,7 +128,7 @@ namespace SceneEngine
 		void CullAndBuildDrawables(
 			unsigned instanceIdx, const Float3x4& localToWorld);
 
-		bool IntersectViewFrustumTest(const Float3x4& localToWorld);
+		uint32_t CalculateViewMask(const Float3x4& localToWorld);
 
 		unsigned GetDrawableCount(unsigned pktIndex) const;
 		void LookupMetadataProvider(DrawableMetadataLookupContext& context);
