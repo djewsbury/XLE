@@ -382,6 +382,23 @@ namespace RenderCore { namespace Assets
         return result;
     }
 
+    bool PredefinedCBLayout::LookupNonArrayElement(
+        /* out */ std::pair<size_t, size_t>& offsets,
+        /* out */ ImpliedTyping::TypeDesc& type,
+        uint64_t hashName,
+        ShaderLanguage lang)
+    {
+        unsigned alignmentRules = AlignmentRulesForLanguage(lang);
+        for (const auto& e:_elements) {
+            if (e._hash != hashName) continue;
+            type = e._type;
+            offsets.first = e._offsetsByLanguage[alignmentRules];
+            offsets.second = offsets.first + e._type.GetSize();
+            return true;
+        }
+        return false;
+    }
+
     unsigned PredefinedCBLayout::GetSize(ShaderLanguage lang) const
     {
         unsigned alignmentRules = AlignmentRulesForLanguage(lang);

@@ -52,6 +52,12 @@ namespace RenderCore { namespace Assets
         unsigned GetSize_NoPostfix(ShaderLanguage lang) const;
         std::vector<ConstantBufferElementDesc> MakeConstantBufferElements(ShaderLanguage lang) const;
 
+        bool LookupNonArrayElement(
+            /* out */ std::pair<size_t, size_t>& offsets,
+            /* out */ ImpliedTyping::TypeDesc& type,
+            uint64_t hashName,
+            ShaderLanguage lang);
+
 		// Reorder the given elements to try to find an ordering that will minimize the
 		// size of the final constant buffer. This accounts for ordering rules such as
 		// preventing vectors from crossing 16 byte boundaries.
