@@ -136,6 +136,8 @@ namespace SceneEngine
 
 	static std::string GetShortDescription(const RenderCore::Assets::ModelRendererConstruction& construction)
 	{
+		if (!construction.GetElementCount()) return "(empty)";
+
 		std::stringstream result;
 		if (construction.GetElementCount() != 1)
 			result << "(Multi-element)";
