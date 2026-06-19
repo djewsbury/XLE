@@ -452,7 +452,7 @@ namespace SceneEngine
 
 				auto dstLock = dst->_renderer.lock();
 				if (dstLock)
-					*dstLock = {};
+					*dstLock = {};	// clear out the existing renderer -- it still exists, but it must be considered invalid
 
 				dst->_pendingRenderer = {};
 				dst->_depVal = std::move(u._depVal);
@@ -632,6 +632,7 @@ namespace SceneEngine
 	{
 		assert(cmdStream == 0);
 		assert(!_activeRenderer->_requiresAdditionalVertexStream);
+		assert(_activeRenderer->_drawableConstructor);		// don't attempt to render when SetRenderer returns false
 		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
@@ -647,6 +648,7 @@ namespace SceneEngine
 	{
 		assert(cmdStream == 0);
 		assert(!_activeRenderer->_requiresAdditionalVertexStream);
+		assert(_activeRenderer->_drawableConstructor);		// don't attempt to render when SetRenderer returns false
 		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
 			*_activeRenderer->_drawableConstructor, _pkts, usi, uniforms);
 		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
@@ -659,6 +661,7 @@ namespace SceneEngine
 	{
 		assert(cmdStream == 0);
 		assert(!_activeRenderer->_requiresAdditionalVertexStream);
+		assert(_activeRenderer->_drawableConstructor);		// don't attempt to render when SetRenderer returns false
 		RenderCore::Techniques::LightWeightBuildDrawables::InstancedFixedSkeleton(
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
@@ -671,6 +674,7 @@ namespace SceneEngine
 	{
 		assert(cmdStream == 0);
 		assert(!_activeRenderer->_requiresAdditionalVertexStream);
+		assert(_activeRenderer->_drawableConstructor);		// don't attempt to render when SetRenderer returns false
 		RenderCore::Techniques::LightWeightBuildDrawables::InstancedFixedSkeleton(
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
@@ -684,6 +688,7 @@ namespace SceneEngine
 	{
 		assert(cmdStream == 0);
 		assert(_activeRenderer->_requiresAdditionalVertexStream);
+		assert(_activeRenderer->_drawableConstructor);		// don't attempt to render when SetRenderer returns false
 		RenderCore::Techniques::LightWeightBuildDrawables::VertexStreamInstancedFixedSkeleton(
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
@@ -693,6 +698,7 @@ namespace SceneEngine
 	void IRigidModelScene::BuildDrawablesHelper::CullAndBuildDrawables(
 		unsigned instanceIdx, const Float3x4& localToWorld)
 	{
+		assert(_activeRenderer->_drawableConstructor);		// don't attempt to render when SetRenderer returns false
 		if (_complexCullingVolume && _complexCullingVolume->TestAABB(localToWorld, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second) == CullTestResult::Culled)
 			return;
 		uint32_t viewMask = 0;
@@ -712,6 +718,7 @@ namespace SceneEngine
 
 	unsigned IRigidModelScene::BuildDrawablesHelper::GetDrawableCount(unsigned pktIndex) const
 	{
+		assert(_activeRenderer->_drawableConstructor);		// don't attempt to render when SetRenderer returns false
 		return RenderCore::Techniques::LightWeightBuildDrawables::GetDrawableCount(
 			*_activeRenderer->_drawableConstructor,
 			pktIndex);
@@ -741,6 +748,7 @@ namespace SceneEngine
 
 	uint32_t IRigidModelScene::BuildDrawablesHelper::CalculateViewMask(const Float3x4& localToWorld)
 	{
+		assert(_activeRenderer->_drawableConstructor);		// don't attempt to render when SetRenderer returns false
 		if (_complexCullingVolume && _complexCullingVolume->TestAABB(localToWorld, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second) == CullTestResult::Culled)
 			return 0;
 		uint32_t viewMask = 0;
