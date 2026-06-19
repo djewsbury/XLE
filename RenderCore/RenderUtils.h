@@ -77,7 +77,8 @@ namespace RenderCore
         const void* end() const     { CheckSubframeHeapReset(); return PtrAdd(_allocation, _size); }
         size_t size() const         { CheckSubframeHeapReset(); return _size; }
 
-		IteratorRange<const void*> AsIteratorRange() const { CheckSubframeHeapReset(); return MakeIteratorRange(begin(), end()); }
+		IteratorRange<void*> AsIteratorRange() { CheckSubframeHeapReset(); return MakeIteratorRange(begin(), end()); }
+        IteratorRange<const void*> AsIteratorRange() const { CheckSubframeHeapReset(); return MakeIteratorRange(begin(), end()); }
 
         SharedPkt() never_throws;
         SharedPkt(const SharedPkt& cloneFrom);
