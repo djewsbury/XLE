@@ -69,7 +69,7 @@ namespace ToolsRig
         GeodesicSphere_Subdivide(v12, v23, v31, sphere_points, sphere_indices, depth - 1);
     }
 
-    static std::pair<std::vector<unsigned>, std::vector<Float3>>     BuildGeodesicSpherePts(int detail)
+    std::pair<std::vector<unsigned>, std::vector<Float3>>     BuildIndexedGeodesicSphereP(int detail)
     {
 
             //  
@@ -110,7 +110,7 @@ namespace ToolsRig
             //      build a geodesic sphere at the origin with radius 1     //
         std::vector<Float3> spherePoints;
         std::vector<unsigned> sphereIndices;
-        std::tie(sphereIndices, spherePoints) = BuildGeodesicSpherePts(detail);
+        std::tie(sphereIndices, spherePoints) = BuildIndexedGeodesicSphereP(detail);
 
         std::vector<Internal::Vertex3D> result;
         result.reserve(sphereIndices.size());
@@ -348,7 +348,7 @@ namespace ToolsRig
     {
         std::vector<Float3> spherePoints;
         std::vector<unsigned> sphereIndices;
-        std::tie(sphereIndices, spherePoints) = BuildGeodesicSpherePts(detail);
+        std::tie(sphereIndices, spherePoints) = BuildIndexedGeodesicSphereP(detail);
         std::vector<Float3> result;
         result.reserve(sphereIndices.size());
         for (auto i:sphereIndices) result.push_back(spherePoints[i]);
@@ -362,7 +362,7 @@ namespace ToolsRig
         // just going to do it the easy way by deleting the triangles we don't want
         std::vector<Float3> spherePoints;
         std::vector<unsigned> sphereIndices;
-        std::tie(sphereIndices, spherePoints) = BuildGeodesicSpherePts(detail);
+        std::tie(sphereIndices, spherePoints) = BuildIndexedGeodesicSphereP(detail);
 
         std::vector<Float3> result;
         result.reserve(sphereIndices.size());
@@ -383,7 +383,7 @@ namespace ToolsRig
     {
         std::vector<Float3> spherePoints;
         std::vector<unsigned> sphereIndices;
-        std::tie(sphereIndices, spherePoints) = BuildGeodesicSpherePts(detail);
+        std::tie(sphereIndices, spherePoints) = BuildIndexedGeodesicSphereP(detail);
 
         auto i = sphereIndices.begin();
         while (i != sphereIndices.end()) {

@@ -51,6 +51,7 @@ namespace ToolsRig
     std::vector<Float3>     BuildRoughGeodesicHemiSphereP(int detail = 4);
     std::vector<Float3>     BuildCubeP();
 
+    std::pair<std::vector<unsigned>, std::vector<Float3>>     BuildIndexedGeodesicSphereP(int detail = 4);
     std::pair<std::vector<unsigned>, std::vector<Float3>>     BuildIndexedRoughGeodesicHemiSphereP(int detail = 4);
 }
 
