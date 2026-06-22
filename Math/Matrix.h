@@ -37,8 +37,8 @@ namespace XLEMath
 
         template<typename BasicType, int I, int J>
 			inline bool Equivalent(
-				cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis> lhs, 
-				cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis> rhs, BasicType tolerance)
+				const cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis>& lhs, 
+				const cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis>& rhs, BasicType tolerance)
 			{
                 for (unsigned j=0; j<J; ++j)
 				    for (unsigned i=0; i<I; ++i)
@@ -47,34 +47,28 @@ namespace XLEMath
 				return true;
 			}
 
+        template<typename BasicType, int I, int J>
+			inline cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis> LinearInterpolate(
+				const cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis>& lhs,
+				const cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis>& rhs, BasicType alpha)
+			{
+                cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis> result;
+                for (unsigned j=0; j<J; ++j)
+				    for (unsigned i=0; i<I; ++i)
+				    	result(i,j) = LinearInterpolate(lhs(i,j), rhs(i,j), alpha);
+				return result;
+			}
+
+        template<typename BasicType, int I, int J>
+            auto        Transpose(const cml::matrix<BasicType, cml::fixed<I, J>, cml::col_basis>& input) -> cml::matrix<BasicType, cml::fixed<J, I>, cml::col_basis> { return cml::transpose(input); }
+
+        template<typename BasicType, int I>
+            auto        Inverse(const cml::matrix<BasicType, cml::fixed<I, I>, cml::col_basis>& input) -> cml::matrix<BasicType, cml::fixed<I, I>, cml::col_basis> { return cml::inverse(input); }
+
+        template<typename BasicType, int I>
+            auto        Determinant(const cml::matrix<BasicType, cml::fixed<I, I>, cml::col_basis>& input) -> BasicType { return cml::determinant(input); }
+
     #endif
-
-    inline Float4x4 LinearInterpolate(const Float4x4& lhs, const Float4x4& rhs, float alpha)
-    {
-        Float4x4 result;
-        for (unsigned i=0; i<4; ++i)
-            for (unsigned j=0; j<4; ++j)
-                result(i,j) = LinearInterpolate(lhs(i,j), rhs(i,j), alpha);
-        return result;
-    }
-
-    inline bool Equivalent(const Float4x4& a, const Float4x4& b, Float4x4::value_type tolerance)
-    {
-        for (unsigned i=0; i<4; ++i)
-            for (unsigned j=0; j<4; ++j)
-                if (!Equivalent(a(i, j), b(i, j), tolerance))
-                    return false;
-        return true;
-    }
-
-    T1(Primitive) Matrix4x4T<Primitive>     Transpose(const Matrix4x4T<Primitive>& input)        { return cml::transpose(input); }
-    T1(Primitive) Matrix3x3T<Primitive>     Transpose(const Matrix3x3T<Primitive>& input)        { return cml::transpose(input); }
-
-    T1(Primitive) Matrix4x4T<Primitive>        Inverse(const Matrix4x4T<Primitive>& input)          { return cml::inverse(input); }
-    T1(Primitive) Matrix3x3T<Primitive>        Inverse(const Matrix3x3T<Primitive>& input)          { return cml::inverse(input); }
-
-    T1(Primitive) Primitive           Determinant(const Matrix3x3T<Primitive>& input)      { return cml::determinant(input); }
-    T1(Primitive) Primitive           Determinant(const Matrix4x4T<Primitive>& input)      { return cml::determinant(input); }
 
     Float3x3        LeftMultiplyByTranspose(const Float3x3& input);
  
