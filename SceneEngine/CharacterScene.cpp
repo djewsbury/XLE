@@ -91,7 +91,7 @@ namespace SceneEngine
 			std::shared_ptr<RenderCore::Assets::AnimationSetScaffold> _animSet;
 			RenderCore::Assets::AnimationSetBinding _animSetBinding;
 			RenderCore::Techniques::ModelConstructionSkeletonBinding _modelToSkeletonBinding;
-			std::vector<Float4x4> _skeletonMachineOutput;
+			mutable std::vector<Float4x4> _skeletonMachineOutput;
 			#if XLE_STORE_HISTORICAL_SKELETON_OUTPUTS
 				std::vector<Float4x4> _defaultPoseSkeletonMachineOutput;
 			#endif
@@ -107,6 +107,7 @@ namespace SceneEngine
 			Animator _animator;
 			BitHeap _allocatedInstances;
 			std::shared_future<CharacterSceneInternal::Renderer> _pendingRenderer;
+			std::shared_future<CharacterSceneInternal::Animator> _pendingAnimator;
 			::Assets::DependencyValidation _depVal;
 		};
 
@@ -170,6 +171,8 @@ namespace SceneEngine
 		std::vector<std::weak_ptr<CharacterSceneInternal::RendererEntry>> _renderers;
 		std::vector<CharacterSceneInternal::PendingUpdate> _pendingUpdates;
 		std::vector<CharacterSceneInternal::PendingExceptionUpdate> _pendingExceptionUpdates;
+
+		friend class ICharacterScene::AnimationConfigureHelper;
 	};
 
 
@@ -431,7 +434,7 @@ namespace SceneEngine
 			});
 
 		std::promise<CharacterSceneInternal::Animator> animatorPromise;
-		auto animatorFuture = animatorPromise.get_future();
+		newEntry->_pendingAnimator = animatorPromise.get_future();
 
 		::Assets::WhenAll(newEntry->_pendingRenderer, newEntry->_animSet->_animSetFuture, newEntry->_model->_completedConstruction).ThenConstructToPromise(
 			std::move(animatorPromise),
@@ -465,8 +468,8 @@ namespace SceneEngine
 				return result;
 			});
 
-		::Assets::WhenAll(newEntry->_pendingRenderer, std::move(animatorFuture)).Then(
-			[dstEntryWeak=std::weak_ptr<CharacterSceneInternal::RendererEntry>(newEntry), sceneWeak=weak_from_this()](auto rendererFuture, auto animatorFuture) {
+		::Assets::WhenAll(newEntry->_pendingRenderer, newEntry->_pendingAnimator).Then(
+			[dstEntryWeak=std::weak_ptr<CharacterSceneInternal::RendererEntry>(newEntry), sceneWeak=weak_from_this()](const auto& rendererFuture, const auto& animatorFuture) {
 				auto scene = sceneWeak.lock();
 				if (!scene) return;
 
@@ -722,6 +725,30 @@ namespace SceneEngine
 		}
 	}
 
+	bool ICharacterScene::AnimationConfigureHelper::StallAndSetRenderer(void* renderer)
+	{
+		auto* realRenderer = (CharacterSceneInternal::RendererEntry*)renderer;
+		if (realRenderer->_renderer._drawableConstructor) {
+			_activeAnimator = &realRenderer->_animator;
+			_activeSkeletonMachine = &realRenderer->_renderer.GetSkeletonMachine();
+			return true;
+		} else if (realRenderer->_pendingRenderer.valid() && realRenderer->_pendingAnimator.valid()) {
+			ScopedLock(((CharacterScene*)_scene)->_poolLock);
+			TRY {
+				YieldToPool(realRenderer->_pendingAnimator);
+				YieldToPool(realRenderer->_pendingRenderer);
+				_activeAnimator = &realRenderer->_pendingAnimator.get();
+				_activeSkeletonMachine = &realRenderer->_pendingRenderer.get().GetSkeletonMachine();
+				return true;
+			} CATCH(...) {
+			} CATCH_END
+		}
+
+		_activeAnimator = nullptr;
+		_activeSkeletonMachine = nullptr;
+		return false;
+	}
+
 	#if XLE_STORE_HISTORICAL_SKELETON_OUTPUTS
 		static IteratorRange<Float4x4*> GetInstanceSkeletonOutput(CharacterSceneInternal::Animator& animator, unsigned instanceIdx, unsigned pingPongBuffer)
 		{
@@ -886,6 +913,7 @@ namespace SceneEngine
 			l->_renderer = std::move(u._renderer);
 			l->_animator = std::move(u._animator);
 			l->_pendingRenderer = {};
+			l->_pendingAnimator = {};
 			// todo -- set dep val
 		}
 		_pendingUpdates.clear();
@@ -894,6 +922,7 @@ namespace SceneEngine
 			if (!l) continue;
 			l->_depVal = std::move(u._depVal);
 			l->_pendingRenderer = {};
+			l->_pendingAnimator = {};
 			// todo -- record exception msg
 		}
 		_pendingExceptionUpdates.clear();

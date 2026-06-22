@@ -117,6 +117,8 @@ namespace SceneEngine
 	{
 	public:
 		bool SetRenderer(void* renderer);
+		bool StallAndSetRenderer(void* renderer);
+
 		void ApplySingleAnimation(unsigned instanceIdx, uint64_t id, float time);
 		void ApplyAnimation(unsigned instanceIdx, const uint64_t ids[], const float times[], const float weights[], unsigned animationCount);		// weights must be pre-normalized
 		void ApplyAnimation(unsigned instanceIdx, IteratorRange<const Float4x4*> skeletonMachineOutput);
@@ -126,7 +128,7 @@ namespace SceneEngine
 		AnimationConfigureHelper(ICharacterScene& scene);
 	private:
 		ICharacterScene* _scene;
-		CharacterSceneInternal::Animator* _activeAnimator;
+		const CharacterSceneInternal::Animator* _activeAnimator;
 		const RenderCore::Assets::SkeletonMachine* _activeSkeletonMachine;
 	};
 
