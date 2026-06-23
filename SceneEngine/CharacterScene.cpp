@@ -22,6 +22,7 @@
 #include "../RenderCore/Assets/ModelScaffold.h"
 #include "../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../RenderCore/Assets/AnimationScaffoldInternal.h"
+#include "../RenderCore/Assets/SkeletonMachine.h"
 #include "../RenderCore/Assets/CompoundObject.h"
 #include "../Assets/AssetTraits.h"
 #include "../Assets/ConfigFileContainer.h"
@@ -71,6 +72,7 @@ namespace SceneEngine
 			std::shared_ptr<RenderCore::Techniques::DeformAccelerator> _deformAccelerator;
 			std::shared_ptr<RenderCore::Assets::SkeletonScaffold> _skeletonScaffold;
 			std::shared_ptr<RenderCore::Assets::ModelScaffold> _firstModelScaffold;
+			std::shared_ptr<ICharacterScene::SkeletonMachine> _interfaceSkeletonMachine;
 			RenderCore::BufferUploads::CommandListID _completionCmdList;
 			std::pair<Float3, Float3> _aabb;
 
@@ -139,8 +141,7 @@ namespace SceneEngine
 		void OnFrameBarrier() override;
 		void CancelConstructions() override;
 
-		std::shared_future<RenderCore::Assets::SkeletonBinding> CreateSkeletonBinding(OpaquePtr renderer, IteratorRange<const uint64_t*> inputInterface) override;
-		std::shared_future<SkeletonMachine> GetSkeletonMachine(OpaquePtr renderer) override;
+		std::future<std::shared_ptr<SkeletonMachine>> GetSkeletonMachine(OpaquePtr renderer) override;
 		std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> GetModelRendererConstruction(OpaquePtr model) override;
 		std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformAccelerator>> GetDeformAccelerator(OpaquePtr renderer) override;
 		std::shared_future<void> GetFutureForRenderer(OpaquePtr renderer) override;
@@ -411,6 +412,13 @@ namespace SceneEngine
 								} else {
 									renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
 								}
+								{
+									renderer._interfaceSkeletonMachine = std::make_shared<ICharacterScene::SkeletonMachine>();
+									auto srcCmdStream = renderer.GetSkeletonMachine().GetCommandStream();
+									auto srcOutputInterface = renderer.GetSkeletonMachine().GetOutputInterface();
+									renderer._interfaceSkeletonMachine->_cmdStream.insert(renderer._interfaceSkeletonMachine->_cmdStream.end(), srcCmdStream.begin(), srcCmdStream.end());
+									renderer._interfaceSkeletonMachine->_outputInterface.insert(renderer._interfaceSkeletonMachine->_outputInterface.end(), srcOutputInterface.begin(), srcOutputInterface.end());
+								}
 								return renderer;
 							});
 					} else {
@@ -423,6 +431,13 @@ namespace SceneEngine
 								renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 								if (completedConstruction->GetElementCount() != 0)
 									renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
+								{
+									renderer._interfaceSkeletonMachine = std::make_shared<ICharacterScene::SkeletonMachine>();
+									auto srcCmdStream = renderer.GetSkeletonMachine().GetCommandStream();
+									auto srcOutputInterface = renderer.GetSkeletonMachine().GetOutputInterface();
+									renderer._interfaceSkeletonMachine->_cmdStream.insert(renderer._interfaceSkeletonMachine->_cmdStream.end(), srcCmdStream.begin(), srcCmdStream.end());
+									renderer._interfaceSkeletonMachine->_outputInterface.insert(renderer._interfaceSkeletonMachine->_outputInterface.end(), srcOutputInterface.begin(), srcOutputInterface.end());
+								}
 								return renderer;
 							});
 					}
@@ -491,56 +506,21 @@ namespace SceneEngine
 		return newEntry;
 	}
 
-	std::shared_future<RenderCore::Assets::SkeletonBinding> CharacterScene::CreateSkeletonBinding(OpaquePtr renderer, IteratorRange<const uint64_t*> inputInterface)
+	auto CharacterScene::GetSkeletonMachine(OpaquePtr renderer) -> std::future<std::shared_ptr<ICharacterScene::SkeletonMachine>>
 	{
 		assert(renderer);
 		ScopedLock(_poolLock);
 
-		std::promise<RenderCore::Assets::SkeletonBinding> promise;
+		std::promise<std::shared_ptr<ICharacterScene::SkeletonMachine>> promise;
 		auto result = promise.get_future();
 
 		auto& rendererEntry = *((const CharacterSceneInternal::RendererEntry*)renderer.get());
 		if (rendererEntry._pendingRenderer.valid()) {
 			::Assets::WhenAll(rendererEntry._pendingRenderer).CheckImmediately().ThenConstructToPromise(
 				std::move(promise),
-				[ii = std::vector<uint64_t>{inputInterface.begin(), inputInterface.end()}](const auto& renderer) {
-					return RenderCore::Assets::SkeletonBinding { renderer.GetSkeletonMachine().GetOutputInterface(), ii };
-				});
-		} else {
-			promise.set_value(
-				RenderCore::Assets::SkeletonBinding {
-					rendererEntry._renderer.GetSkeletonMachine().GetOutputInterface(),
-					inputInterface });
-		}
-
-		return result;
-	}
-
-	static CharacterScene::SkeletonMachine MakeCharacterSceneSkeletonMachine(const RenderCore::Assets::SkeletonMachine& skm)
-	{
-		CharacterScene::SkeletonMachine result;
-		result._outputInterface.insert(result._outputInterface.end(), skm.GetOutputInterface()._outputMatrixNames, skm.GetOutputInterface()._outputMatrixNames+skm.GetOutputInterface()._outputMatrixNameCount);
-		result._cmdStream.insert(result._cmdStream.end(), skm.GetCommandStream().begin(),skm.GetCommandStream().end());
-		return result;
-	}
-
-	auto CharacterScene::GetSkeletonMachine(OpaquePtr renderer) -> std::shared_future<SkeletonMachine>
-	{
-		assert(renderer);
-		ScopedLock(_poolLock);
-
-		std::promise<SkeletonMachine> promise;
-		auto result = promise.get_future();
-
-		auto& rendererEntry = *((const CharacterSceneInternal::RendererEntry*)renderer.get());
-		if (rendererEntry._pendingRenderer.valid()) {
-			::Assets::WhenAll(rendererEntry._pendingRenderer).CheckImmediately().ThenConstructToPromise(
-				std::move(promise),
-				[](const auto& renderer) -> SkeletonMachine {
-					return MakeCharacterSceneSkeletonMachine(renderer.GetSkeletonMachine());
-				});
+				[](const auto& renderer) { return renderer._interfaceSkeletonMachine; });
 		} else
-			promise.set_value(MakeCharacterSceneSkeletonMachine(rendererEntry._renderer.GetSkeletonMachine()));
+			promise.set_value(rendererEntry._renderer._interfaceSkeletonMachine);
 		return result;
 	}
 

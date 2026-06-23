@@ -43,10 +43,8 @@ namespace SceneEngine
 		class AnimationConfigureHelper;
 		AnimationConfigureHelper BeginAnimationConfigure();
 
-		virtual std::shared_future<RenderCore::Assets::SkeletonBinding> CreateSkeletonBinding(OpaquePtr renderer, IteratorRange<const uint64_t*> inputInterface) = 0;
-
 		struct SkeletonMachine { std::vector<uint64_t> _outputInterface; std::vector<uint32_t> _cmdStream; };
-		virtual std::shared_future<SkeletonMachine> GetSkeletonMachine(OpaquePtr renderer) = 0;
+		virtual std::future<std::shared_ptr<SkeletonMachine>> GetSkeletonMachine(OpaquePtr renderer) = 0;
 
 		virtual std::shared_future<std::shared_ptr<RenderCore::Assets::ModelRendererConstruction>> GetModelRendererConstruction(OpaquePtr model) = 0;
 		virtual std::shared_future<std::shared_ptr<RenderCore::Techniques::DeformAccelerator>> GetDeformAccelerator(OpaquePtr renderer) = 0;		// note that the opaque pointer is "renderer", not "deformers"
