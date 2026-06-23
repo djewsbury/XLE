@@ -599,6 +599,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
+		assert(_activeRenderer->_deformAccelerator);
 		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
@@ -618,6 +619,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
+		assert(_activeRenderer->_deformAccelerator);
 		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
@@ -640,6 +642,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			composedTransform, instanceIdx, viewMask);
+		assert(_activeRenderer->_deformAccelerator);
 		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
@@ -659,6 +662,7 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
+		assert(_activeRenderer->_deformAccelerator);
 		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 

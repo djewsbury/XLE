@@ -77,7 +77,7 @@ namespace RenderCore { namespace Techniques
 		};
 		Deformable& Allocate();
 
-		void Queue(DeformAccelerator& da, InstanceToken instance) { Allocate() = Deformable{&da, instance}; }
+		void Queue(DeformAccelerator& da, InstanceToken instance) { assert(&da); Allocate() = Deformable{&da, instance}; }
 
 		DeformersPacket();
 		~DeformersPacket();

@@ -637,7 +637,8 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
-		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
+		if (_activeRenderer->_deformAccelerator)
+			_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
 	void IRigidModelScene::BuildDrawablesHelper::BuildDrawables(
@@ -651,7 +652,8 @@ namespace SceneEngine
 		assert(_activeRenderer->_drawableConstructor);		// don't attempt to render when SetRenderer returns false
 		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
 			*_activeRenderer->_drawableConstructor, _pkts, usi, uniforms);
-		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
+		if (_activeRenderer->_deformAccelerator)
+			_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
 	void IRigidModelScene::BuildDrawablesHelper::BuildDrawablesInstancedFixedSkeleton(
@@ -713,7 +715,8 @@ namespace SceneEngine
 			*_activeRenderer->_drawableConstructor,
 			_pkts,
 			localToWorld, instanceIdx, viewMask);
-		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
+		if (_activeRenderer->_deformAccelerator)
+			_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
 	unsigned IRigidModelScene::BuildDrawablesHelper::GetDrawableCount(unsigned pktIndex) const

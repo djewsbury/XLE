@@ -347,6 +347,7 @@ namespace RenderCore { namespace Techniques
 		};
 		std::vector<DeformerAndInstances> deformersAndInstances;				// candidate for subframe heap
 		{
+			assert(pkt._deformables.empty() || pkt._deformables[0]._deformAccelerator != nullptr);		// don't push null deform accelerators
 			deformersAndInstances.reserve(pkt._deformables.size());
 			pkt._deformables.push_back(DeformersPacket::Deformable{nullptr, ~0u});		// sentinel
 			auto i = pkt._deformables.begin();
