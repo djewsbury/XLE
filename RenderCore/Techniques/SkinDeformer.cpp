@@ -9,6 +9,7 @@
 #include "Services.h"
 #include "SubFrameEvents.h"
 #include "DeformerConstruction.h"
+#include "../Assets/SkeletonMachine.h"
 #include "../Assets/ModelRendererConstruction.h"
 #include "../Assets/ModelScaffold.h"
 #include "../Assets/ModelMachine.h"
@@ -68,7 +69,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	RenderCore::Assets::SkeletonBinding CPUSkinDeformer::CreateBinding(
-		const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const
+		SkeletonMachineOutputInterface skeletonMachineOutputInterface) const
 	{
 		return RenderCore::Assets::SkeletonBinding{skeletonMachineOutputInterface, _jointInputInterface};
 	}
@@ -338,7 +339,7 @@ namespace RenderCore { namespace Techniques
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	RenderCore::Assets::SkeletonBinding GPUSkinDeformer::CreateBinding(
-		const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const
+		SkeletonMachineOutputInterface skeletonMachineOutputInterface) const
 	{
 		return RenderCore::Assets::SkeletonBinding{skeletonMachineOutputInterface, _jointInputInterface};
 	}
@@ -859,7 +860,7 @@ namespace RenderCore { namespace Techniques
 						RenderCore::Assets::SkeletonBinding defaultSkeletonBinding;
 						std::vector<Float4x4> defaultSkeletonMachineOutput;
 						if (skeletonMachine) {
-							defaultSkeletonBinding = {skeletonMachine->GetOutputInterface(), modelScaffold->FindCommandStreamInputInterface()};
+							defaultSkeletonBinding = { skeletonMachine->GetOutputInterface(), modelScaffold->FindCommandStreamInputInterface() };
 							defaultSkeletonMachineOutput.resize(skeletonMachine->GetOutputMatrixCount(), Identity<Float4x4>());
 							skeletonMachine->GenerateOutputTransforms(MakeIteratorRange(defaultSkeletonMachineOutput));
 						}

@@ -29,7 +29,7 @@ namespace RenderCore { namespace Techniques
 		virtual void* QueryInterface(size_t) override;
 
 		RenderCore::Assets::SkeletonBinding CreateBinding(
-			const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const override;
+			SkeletonMachineOutputInterface skeletonMachineOutputInterface) const override;
 
 		void FeedInSkeletonMachineResults(
 			unsigned instanceIdx,
@@ -100,7 +100,7 @@ namespace RenderCore { namespace Techniques
 		virtual void* QueryInterface(size_t) override;
 
 		RenderCore::Assets::SkeletonBinding CreateBinding(
-			const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const override;
+			SkeletonMachineOutputInterface skeletonMachineOutputInterface) const override;
 
 		void FeedInSkeletonMachineResults(
 			unsigned instanceIdx,

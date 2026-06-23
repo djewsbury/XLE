@@ -179,6 +179,8 @@ namespace RenderCore { namespace Techniques
 		const std::shared_ptr<IDeformAcceleratorPool>& deformAcceleratorPool,
 		const Assets::ModelRendererConstruction& rendererConstruction);
 
+	using SkeletonMachineOutputInterface = IteratorRange<const uint64_t*>;
+
 	class RendererSkeletonInterface
 	{
 	public:
@@ -187,10 +189,10 @@ namespace RenderCore { namespace Techniques
 			IteratorRange<const Float4x4*> skeletonMachineOutput);
 
 		RendererSkeletonInterface(
-			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
+			SkeletonMachineOutputInterface smOutputInterface,
 			IteratorRange<const std::shared_ptr<IGeoDeformer>*> skinDeformers);
 		RendererSkeletonInterface(
-			const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
+			SkeletonMachineOutputInterface smOutputInterface,
 			IGeoDeformerConductor& geoDeformerInfrastructure,
 			::Assets::DependencyValidation depVal = {});
 		~RendererSkeletonInterface();

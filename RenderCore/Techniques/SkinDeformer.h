@@ -21,11 +21,12 @@ namespace RenderCore { namespace Techniques
 	std::shared_ptr<IDeformConfigure> CreateGPUSkinDeformerConfigure(std::shared_ptr<PipelineCollection> pipelineCollection);
 	std::shared_ptr<IDeformConfigure> CreateCPUSkinDeformerConfigure();
 
+	using SkeletonMachineOutputInterface = IteratorRange<const uint64_t*>;
+
 	class ISkinDeformer
 	{
 	public:
-		virtual RenderCore::Assets::SkeletonBinding CreateBinding(
-			const RenderCore::Assets::SkeletonMachine::OutputInterface& skeletonMachineOutputInterface) const = 0;
+		virtual RenderCore::Assets::SkeletonBinding CreateBinding(SkeletonMachineOutputInterface) const = 0;
 
 		virtual void FeedInSkeletonMachineResults(
 			unsigned instanceIdx,

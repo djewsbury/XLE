@@ -13,9 +13,6 @@
 
 namespace RenderCore { namespace Assets 
 {
-    class SkinningBindingBox;
-    class RawAnimationCurve;
-
     #pragma pack(push)
     #pragma pack(1)
 
@@ -25,33 +22,24 @@ namespace RenderCore { namespace Assets
     class SkeletonMachine
     {
     public:
-        unsigned                        GetOutputMatrixCount() const        { return _outputMatrixCount; }
+        unsigned GetOutputMatrixCount() const        { return _outputInterface.size(); }
 
         void GenerateOutputTransforms   (   IteratorRange<Float4x4*> output,
                                             IteratorRange<const void*> parameterBlock = {}) const;
 
 		void CalculateParentPointers(IteratorRange<unsigned*> output) const;
 
-        struct OutputInterface
-        {
-            uint64_t*   _outputMatrixNames = nullptr;
-            size_t      _outputMatrixNameCount = 0;
-        };
-
-        const OutputInterface&  GetOutputInterface() const  { return _outputInterface; }
+        using OutputInterface = IteratorRange<const uint64_t*>;
+        OutputInterface  GetOutputInterface() const  { return _outputInterface; }
 
 		std::vector<StringSection<>> GetOutputMatrixNames() const;
-        IteratorRange<const uint32_t*> GetCommandStream() const { return MakeIteratorRange(_commandStream, &_commandStream[_commandStreamSize]); }
+        IteratorRange<const uint32_t*> GetCommandStream() const { return _commandStream; }
 
         SkeletonMachine();
         ~SkeletonMachine();
     protected:
-        uint32_t*			_commandStream;
-        size_t              _commandStreamSize;     // size in number of uint32_t's
-        unsigned            _outputMatrixCount;
-
-        OutputInterface     _outputInterface;   // todo -- can this just become a SerializableVector for simplicity?
-
+        SerializableVector<uint32_t>    _commandStream;
+        SerializableVector<uint64_t>    _outputInterface;
 		SerializableVector<char>		_outputMatrixNames;
     };
 

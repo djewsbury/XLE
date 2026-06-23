@@ -9,6 +9,7 @@
 #include "../../RenderCore/Assets/ModelScaffold.h"
 #include "../../RenderCore/Assets/CompiledMaterialSet.h"
 #include "../../RenderCore/Assets/AnimationScaffoldInternal.h"
+#include "../../RenderCore/Assets/SkeletonMachine.h"
 #include "../../RenderCore/Techniques/SkinDeformer.h"
 #include "../../RenderCore/Techniques/SimpleModelRenderer.h"
 #include "../../RenderCore/Techniques/PipelineAccelerator.h"
@@ -61,7 +62,7 @@ namespace ToolsRig
 	static std::shared_ptr<RendererSkeletonInterface> BuildSkeletonInterface(
 		SimpleModelRenderer& renderer,
 		RenderCore::Techniques::IDeformAcceleratorPool& deformAccelerators,
-		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface)
+		IteratorRange<const uint64_t*> smOutputInterface)
 	{
 		auto* deformAcc = renderer.GetDeformAccelerator().get();
 		if (!deformAcc) return nullptr;

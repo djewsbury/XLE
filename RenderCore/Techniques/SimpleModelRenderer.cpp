@@ -19,10 +19,11 @@
 #include "../Assets/ModelMachine.h"		// for DrawCallDesc
 #include "../Assets/CompiledMaterialSet.h"
 #include "../Assets/AnimationBindings.h"
+#include "../Assets/SkeletonMachine.h"
 #include "../Assets/CompoundObject.h"
-#include "../Assets/IArtifact.h"
-#include "../Assets/IntermediateCompilers.h"
 #include "../../Formatters/TextFormatter.h"
+#include "../../Assets/IArtifact.h"
+#include "../../Assets/IntermediateCompilers.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/Marker.h"
 #include "../../Assets/Continuation.h"
@@ -879,13 +880,13 @@ namespace RenderCore { namespace Techniques
 					secondarySkeleton->GenerateOutputTransforms(MakeIteratorRange(secondaryOutputs, &secondaryOutputs[secondarySkeleton->GetOutputMatrixCount()]));
 
 					///////
-					auto& primaryInterface = primarySkeleton->GetOutputInterface();
-					auto& secondaryInterface = secondarySkeleton->GetOutputInterface();
+					auto primaryInterface = primarySkeleton->GetOutputInterface();
+					auto secondaryInterface = secondarySkeleton->GetOutputInterface();
 					for (size_t c=0; c<cmdStreamInput.size(); ++c) {
 						uint64_t name = cmdStreamInput[c];
 						bool gotMatch = false;
-						for (size_t c2=0; c2<primaryInterface._outputMatrixNameCount; ++c2)
-							if (primaryInterface._outputMatrixNames[c2] == name) {
+						for (size_t c2=0; c2<primaryInterface.size(); ++c2)
+							if (primaryInterface[c2] == name) {
 								elementBindingRange[c] = unsigned(c2);
 								unanimatedTransformsRange[c] = primaryOutputs[c2];
 								isBoundRange[c] = true;
@@ -894,8 +895,8 @@ namespace RenderCore { namespace Techniques
 							}
 
 						if (!gotMatch)
-							for (size_t c2=0; c2<secondaryInterface._outputMatrixNameCount; ++c2)
-								if (secondaryInterface._outputMatrixNames[c2] == name) {
+							for (size_t c2=0; c2<secondaryInterface.size(); ++c2)
+								if (secondaryInterface[c2] == name) {
 									unanimatedTransformsRange[c] = secondaryOutputs[c2];
 									isBoundRange[c] = true;
 									gotMatch = true;
@@ -910,11 +911,11 @@ namespace RenderCore { namespace Techniques
 					primarySkeleton->GenerateOutputTransforms(MakeIteratorRange(primaryOutputs, &primaryOutputs[primarySkeleton->GetOutputMatrixCount()]));
 					
 					///////
-					auto& primaryInterface = primarySkeleton->GetOutputInterface();
+					auto primaryInterface = primarySkeleton->GetOutputInterface();
 					for (size_t c=0; c<cmdStreamInput.size(); ++c) {
 						uint64_t name = cmdStreamInput[c];
-						for (size_t c2=0; c2<primaryInterface._outputMatrixNameCount; ++c2)
-							if (primaryInterface._outputMatrixNames[c2] == name) {
+						for (size_t c2=0; c2<primaryInterface.size(); ++c2)
+							if (primaryInterface[c2] == name) {
 								elementBindingRange[c] = unsigned(c2);
 								unanimatedTransformsRange[c] = primaryOutputs[c2];
 								isBoundRange[c] = true;
@@ -941,7 +942,7 @@ namespace RenderCore { namespace Techniques
 	constexpr auto s_skinDeformerInterface = TypeHashCode<ISkinDeformer>;
 
 	RendererSkeletonInterface::RendererSkeletonInterface(
-		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
+		SkeletonMachineOutputInterface smOutputInterface,
 		IteratorRange<const std::shared_ptr<IGeoDeformer>*> skinDeformers)
 	{
 		_deformers.reserve(skinDeformers.size());
@@ -954,7 +955,7 @@ namespace RenderCore { namespace Techniques
 	}
 
 	RendererSkeletonInterface::RendererSkeletonInterface(
-		const RenderCore::Assets::SkeletonMachine::OutputInterface& smOutputInterface,
+		SkeletonMachineOutputInterface smOutputInterface,
 		IGeoDeformerConductor& geoDeformerInfrastructure,
 		::Assets::DependencyValidation depVal)
 	: _depVal(depVal)
@@ -1044,7 +1045,7 @@ namespace RenderCore { namespace Techniques
 			skeletonActual->GetSkeletonMachine().GetOutputInterface(),
 			scaffoldActual->FindCommandStreamInputInterface() };
 
-		std::vector<Float4x4> defaultTransforms(skeletonActual->GetSkeletonMachine().GetOutputInterface()._outputMatrixNameCount);
+		std::vector<Float4x4> defaultTransforms(skeletonActual->GetSkeletonMachine().GetOutputMatrixCount());
 		skeletonActual->GetSkeletonMachine().GenerateOutputTransforms(MakeIteratorRange(defaultTransforms));
 
 		for (unsigned geoIdx=0; geoIdx<scaffoldActual->GetGeoCount(); ++geoIdx) {

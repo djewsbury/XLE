@@ -18,6 +18,7 @@
 #include "../../../RenderCore/Techniques/CommonUtils.h"
 #include "../../../RenderCore/Techniques/PipelineCollection.h"
 #include "../../../RenderCore/Assets/ModelRendererConstruction.h"
+#include "../../../RenderCore/Assets/SkeletonMachine.h"
 #include "../../../RenderCore/Metal/DeviceContext.h"		// required for memory barrier
 #include "../../../RenderCore/GeoProc/MeshDatabase.h"
 #include "../../../RenderCore/GeoProc/NascentModel.h"

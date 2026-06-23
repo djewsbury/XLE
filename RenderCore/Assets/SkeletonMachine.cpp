@@ -12,22 +12,22 @@ namespace RenderCore { namespace Assets
 		IteratorRange<Float4x4*> output,
 		IteratorRange<const void*> parameterBlock) const
 	{
-		if (output.size() < _outputMatrixCount)
+		if (output.size() < _outputInterface.size())
 			Throw(::Exceptions::BasicLabel("Output buffer to SkeletonMachine::GenerateOutputTransforms is too small"));
 		RenderCore::Assets::GenerateOutputTransforms(
 			output, parameterBlock,
-			MakeIteratorRange(_commandStream, _commandStream + _commandStreamSize));
+			_commandStream);
 	}
 
 	void SkeletonMachine::CalculateParentPointers(IteratorRange<unsigned*> output) const
 	{
-		RenderCore::Assets::CalculateParentPointers(output, MakeIteratorRange(_commandStream, _commandStream + _commandStreamSize));
+		RenderCore::Assets::CalculateParentPointers(output, _commandStream);
 	}
 
 	std::vector<StringSection<>> SkeletonMachine::GetOutputMatrixNames() const
 	{
 		std::vector<StringSection<>> result;
-		result.reserve(_outputInterface._outputMatrixNameCount);
+		result.reserve(_outputInterface.size());
 		auto nameStart = _outputMatrixNames.begin();
 		for (auto i=_outputMatrixNames.begin(); i!=_outputMatrixNames.end();) {
 			if (*i == 0) {
@@ -41,16 +41,8 @@ namespace RenderCore { namespace Assets
 		return result;
 	}
 
-	SkeletonMachine::SkeletonMachine()
-	{
-		_commandStream = nullptr;
-		_commandStreamSize = 0;
-		_outputMatrixCount = 0;
-	}
-
-	SkeletonMachine::~SkeletonMachine()
-	{
-	}
+	SkeletonMachine::SkeletonMachine() = default;
+	SkeletonMachine::~SkeletonMachine() = default;
 
 }}
 

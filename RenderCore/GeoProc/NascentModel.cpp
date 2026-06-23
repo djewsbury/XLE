@@ -816,9 +816,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
         auto skelOutputInterface = skeleton.GetSkeletonMachine().BuildHashedOutputInterface();
         auto streamInputInterface = helper.BuildHashedInputInterface();
-        RenderCore::Assets::SkeletonBinding skelBinding(
-            RenderCore::Assets::SkeletonMachine::OutputInterface{AsPointer(skelOutputInterface.begin()), skelOutputInterface.size()},
-			MakeIteratorRange(streamInputInterface));
+        RenderCore::Assets::SkeletonBinding skelBinding(skelOutputInterface, streamInputInterface);
 
         auto finalMatrixCount = (unsigned)streamInputInterface.size(); // immData->_visualScene.GetInputInterface()._jointCount;
         result._defaultTransforms.resize(finalMatrixCount);

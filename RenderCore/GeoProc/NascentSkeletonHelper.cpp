@@ -4,10 +4,8 @@
 
 #include "NascentSkeletonHelper.h"
 #include "../Assets/TransformationCommands.h"
-#include "../RenderUtils.h"
 #include "../../Assets/Assets.h"
 #include "../../Assets/BlockSerializer.h"
-#include "../../Math/Transformations.h"
 #include "../../Math/MathSerialization.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/StreamUtils.h"
@@ -136,19 +134,10 @@ namespace RenderCore { namespace Assets { namespace GeoProc { namespace Internal
 	template <>
 		void    NascentSkeletonHelper::SerializeMethod(::Assets::BlockSerializer& outputSerializer) const
 	{
-		//
-		//		Write the command stream
-		//
-		outputSerializer.SerializeSubBlock(MakeIteratorRange(_commandStream));
-        outputSerializer.SerializeValue(_commandStream.size());
-        outputSerializer.SerializeValue(_outputMatrixCount);
+		SerializationOperator(outputSerializer, _commandStream);
 
-		//
-		//      Now, output interface...
-		//
 		auto jointHashNames = BuildHashedOutputInterface();
-		outputSerializer.SerializeSubBlock(MakeIteratorRange(jointHashNames));
-		outputSerializer.SerializeValue(jointHashNames.size());
+		SerializationOperator(outputSerializer, jointHashNames);
 
 		std::vector<char> boneNames;
 		for (const auto&j:_jointTags) {

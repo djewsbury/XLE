@@ -5,10 +5,11 @@
 #pragma once
 
 #include "AnimationSet.h"
-#include "SkeletonMachine.h"
+#include "../../Math/Matrix.h"
 
 namespace RenderCore { namespace Assets
 {
+	class SkeletonMachine;
 	class AnimationSetBinding
 	{
 	public:
@@ -50,11 +51,11 @@ namespace RenderCore { namespace Assets
 		unsigned ModelJointToMachineOutput(unsigned index) const { return _modelJointIndexToMachineOutput[index]; }
 		IteratorRange<const unsigned*> ModelJointToMachineOutput() const { return _modelJointIndexToMachineOutput; }
 
-		SkeletonBinding(    const SkeletonMachine::OutputInterface&		output,
-							IteratorRange<const uint64_t*> 				input);
-		SkeletonBinding(    const SkeletonMachine::OutputInterface&		primaryOutput,
-							const SkeletonMachine::OutputInterface&		secondaryutput,
-							IteratorRange<const uint64_t*> 				input);
+		SkeletonBinding(    IteratorRange<const uint64_t*>		output,
+							IteratorRange<const uint64_t*>		input);
+		SkeletonBinding(    IteratorRange<const uint64_t*>		primaryOutput,
+							IteratorRange<const uint64_t*>		secondaryOutput,
+							IteratorRange<const uint64_t*>		input);
 		SkeletonBinding() = default;
 
 	private:
