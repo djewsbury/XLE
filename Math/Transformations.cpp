@@ -976,6 +976,26 @@ namespace XLEMath
         return result;
     }
 
+    Float3          TransformDirectionVectorByOrthonormalInverse(const Float3x4& transform, Float3 pt)
+    {
+        assert(IsOrthonormal(Truncate3x3(transform)));
+        Float3 result;
+        result[0] = transform(0,0) * pt[0] + transform(1,0) * pt[1] + transform(2,0) * pt[2];
+        result[1] = transform(0,1) * pt[0] + transform(1,1) * pt[1] + transform(2,1) * pt[2];
+        result[2] = transform(0,2) * pt[0] + transform(1,2) * pt[1] + transform(2,2) * pt[2];
+        return result;
+    }
+
+    Float3          TransformDirectionVectorByOrthonormalInverse(const Float4x4& transform, Float3 pt)
+    {
+        assert(IsOrthonormal(Truncate3x3(transform)));
+        Float3 result;
+        result[0] = transform(0,0) * pt[0] + transform(1,0) * pt[1] + transform(2,0) * pt[2];
+        result[1] = transform(0,1) * pt[0] + transform(1,1) * pt[1] + transform(2,1) * pt[2];
+        result[2] = transform(0,2) * pt[0] + transform(1,2) * pt[1] + transform(2,2) * pt[2];
+        return result;
+    }
+
     Float2          TransformPoint(const Float2x3& transform, Float2 pt)
     {
         return transform * Expand(pt, 1.f);
