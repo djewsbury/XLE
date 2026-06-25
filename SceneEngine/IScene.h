@@ -59,6 +59,8 @@ namespace SceneEngine
         ExecuteSceneContext() { _quickMetrics[0] = '\0'; }
     };
 
+    uint32_t ViewMaskForWorldSpaceBoundingSphere(ExecuteSceneContext&, const Float3& center, float radius);
+
 #pragma warning(push)
 #pragma warning(disable:4324)          // structure was padded due to alignment specifier
     class PrepareForViewContext

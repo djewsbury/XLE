@@ -10,7 +10,7 @@
 #include <memory>
 #include <future>
 
-namespace RenderCore { namespace Techniques { class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; class DeformersPacket; class DeformAccelerator; }}
+namespace RenderCore { namespace Techniques { class DeformerConstruction; class IDrawablesPool; class IPipelineAcceleratorPool; class IDeformAcceleratorPool; class DrawablesPacket; class ProjectionDesc; class DeformersPacket; class DeformAccelerator; class DrawableConstructor; }}
 namespace RenderCore { namespace BufferUploads { class IManager; using CommandListID = uint32_t; }}
 namespace RenderCore { class IThreadContext; }
 namespace RenderCore { namespace Assets { class SkeletonMachine; class ModelRendererConstruction; class SkeletonBinding; }}
@@ -80,13 +80,10 @@ namespace SceneEngine
 		void CullAndBuildDrawables(
 			unsigned instanceIdx, const Float3& translation, const Float3x3& rotation, float uniformScale);
 
-		/// this varation ignores the bounding volume included in the renderer, and instead uses the given
-		/// bounding sphere for culling. The bounding sphere is expressed in world space!
-		void CullAndBuildDrawables(
-			unsigned instanceIdx, const Float3x4& localToWorld,
-			const Float3& customWorldSpaceBoundingSphere, float customBoundingSphereRadius);
+		uint32_t CalculateViewMask(const Float3x4& localToWorld);
 
 		bool IsGood() const { return _activeRenderer != nullptr; }
+		RenderCore::Techniques::DrawableConstructor* GetDrawableConstructor() const;
 
 		RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
 

@@ -646,24 +646,16 @@ namespace SceneEngine
 		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
 	}
 
-	void ICharacterScene::BuildDrawablesHelper::CullAndBuildDrawables(
-		unsigned instanceIdx, const Float3x4& localToWorld,
-		const Float3& customWorldSpaceBoundingSphere, float customBoundingSphereRadius)
+	uint32_t ICharacterScene::BuildDrawablesHelper::CalculateViewMask(const Float3x4& localToWorld)
 	{
-		if (_complexCullingVolume && _complexCullingVolume->TestSphere(customWorldSpaceBoundingSphere, customBoundingSphereRadius) == CullTestResult::Culled)
-			return;
+		if (_complexCullingVolume && _complexCullingVolume->TestAABB(localToWorld, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second) == CullTestResult::Culled)
+			return 0;
 		uint32_t viewMask = 0;
-		float r = customWorldSpaceBoundingSphere[3];
-		for (unsigned v=0; v<_views.size(); ++v)
-			viewMask |= (!CullAABB(_views[v]._worldToProjection, customWorldSpaceBoundingSphere-Float3{r,r,r}, customWorldSpaceBoundingSphere+Float3{r,r,r}, RenderCore::Techniques::GetDefaultClipSpaceType())) << v;
-		if (!viewMask) return;
-
-		RenderCore::Techniques::LightWeightBuildDrawables::SingleInstance(
-			*_activeRenderer->_drawableConstructor,
-			_pkts,
-			localToWorld, instanceIdx, viewMask);
-		assert(_activeRenderer->_deformAccelerator);
-		_deformersPacket->Queue(*_activeRenderer->_deformAccelerator, instanceIdx);
+		for (unsigned v=0; v<_views.size(); ++v) {
+			auto localToClip = Combine(localToWorld, _views[v]._worldToProjection);
+			viewMask |= (!CullAABB(localToClip, _activeRenderer->_aabb.first, _activeRenderer->_aabb.second, RenderCore::Techniques::GetDefaultClipSpaceType())) << v;
+		}
+		return viewMask;
 	}
 
 	bool ICharacterScene::BuildDrawablesHelper::SetRenderer(void* renderer)
@@ -672,6 +664,12 @@ namespace SceneEngine
 		_activeRenderer = &rendererEntry->_renderer;
 		_completionCmdList = std::max(_completionCmdList, _activeRenderer->_completionCmdList);
 		return _activeRenderer->_drawableConstructor != nullptr;
+	}
+
+	RenderCore::Techniques::DrawableConstructor* ICharacterScene::BuildDrawablesHelper::GetDrawableConstructor() const
+	{
+		assert(_activeRenderer);
+		return _activeRenderer->_drawableConstructor.get();
 	}
 
 	ICharacterScene::BuildDrawablesHelper::BuildDrawablesHelper(
@@ -955,6 +953,16 @@ namespace SceneEngine
 		std::shared_ptr<Assets::OperationContext> loadingContext)
 	{
 		return std::make_shared<CharacterScene>(std::move(drawablesPool), std::move(pipelineAcceleratorPool), std::move(deformAcceleratorPool), std::move(bufferUploads), std::move(loadingContext));
+	}
+
+	uint32_t ViewMaskForWorldSpaceBoundingSphere(ExecuteSceneContext& exeContext, const Float3& center, float r)
+	{
+		if (exeContext._complexCullingVolume && exeContext._complexCullingVolume->TestSphere(center, r) == CullTestResult::Culled)
+			return 0;
+		uint32_t viewMask = 0;
+		for (unsigned v=0; v<exeContext._views.size(); ++v)
+			viewMask |= (!CullAABB(exeContext._views[v]._worldToProjection, center-Float3{r,r,r}, center+Float3{r,r,r}, RenderCore::Techniques::GetDefaultClipSpaceType())) << v;
+		return viewMask;
 	}
 
 }
