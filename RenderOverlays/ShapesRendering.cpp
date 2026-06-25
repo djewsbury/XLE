@@ -1002,7 +1002,7 @@ namespace RenderOverlays
                 DefaultFontsStaticData(Formatter& fmttr)
             {
                 uint64_t keyname;
-                while (fmttr.TryKeyedItem(keyname)) {
+                while (Formatters::TryKeyedItem(fmttr, keyname)) {
                     switch (keyname) {
                     case "Default"_h: _defaultFont = Formatters::RequireStringValue(fmttr).AsString(); break;
                     case "TableHeader"_h: _tableHeaderFont = Formatters::RequireStringValue(fmttr).AsString(); break;

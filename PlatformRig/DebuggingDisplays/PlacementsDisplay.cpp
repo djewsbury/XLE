@@ -550,7 +550,7 @@ namespace PlatformRig { namespace Overlays
 				StaticData(Formatter& fmttr)
 			{
 				uint64_t keyname;
-				while (fmttr.TryKeyedItem(keyname)) {
+				while (Formatters::TryKeyedItem(fmttr, keyname)) {
 					switch (keyname) {
 					case "HeadingFont"_h: _headingFont = RequireStringValue(fmttr).AsString(); break;
 					case "ValueFont"_h: _valueFont = RequireStringValue(fmttr).AsString(); break;

@@ -61,6 +61,13 @@ namespace EntityInterface
 		virtual Formatters::StreamLocation GetLocation() const override { return _fmttr.GetLocation(); }
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _cfgFile->GetDependencyValidation(); }
 
+		virtual Formatters::TextInputFormatter<char>* TryCastToTextFormatter() override
+		{
+			if constexpr (std::is_same_v<Formatter, Formatters::TextInputFormatter<char>>)
+				return &_fmttr;
+			return nullptr;
+		}
+
 		TextFormatterAdapter(
 			std::shared_ptr<::Assets::ConfigFileContainer<Formatter>> cfgFile,
 			StringSection<typename Formatter::value_type> internalSection)
@@ -187,6 +194,8 @@ namespace EntityInterface
 		{
 			Formatters::SkipValueOrElement(_fmttr);
 		}
+
+		virtual Formatters::TextInputFormatter<char>* TryCastToTextFormatter() override { return &_fmttr; }
 
 		virtual Formatters::StreamLocation GetLocation() const override { return _fmttr.GetLocation(); }
 		virtual ::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }

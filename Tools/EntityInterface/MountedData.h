@@ -24,9 +24,23 @@ namespace EntityInterface
 		const ::Assets::DependencyValidation& GetDependencyValidation() const { return _depVal; }
 
 		MountedData(Formatters::IDynamicInputFormatter& fmttr)
-		: _data(fmttr), _depVal(fmttr.GetDependencyValidation())
+		: _data(AdaptFormatterForConstructor(fmttr))
+		, _depVal(fmttr.GetDependencyValidation())
 		{}
 		MountedData() = default;
+
+		static std::conditional_t<std::is_constructible_v<T, Formatters::IDynamicInputFormatter&>, Formatters::IDynamicInputFormatter&, Formatters::TextInputFormatter<>&>
+			AdaptFormatterForConstructor(Formatters::IDynamicInputFormatter& fmttr)
+		{
+			if constexpr (std::is_constructible_v<T, Formatters::IDynamicInputFormatter&>) {
+				return fmttr;
+			} else {
+				static_assert(std::is_constructible_v<T, Formatters::TextInputFormatter<>&>, "Type in MountedData must be constructable either from IDynamicInputFormatter or TextInputFormatter<>");
+				if (auto* simpleFmttr = fmttr.TryCastToTextFormatter())
+					return *simpleFmttr;
+				Throw(std::runtime_error("Mounting point cannot be simplified to text input formatter"));
+			}
+		}
 
 		static void ConstructToPromise(
 			std::promise<MountedData>&& promise,

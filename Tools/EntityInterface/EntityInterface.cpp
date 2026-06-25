@@ -240,6 +240,17 @@ namespace EntityInterface
 			return _depVal;
 		}
 
+		virtual Formatters::TextInputFormatter<char>* TryCastToTextFormatter() override
+		{
+			if (_mounts.size() != 1) return nullptr;
+
+			auto virtualState = GetVirtualElementsBlob();
+			if (virtualState != Formatters::FormatterBlob::None)
+				return nullptr;
+
+			return _mounts[0]._formatter->TryCastToTextFormatter();
+		}
+
 		FormatOverlappingDocuments(
 			IteratorRange<std::shared_ptr<Formatters::IDynamicInputFormatter>*> mounts,
 			IteratorRange<const std::string*> externalMountPoints,

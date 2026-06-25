@@ -521,7 +521,7 @@ namespace EntityInterface
 				StaticData(Formatter& fmttr)
 			{
 				uint64_t keyname;
-				while (fmttr.TryKeyedItem(keyname)) {
+				while (Formatters::TryKeyedItem(fmttr, keyname)) {
 					switch (keyname) {
 					case "Font"_h: _font = RequireStringValue(fmttr).AsString(); break;
 

@@ -60,7 +60,7 @@ namespace PlatformRig { namespace Overlays
             ComboBarStaticData(Formatter& fmttr)
         {
             uint64_t keyname;
-            while (fmttr.TryKeyedItem(keyname)) {
+            while (Formatters::TryKeyedItem(fmttr, keyname)) {
                 switch (keyname) {
                 case "LineWidth"_h: _lineWidth = Formatters::RequireCastValue<decltype(_lineWidth)>(fmttr); break;
                 case "BracketLength"_h: _bracketLength = Formatters::RequireCastValue<decltype(_bracketLength)>(fmttr); break;

@@ -195,7 +195,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             ScrollBarStaticData(Formatter& fmttr)
         {
             uint64_t keyname;
-            while (fmttr.TryKeyedItem(keyname)) {
+            while (Formatters::TryKeyedItem(fmttr, keyname)) {
                 switch (keyname) {
                 case "SectionHeight"_h: _sectionHeight = Formatters::RequireCastValue<decltype(_sectionHeight)>(fmttr); break;
                 case "SectionMargin"_h: _sectionMargin = Formatters::RequireCastValue<decltype(_sectionMargin)>(fmttr); break;

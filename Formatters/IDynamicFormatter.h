@@ -12,6 +12,8 @@ namespace Utility { template <typename T> class StringSection; }
 
 namespace Formatters
 {
+    template<typename T> class TextInputFormatter;
+
     class IDynamicInputFormatter
     {
     public:
@@ -41,6 +43,8 @@ namespace Formatters
 
         virtual StreamLocation GetLocation() const = 0;
         virtual ::Assets::DependencyValidation GetDependencyValidation() const = 0;
+
+        virtual TextInputFormatter<char>* TryCastToTextFormatter() { return nullptr; }
 
         using Blob = FormatterBlob;
 
