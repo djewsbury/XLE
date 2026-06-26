@@ -84,6 +84,7 @@ namespace SceneEngine
 
 		bool IsGood() const { return _activeRenderer != nullptr; }
 		RenderCore::Techniques::DrawableConstructor* GetDrawableConstructor() const;
+		RenderCore::Techniques::DeformAccelerator* GetDeformAccelerator() const;
 
 		RenderCore::BufferUploads::CommandListID _completionCmdList = 0;
 

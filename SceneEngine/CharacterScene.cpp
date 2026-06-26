@@ -672,6 +672,12 @@ namespace SceneEngine
 		return _activeRenderer->_drawableConstructor.get();
 	}
 
+	RenderCore::Techniques::DeformAccelerator* ICharacterScene::BuildDrawablesHelper::GetDeformAccelerator() const
+	{
+		assert(_activeRenderer);
+		return _activeRenderer->_deformAccelerator.get();
+	}
+
 	ICharacterScene::BuildDrawablesHelper::BuildDrawablesHelper(
 		ICharacterScene& scene,
 		IteratorRange<RenderCore::Techniques::DrawablesPacket** const> pkts,
