@@ -326,6 +326,7 @@ namespace RenderCore
     std::optional<AddressMode> AsAddressMode(StringSection<>);
 	std::optional<FilterMode> AsFilterMode(StringSection<>);
 	std::optional<CompareOp> AsCompareOp(StringSection<>);
+    std::optional<Topology> AsTopology(StringSection<>);
     std::optional<SamplerDescFlags::Flag> AsSamplerDescFlag(StringSection<>);
     std::optional<CullMode> AsCullMode(StringSection<>);
 }

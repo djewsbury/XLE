@@ -251,6 +251,36 @@ namespace RenderCore
         return {};
     }
 
+    std::optional<Topology> AsTopology(StringSection<> input)
+    {
+        if (XlEqString(input, "PointList")) return Topology::PointList;
+        if (XlEqString(input, "LineList")) return Topology::LineList;
+        if (XlEqString(input, "LineStrip")) return Topology::LineStrip;
+        if (XlEqString(input, "TriangleList")) return Topology::TriangleList;
+        if (XlEqString(input, "TriangleStrip")) return Topology::TriangleStrip;
+        if (XlEqString(input, "LineListWithAdjacency")) return Topology::LineListWithAdjacency;
+        if (XlEqString(input, "LineStripWithAdjacency")) return Topology::LineStripWithAdjacency;
+        if (XlEqString(input, "TriangleListWithAdjacency")) return Topology::TriangleListWithAdjacency;
+        if (XlEqString(input, "TriangleStripWithAdjacency")) return Topology::TriangleStripWithAdjacency;
+        if (XlEqString(input, "PatchList1")) return Topology::PatchList1;
+        if (XlEqString(input, "PatchList2")) return Topology::PatchList2;
+        if (XlEqString(input, "PatchList3")) return Topology::PatchList3;
+        if (XlEqString(input, "PatchList4")) return Topology::PatchList4;
+        if (XlEqString(input, "PatchList5")) return Topology::PatchList5;
+        if (XlEqString(input, "PatchList6")) return Topology::PatchList6;
+        if (XlEqString(input, "PatchList7")) return Topology::PatchList7;
+        if (XlEqString(input, "PatchList8")) return Topology::PatchList8;
+        if (XlEqString(input, "PatchList9")) return Topology::PatchList9;
+        if (XlEqString(input, "PatchList10")) return Topology::PatchList10;
+        if (XlEqString(input, "PatchList11")) return Topology::PatchList11;
+        if (XlEqString(input, "PatchList12")) return Topology::PatchList12;
+        if (XlEqString(input, "PatchList13")) return Topology::PatchList13;
+        if (XlEqString(input, "PatchList14")) return Topology::PatchList14;
+        if (XlEqString(input, "PatchList15")) return Topology::PatchList15;
+        if (XlEqString(input, "PatchList16")) return Topology::PatchList16;
+        return {};
+    }
+
     std::optional<SamplerDescFlags::Flag> AsSamplerDescFlag(StringSection<> input)
     {
         if (XlEqString(input, "DisableMipmaps")) return SamplerDescFlags::DisableMipmaps;
