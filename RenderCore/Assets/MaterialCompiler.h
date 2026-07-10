@@ -42,9 +42,10 @@ namespace RenderCore { namespace Assets
 		void AddOverride(FutureMaterialSet&&, std::string prefix = {});
 		void AddOverride(std::string materialFileIdentifier);
 
+		static const uint64_t s_applyToAll = ~0ull;
 		struct Override
 		{
-			uint64_t _application = 0;		// 0 means it applies to all
+			uint64_t _application = s_applyToAll;
 			unsigned _overrideIdx = 0;
 		};
 		std::vector<std::pair<Override, RawMaterial>> _inlineMaterialOverrides;

@@ -396,7 +396,7 @@ namespace RenderCore { namespace Assets
 
 				if (o0 != construction->_inlineMaterialOverrides.end() && o0->first._overrideIdx == overrideIdx) {
 
-					if (o0->first._application == 0 || o0->first._application == guid) {
+					if (o0->first._application == MaterialSetConstruction::s_applyToAll || o0->first._application == guid) {
 						auto marker = std::make_shared<::Assets::Marker<ResolvedMaterial>>();
 						marker->SetAssetForeground({o0->second, ::Assets::DependencyValidation{}});
 						partialMaterials.emplace_back(std::move(marker->ShareFuture()));
@@ -405,7 +405,7 @@ namespace RenderCore { namespace Assets
 
 				} else if (o1 != construction->_materialFileOverrides.end() && o1->first._overrideIdx == overrideIdx) {
 
-					if (o1->first._application == 0 || o1->first._application == guid) {
+					if (o1->first._application == MaterialSetConstruction::s_applyToAll || o1->first._application == guid) {
 						// note that we use the parameters on "o1->second" as a prefix on the cfg names we're going to read from
 						auto splitName = MakeFileNameSplitter(o1->second);
 						auto indexer = ::AssetsNew::ContextAndIdentifier{ (StringMeldInPlace(buffer) << splitName.AllExceptParameters() << ":" << splitName.Parameters() << cfg).AsString() };
@@ -415,11 +415,11 @@ namespace RenderCore { namespace Assets
 					++o1;
 
 				} else if (o2 != construction->_futureMaterialOverrides.end() && o2->first._overrideIdx == overrideIdx) {
-					if (o2->first._application == 0 || o2->first._application == guid)
+					if (o2->first._application == MaterialSetConstruction::s_applyToAll || o2->first._application == guid)
 						partialMaterials.push_back(o2->second);
 					++o2;
 				} else if (o3 != construction->_futureMaterialSetOverrides.end() && o3->first._overrideIdx == overrideIdx) {
-					if (o3->first._application == 0 || o3->first._application == guid) {
+					if (o3->first._application == MaterialSetConstruction::s_applyToAll || o3->first._application == guid) {
 						// We have to go via a ::Assets::PtrToMarkerPtr<CompilableMaterialAssetMixin<RawMaterial>>
 						// in order to put this in "partialMaterials"
 						std::promise<ResolvedMaterial> promisedMaterial;
@@ -434,7 +434,7 @@ namespace RenderCore { namespace Assets
 					}
 					++o3;
 				} else if (o4 != construction->_futurePredefinedDescriptorSetOverrides.end() && o4->first._overrideIdx == overrideIdx) {
-					if (o4->first._application == 0 || o4->first._application == guid)
+					if (o4->first._application == MaterialSetConstruction::s_applyToAll || o4->first._application == guid)
 						partialMaterialDescriptorSets.push_back(o4->second);
 					++o4;
 				}
@@ -626,34 +626,34 @@ namespace RenderCore { namespace Assets
 
 	void MaterialSetConstruction::AddOverride(RawMaterial&& mat)
 	{
-		_inlineMaterialOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
+		_inlineMaterialOverrides.emplace_back(Override{s_applyToAll, _nextOverrideIdx++}, std::move(mat));
 		_hash = 0;
 	}
 
 	void MaterialSetConstruction::AddOverride(FutureMaterial&& mat)
 	{
-		_futureMaterialOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(mat));
+		_futureMaterialOverrides.emplace_back(Override{s_applyToAll, _nextOverrideIdx++}, std::move(mat));
 		_disableHash = true;
 		_hash = 0;
 	}
 
 	void MaterialSetConstruction::AddOverride(FuturePredefinedDescriptorSet&& descSet)
 	{
-		_futurePredefinedDescriptorSetOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(descSet));
+		_futurePredefinedDescriptorSetOverrides.emplace_back(Override{s_applyToAll, _nextOverrideIdx++}, std::move(descSet));
 		_disableHash = true;
 		_hash = 0;
 	}
 
 	void MaterialSetConstruction::AddOverride(FutureMaterialSet&& mat, std::string prefix)
 	{
-		_futureMaterialSetOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::make_pair(std::move(mat), std::move(prefix)));
+		_futureMaterialSetOverrides.emplace_back(Override{s_applyToAll, _nextOverrideIdx++}, std::make_pair(std::move(mat), std::move(prefix)));
 		_disableHash = true;
 		_hash = 0;
 	}
 
 	void MaterialSetConstruction::AddOverride(std::string materialFileIdentifier)
 	{
-		_materialFileOverrides.emplace_back(Override{0, _nextOverrideIdx++}, std::move(materialFileIdentifier));
+		_materialFileOverrides.emplace_back(Override{s_applyToAll, _nextOverrideIdx++}, std::move(materialFileIdentifier));
 		_hash = 0;
 	}
 
