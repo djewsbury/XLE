@@ -191,7 +191,9 @@ namespace RenderCore { namespace LightingEngine
 		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferMotion).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetName("PreDepth");
-		result.AddSubpass(std::move(preDepthSubpass), depthMotionDelegate, Techniques::BatchFlags::Opaque);
+		Techniques::BatchFlags::BitField batches = Techniques::BatchFlags::Opaque;
+		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("sky"_h);
+		result.AddSubpass(std::move(preDepthSubpass), depthMotionDelegate, batches);
 		return result;
 	}
 
@@ -204,7 +206,9 @@ namespace RenderCore { namespace LightingEngine
 		preDepthSubpass.AppendOutput(result.DefineAttachment(Techniques::AttachmentSemantics::GBufferNormal).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetDepthStencil(result.DefineAttachment(Techniques::AttachmentSemantics::MultisampleDepth).Clear().FinalState(BindFlag::ShaderResource));
 		preDepthSubpass.SetName("PreDepth");
-		result.AddSubpass(std::move(preDepthSubpass), depthMotionNormalDelegate, Techniques::BatchFlags::Opaque);
+		Techniques::BatchFlags::BitField batches = Techniques::BatchFlags::Opaque;
+		batches |= 1u<<Techniques::Services::GetInstance().ExtendedBatchCode("sky"_h);
+		result.AddSubpass(std::move(preDepthSubpass), depthMotionNormalDelegate, batches);
 		return result;
 	}
 

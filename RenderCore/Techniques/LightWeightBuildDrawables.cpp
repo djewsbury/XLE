@@ -173,16 +173,20 @@ namespace RenderCore { namespace Techniques
 			uint32_t* _viewMasks;
 		};
 
-		static unsigned CountBitsSet(uint32_t viewMask)
-		{
-			unsigned v=0;
-			while (viewMask) {
-				auto lz = xl_ctz8(viewMask);
-				v++;
-				viewMask ^= 1ull<<lz;
+		#if 0
+			static unsigned CountBitsSet(uint32_t viewMask)
+			{
+				unsigned v=0;
+				while (viewMask) {
+					auto lz = xl_ctz8(viewMask);
+					v++;
+					viewMask ^= 1ull<<lz;
+				}
+				return v;
 			}
-			return v;
-		}
+		#else
+			static unsigned CountBitsSet(uint32_t viewMask) { return popcount(viewMask); }
+		#endif
 
 		static void DrawFn_InstancedFixedSkeletonViewMask(
 			RenderCore::Techniques::ParsingContext& parserContext,

@@ -7,6 +7,7 @@
 #include "../../Utility/StringFormat.h"
 #include <sstream>
 
+// #define XLE_SPRITE_TECHNIQUE_LOG_SHADERS 1
 #if XLE_SPRITE_TECHNIQUE_LOG_SHADERS
 	#include <iostream>
 #endif
@@ -1427,8 +1428,12 @@ void WriteBarycentricCoords(
 		psOutput._entryPointSignature = std::make_unique<GraphLanguage::NodeGraphSignature>(psSignature);
 		for (auto& s:psSteps) if (s._enabled && s._patchCodeForExpansions && s._patchCodeForExpansions != ~0ull) psOutput._resource._patchCollectionExpansions.emplace_back(s._patchCodeForExpansions);
 
-		// std::cout << "----- VS ----" << std::endl;
-		// std::cout << vs.str() << std::endl;
+#if XLE_SPRITE_TECHNIQUE_LOG_SHADERS
+		std::cout << "----- VS ----" << std::endl;
+		std::cout << vs.str() << std::endl;
+		std::cout << "----- PS ----" << std::endl;
+		std::cout << ps.str() << std::endl;
+#endif
 
 		std::vector<PatchDelegateOutput> result;
 		result.emplace_back(std::move(vsOutput));

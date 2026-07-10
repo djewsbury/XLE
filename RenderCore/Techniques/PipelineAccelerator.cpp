@@ -244,7 +244,7 @@ namespace RenderCore { namespace Techniques
 		std::promise<Pipeline> pipelinePromise;
 		std::shared_future<Pipeline> futurePipeline = pipelinePromise.get_future();
 		ParameterBox copyGlobalSelectors = globalSelectors;
-		std::weak_ptr<PipelineAccelerator> weakThis = shared_from_this();
+		auto weakThis = weak_from_this();
 		auto patchCollectionFuture = layoutDelegate->CompileShaderPatchCollection(_shaderPatches, _matDescSet);
 		unsigned sequencerIdx = unsigned(cfg->_cfgId);
 
