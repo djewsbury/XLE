@@ -228,12 +228,11 @@ namespace XLEMath
             Float3( boundingBox.second[0], boundingBox.second[1], boundingBox.second[2] )
         };
 
-        for (unsigned c=0; c<dimof(corners); ++c) {
+        for (unsigned c=0; c<dimof(corners); ++c)
             corners[c] = TransformPoint(transformation, corners[c]);
-        }
 
-        Float3 mins(std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()), maxs(-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max());
-        for (unsigned c=0; c<dimof(corners); ++c) {
+        Float3 mins = corners[0], maxs = corners[0];
+        for (unsigned c=1; c<dimof(corners); ++c) {
             mins[0] = std::min(mins[0], corners[c][0]);
             mins[1] = std::min(mins[1], corners[c][1]);
             mins[2] = std::min(mins[2], corners[c][2]);
