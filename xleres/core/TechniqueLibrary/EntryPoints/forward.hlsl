@@ -25,7 +25,16 @@ float4 frameworkEntry(
 	return float4(result, sample.blendingAlpha);
 }
 
-float4 frameworkEntry_CustomLighting(float4 position : SV_Position, float4 customLighting : CUSTOMLIGHTING) : SV_Target0 { return customLighting; }
+// BuildAutoPipeline ranks based on number of matched inputs. So we need to include any vs inputs that frameworkEntry
+// takes so that our matched inputs is at least the same as frameworkEntry
+float4 frameworkEntry_CustomLighting(
+	float4 position : SV_Position,
+	float3 worldPosition : WORLDPOSITION,
+	float3 worldVertexNormal : NORMAL,
+	float4 customLighting : CUSTOMLIGHTING) : SV_Target0
+{
+	return customLighting;
+}
 
 GBufferValues SampleFallback() : GBUFFERVALUES { return GBufferValues_Default(); }
 
