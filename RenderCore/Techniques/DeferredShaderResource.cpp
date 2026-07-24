@@ -259,12 +259,13 @@ namespace RenderCore { namespace Techniques
         auto util = Services::GetCompoundAssetUtil();
         ::Assets::WhenAll(util->GetCachedFutureScaffold(containerInitializer)).ThenConstructToPromise(
             std::move(promise),
-            [util=std::weak_ptr<::AssetsNew::CompoundAssetUtil>{util}, originalRequest=splitter.FullFilename().AsString(), config=splitter.Parameters().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, const auto& scaffold) {
+            [util=std::weak_ptr<::AssetsNew::CompoundAssetUtil>{util}, originalRequest=splitter.AllExceptParameters().AsString(), config=splitter.Parameters().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, const auto& scaffold) {
                 TRY {
                     auto req = MakeTextureCompilationRequestSync(
                         Services::GetTextureCompilerRegistrar(),
                         util.lock(), ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(config) DEBUG_ONLY(, config)});
                     auto artifactActual = ::Assets::ActualizeAssetPtr<Assets::TextureArtifact>(req);
+                    // Note that we strip of the parameters from the original request; because parameters are processed as an entity name, rather than view construction flags
                     ConstructToPromiseArtifact(std::move(thatPromise), *artifactActual, originalRequest);
                 } CATCH(...) {
                     thatPromise.set_exception(std::current_exception());
@@ -283,12 +284,13 @@ namespace RenderCore { namespace Techniques
         auto util = Services::GetCompoundAssetUtil();
         ::Assets::WhenAll(util->GetCachedFutureScaffold(containerInitializer)).ThenConstructToPromise(
             std::move(promise),
-            [util=std::weak_ptr<::AssetsNew::CompoundAssetUtil>{util}, originalRequest=splitter.FullFilename().AsString(), opContext=std::move(opContext), config=splitter.Parameters().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, const auto& scaffold) {
+            [util=std::weak_ptr<::AssetsNew::CompoundAssetUtil>{util}, originalRequest=splitter.AllExceptParameters().AsString(), opContext=std::move(opContext), config=splitter.Parameters().AsString()](std::promise<std::shared_ptr<DeferredShaderResource>>&& thatPromise, const auto& scaffold) {
                 TRY {
                     auto req = MakeTextureCompilationRequestSync(
                         Services::GetTextureCompilerRegistrar(),
                         util.lock(), ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(config) DEBUG_ONLY(, config)});
                     auto artifactActual = ::Assets::ActualizeAssetPtr<Assets::TextureArtifact>(opContext, req);
+                    // Note that we strip of the parameters from the original request; because parameters are processed as an entity name, rather than view construction flags
                     ConstructToPromiseArtifact(std::move(thatPromise), *artifactActual, originalRequest);
                 } CATCH(...) {
                     thatPromise.set_exception(std::current_exception());
