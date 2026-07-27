@@ -6,13 +6,11 @@
 
 #pragma once
 
-#include "../OSServices/OverlappedWindow.h"
-#include "../RenderCore/IDevice_Forward.h"
 #include "../Math/Vector.h"
 #include "../Utility/StringUtils.h"
-#include "../Utility/FunctionUtils.h"
 
 namespace RenderOverlays { namespace DebuggingDisplay { class DebugScreensSystem; }}
+namespace RenderOverlays { class IOverlayContext; struct ImmediateLayout; }
 namespace RenderCore { namespace Techniques { class TechniqueContext; }}
 
 namespace PlatformRig
@@ -33,6 +31,10 @@ namespace PlatformRig
         class Pimpl;
         std::unique_ptr<Pimpl> _pimpl;
     };
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    void TopBarHeading(RenderOverlays::IOverlayContext&, RenderOverlays::ImmediateLayout&, StringSection<>);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

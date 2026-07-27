@@ -77,6 +77,8 @@ namespace RenderOverlays
 
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> path, int size);
 	::Assets::PtrToMarkerPtr<Font> MakeFont(StringSection<> pathAndSize);		// use "<fontname>:<size>"
+	Font* TryActualizeFont(StringSection<> path, int size);
+	Font* TryActualizeFont(StringSection<> pathAndSize);
 	std::shared_ptr<Font> MakeDummyFont();
 
 	void RegisterFontLibraryFile(StringSection<> path);

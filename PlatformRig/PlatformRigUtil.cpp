@@ -8,18 +8,14 @@
 #include "LuaInterface.h"
 #include "FrameRig.h"
 #include "InputContext.h"
-#include "../RenderCore/IDevice.h"
+#include "TopBar.h"
+#include "RenderOverlays/Font.h"
+#include "RenderOverlays/DrawText.h"
 #include "../RenderCore/Techniques/TechniqueUtils.h"
 #include "../RenderCore/Techniques/Techniques.h"
-#include "../RenderCore/Format.h"
 #include "../ConsoleRig/Console.h"
 #include "../ConsoleRig/IncludeLUA.h"
 #include "../Utility/ParameterBox.h"
-#include "../Utility/BitUtils.h"
-#include "../Math/Transformations.h"
-#include "../Math/ProjectionMath.h"
-#include "../ConsoleRig/IncludeLUA.h"
-#include <cfloat>
 #include <unordered_map>
 
 namespace PlatformRig
@@ -121,5 +117,18 @@ namespace PlatformRig
         };
         return subContext;
     }
+
+    void TopBarHeading(RenderOverlays::IOverlayContext& context, RenderOverlays::ImmediateLayout& layout, StringSection<> heading)
+	{
+		if (auto* topBar = context.GetService<PlatformRig::ITopBarManager>())
+			if (auto* headingFont = RenderOverlays::TryActualizeFont("OrbitronBlack", 20))
+				if (auto rect = topBar->ScreenTitle(context, layout, StringWidth(*headingFont, heading)); IsGood(rect))
+					RenderOverlays::DrawText()
+						.Font(*headingFont)
+						.Color(RenderOverlays::ColorB::Black)
+						.Alignment(RenderOverlays::TextAlignment::Left)
+						.Flags(0)
+						.Draw(context, rect, heading);
+	}
 
 }

@@ -396,6 +396,16 @@ namespace RenderOverlays
 		}
 	}
 
+	Font* TryActualizeFont(StringSection<> path, int size)
+	{
+		return MakeFont(path, size)->TryActualize2().get();
+	}
+
+	Font* TryActualizeFont(StringSection<> pathAndSize)
+	{
+		return MakeFont(pathAndSize)->TryActualize2().get();
+	}
+
 	////////////////////////////////////////////////////////////////////////////////////
 
 	FTFontResources::FTFontResources()
