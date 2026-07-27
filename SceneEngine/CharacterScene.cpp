@@ -81,7 +81,7 @@ namespace SceneEngine
 				if (_skeletonScaffold) {
 					return _skeletonScaffold->GetSkeletonMachine();
 				} else {
-					assert(_firstModelScaffold->EmbeddedSkeleton());
+					assert(_firstModelScaffold && _firstModelScaffold->EmbeddedSkeleton());
 					return *_firstModelScaffold->EmbeddedSkeleton();
 				}
 			}
@@ -409,9 +409,9 @@ namespace SceneEngine
 								if (completedConstruction->GetElementCount() != 0) {
 									renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
 									renderer._aabb = renderer._firstModelScaffold->GetStaticBoundingBox();
-								} else {
+								} else
 									renderer._aabb = {Zero<Float3>(), Zero<Float3>()};
-								}
+
 								{
 									renderer._interfaceSkeletonMachine = std::make_shared<ICharacterScene::SkeletonMachine>();
 									auto srcCmdStream = renderer.GetSkeletonMachine().GetCommandStream();
@@ -431,6 +431,7 @@ namespace SceneEngine
 								renderer._skeletonScaffold = completedConstruction->GetSkeletonScaffold();
 								if (completedConstruction->GetElementCount() != 0)
 									renderer._firstModelScaffold = completedConstruction->GetElement(0)->GetModel();
+
 								{
 									renderer._interfaceSkeletonMachine = std::make_shared<ICharacterScene::SkeletonMachine>();
 									auto srcCmdStream = renderer.GetSkeletonMachine().GetCommandStream();
