@@ -390,7 +390,9 @@ namespace RenderCore { namespace Assets
 #if ENABLE_DXTEX
 	std::optional<DirectX::ScratchImage> BuildMipmaps(BufferUploads::IAsyncDataSource& srcPkt)
 	{
-		auto inputDesc = srcPkt.GetDesc().get();
+		auto futureDesc = srcPkt.GetDesc();
+		YieldToPool(futureDesc);
+		auto inputDesc = futureDesc.get();
 		assert(inputDesc._type == ResourceDesc::Type::Texture);
 		assert(inputDesc._textureDesc._arrayCount <= 1);			// not supporting arrayed textures
 		if (inputDesc._textureDesc._mipCount > 1) return {};		// already got mipmaps
