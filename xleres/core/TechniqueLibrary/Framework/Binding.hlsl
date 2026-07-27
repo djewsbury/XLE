@@ -49,6 +49,11 @@
 #define BIND_MAT_T11 : register(t11, space4)
 #define BIND_MAT_T12 : register(t12, space4)
 #define BIND_MAT_T13 : register(t13, space4)
+#define BIND_MAT_T14 : register(t14, space4)
+#define BIND_MAT_T15 : register(t15, space4)
+#define BIND_MAT_T16 : register(t16, space4)
+#define BIND_MAT_T17 : register(t17, space4)
+#define BIND_MAT_T18 : register(t18, space4)
 
 #define BIND_MAT_S1 : register(s1, space4)
 #define BIND_MAT_S2 : register(s2, space4)
@@ -63,6 +68,11 @@
 #define BIND_MAT_S11 : register(s11, space4)
 #define BIND_MAT_S12 : register(s12, space4)
 #define BIND_MAT_S13 : register(s13, space4)
+#define BIND_MAT_S14 : register(s14, space4)
+#define BIND_MAT_S15 : register(s15, space4)
+#define BIND_MAT_S16 : register(s16, space4)
+#define BIND_MAT_S17 : register(s17, space4)
+#define BIND_MAT_S18 : register(s18, space4)
 
 #define BIND_MAT_U1 : register(u1, space4)
 #define BIND_MAT_U2 : register(u2, space4)
@@ -77,6 +87,11 @@
 #define BIND_MAT_U11 : register(u11, space4)
 #define BIND_MAT_U12 : register(u12, space4)
 #define BIND_MAT_U13 : register(u13, space4)
+#define BIND_MAT_U14 : register(u14, space4)
+#define BIND_MAT_U15 : register(u15, space4)
+#define BIND_MAT_U16 : register(u16, space4)
+#define BIND_MAT_U17 : register(u17, space4)
+#define BIND_MAT_U18 : register(u18, space4)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
