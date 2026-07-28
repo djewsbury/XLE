@@ -42,33 +42,6 @@ namespace ToolsRig
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::TEXTANGENT, RenderCore::Format::R32G32B32A32_FLOAT }
 	};
 
-    static void GeodesicSphere_Subdivide(
-        unsigned v1, unsigned v2, unsigned v3, 
-        std::vector<Float3>& sphere_points,
-        std::vector<unsigned>& sphere_indices,
-        unsigned int depth) 
-    {
-        if(depth == 0) 
-        {
-            sphere_indices.push_back(v1);
-            sphere_indices.push_back(v2);
-            sphere_indices.push_back(v3);
-            return;
-        }
-
-        unsigned v12 = (unsigned)sphere_points.size(), v23 = v12+1, v31 = v12+2;
-        Float3 v12p = Normalize(sphere_points[v1] + sphere_points[v2]);
-        Float3 v23p = Normalize(sphere_points[v2] + sphere_points[v3]);
-        Float3 v31p = Normalize(sphere_points[v3] + sphere_points[v1]);
-        sphere_points.push_back(v12p);
-        sphere_points.push_back(v23p);
-        sphere_points.push_back(v31p);
-        GeodesicSphere_Subdivide( v1, v12, v31, sphere_points, sphere_indices, depth - 1);
-        GeodesicSphere_Subdivide( v2, v23, v12, sphere_points, sphere_indices, depth - 1);
-        GeodesicSphere_Subdivide( v3, v31, v23, sphere_points, sphere_indices, depth - 1);
-        GeodesicSphere_Subdivide(v12, v23, v31, sphere_points, sphere_indices, depth - 1);
-    }
-
     std::pair<std::vector<unsigned>, std::vector<Float3>>     BuildIndexedGeodesicSphereP(int detail)
     {
 
@@ -93,15 +66,58 @@ namespace ToolsRig
             { 6,  1, 10 }, { 9, 0, 11 }, { 9, 11, 2 }, {  9, 2, 5 }, { 7, 2, 11 }
         };
 
-        std::vector<Float3> spherePoints;
         std::vector<unsigned> sphereIndices;
+        sphereIndices.reserve(20*3);
+        std::vector<Float3> spherePoints;
         spherePoints.insert(spherePoints.end(), vdata, &vdata[dimof(vdata)]);
         for(int i = 0; i < 20; i++) {
-                // note -- flip here to flip the winding
-            GeodesicSphere_Subdivide(
-                tindices[i][0], tindices[i][2], 
-                tindices[i][1], spherePoints, sphereIndices, detail);
+            sphereIndices.emplace_back(tindices[i][0]);     // note -- flip here to flip the winding
+            sphereIndices.emplace_back(tindices[i][2]);
+            sphereIndices.emplace_back(tindices[i][1]);
         }
+
+        std::vector<std::pair<uint64_t, unsigned>> subdivisionRecord;
+        auto MakeSubDivId = [](unsigned lhs, unsigned rhs) { return (uint64_t(std::max(lhs, rhs))<<32ull)|std::min(lhs, rhs); };
+        auto FindSubDiv = [&](unsigned lhs, unsigned rhs) { 
+            auto id = MakeSubDivId(lhs, rhs);
+            auto i = LowerBound(subdivisionRecord, id);
+            assert(i!=subdivisionRecord.end() && i->first == id);
+            return i->second;
+        };
+
+        for (unsigned c=0; c<detail; ++c) {
+
+            // find all of the edges (there will be duplicates in this pass)
+            subdivisionRecord.clear();
+            for (auto i=sphereIndices.begin(); i!=sphereIndices.end(); i+=3) {
+                subdivisionRecord.emplace_back(MakeSubDivId(*(i+0), *(i+1)), ~0u);
+                subdivisionRecord.emplace_back(MakeSubDivId(*(i+1), *(i+2)), ~0u);
+                subdivisionRecord.emplace_back(MakeSubDivId(*(i+2), *(i+0)), ~0u);
+            }
+
+            std::sort(b2e(subdivisionRecord));
+            subdivisionRecord.erase(std::unique(b2e(subdivisionRecord)), subdivisionRecord.end());
+
+            spherePoints.reserve(spherePoints.size()+subdivisionRecord.size());
+            for (auto& r:subdivisionRecord) {
+                r.second = unsigned(spherePoints.size());
+                spherePoints.emplace_back(Normalize(spherePoints[r.first>>32] + spherePoints[uint32_t(r.first)]));
+            }
+
+            std::vector<unsigned> newSphereIndices;
+            newSphereIndices.reserve(sphereIndices.size()*3);
+            for (auto i=sphereIndices.begin(); i!=sphereIndices.end(); i+=3) {
+                unsigned v1 = *(i+0), v2 = *(i+1), v3 = *(i+2);
+                unsigned v12 = FindSubDiv(v1, v2), v23 = FindSubDiv(v2, v3), v31 = FindSubDiv(v3, v1);
+                newSphereIndices.emplace_back( v1), newSphereIndices.emplace_back(v12), newSphereIndices.emplace_back(v31);
+                newSphereIndices.emplace_back( v2), newSphereIndices.emplace_back(v23), newSphereIndices.emplace_back(v12);
+                newSphereIndices.emplace_back( v3), newSphereIndices.emplace_back(v31), newSphereIndices.emplace_back(v23);
+                newSphereIndices.emplace_back(v12), newSphereIndices.emplace_back(v23), newSphereIndices.emplace_back(v31);
+            }
+
+            sphereIndices = std::move(newSphereIndices);
+        }
+
         return {std::move(sphereIndices), std::move(spherePoints)};
     }
 
