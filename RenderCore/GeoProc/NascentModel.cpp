@@ -342,7 +342,8 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 
 		std::vector<DrawCallDesc> drawCalls;
 		for (const auto&d:geoBlock._drawCalls)
-			drawCalls.push_back(DrawCallDesc{d._firstIndex, d._indexCount, 0, d._topology});
+			if (d._indexCount > 0)		// filter out zero index draw calls (used to filter out material assignments earlier)
+				drawCalls.push_back(DrawCallDesc{d._firstIndex, d._indexCount, 0, d._topology});
 
         return NascentRawGeometry {
             nativeVB, geoBlock._indices,
@@ -589,14 +590,16 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				if (!geoBlock)
 					Throw(std::runtime_error("Missing geometry block referenced by command list in NascentModel::SerializeToChunks"));
 
-				// the number of material assignments in the cmd must match the number of draw calls in
+				// the number of material assignments in the cmd must be >= the number of draw calls in
 				// the geometry block (ie the material binding symbols is parallel to the draw calls array)
-				assert(geoBlock->_drawCalls.size() == cmd.second._materialBindingSymbols.size());
+				// We might have materials on the object that are not actually used -- in these cases, we will have redundant additional material bindings
+				assert(geoBlock->_drawCalls.size() <= cmd.second._materialBindingSymbols.size());
 
 				std::vector<MaterialGuid> materials;
-				materials.reserve(cmd.second._materialBindingSymbols.size());
-				for (const auto&mat:cmd.second._materialBindingSymbols)
-					materials.push_back(HashOrNumber(mat, helper));
+				materials.reserve(std::min(geoBlock->_drawCalls.size(), cmd.second._materialBindingSymbols.size()));
+				for (unsigned c=0; c<geoBlock->_drawCalls.size(); ++c)
+					if (geoBlock->_drawCalls[c]._indexCount > 0)		// zero index draw calls are used to filter out unused material bindings
+						materials.push_back(HashOrNumber(cmd.second._materialBindingSymbols[c], helper));
 				std::vector<uint64_t> groupGuids;
 				groupGuids.reserve(cmd.second._groups.size());
 				for (const auto&grp:cmd.second._groups)

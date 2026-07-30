@@ -774,8 +774,9 @@ namespace RenderCore { namespace Techniques
 								for (const auto& dc:drawOrderDesc->_drawCalls) {
 									// note -- there's some redundancy here, because we'll end up calling 
 									// AddMaterial & MakePipeline over and over again for the same parameters. There's
-									// some caching in those to precent allocating dupes, but it might still be more
+									// some caching in those to prevent allocating dupes, but it might still be more
 									// efficient to avoid some of the redundancy
+									assert(dc._indexCount > 0);		// draw calls with an index count of zero are passed to NascentModel as a placeholder for unused material assignments -- but they should be filtered out before we get here
 									assert(materialIterator < currentMaterialAssignments.size());
 									auto matAssignment = currentMaterialAssignments[materialIterator++];
 									auto materialMachine = materialScaffold->GetMaterialMachine(matAssignment);
