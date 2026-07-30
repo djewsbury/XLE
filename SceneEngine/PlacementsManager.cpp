@@ -2460,7 +2460,7 @@ namespace SceneEngine
 
                 // When assets aren't yet ready, we can't return this reliably
             if (assetState == ::Assets::AssetState::Ready)
-                return TransformBoundingBox(cellToWorld, localBoundingBox);
+                return TransformBoundingBox(Combine(dst->_localToCell, cellToWorld), localBoundingBox);
         }
 
         return s_invalidBoundingBox;

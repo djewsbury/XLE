@@ -264,6 +264,7 @@ namespace RenderCore { namespace Techniques
                     auto req = MakeTextureCompilationRequestSync(
                         Services::GetTextureCompilerRegistrar(),
                         util.lock(), ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(config) DEBUG_ONLY(, config)});
+                    if (!req._subCompiler) Throw(std::runtime_error("Texture Compile operation failed to instantiate"));
                     auto artifactActual = ::Assets::ActualizeAssetPtr<Assets::TextureArtifact>(req);
                     // Note that we strip of the parameters from the original request; because parameters are processed as an entity name, rather than view construction flags
                     ConstructToPromiseArtifact(std::move(thatPromise), *artifactActual, originalRequest);
@@ -289,6 +290,7 @@ namespace RenderCore { namespace Techniques
                     auto req = MakeTextureCompilationRequestSync(
                         Services::GetTextureCompilerRegistrar(),
                         util.lock(), ::AssetsNew::ScaffoldAndEntityName{scaffold, Hash64(config) DEBUG_ONLY(, config)});
+                    if (!req._subCompiler) Throw(std::runtime_error("Texture Compile operation failed to instantiate"));
                     auto artifactActual = ::Assets::ActualizeAssetPtr<Assets::TextureArtifact>(opContext, req);
                     // Note that we strip of the parameters from the original request; because parameters are processed as an entity name, rather than view construction flags
                     ConstructToPromiseArtifact(std::move(thatPromise), *artifactActual, originalRequest);

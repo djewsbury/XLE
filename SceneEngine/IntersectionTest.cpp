@@ -224,6 +224,7 @@ namespace SceneEngine
         parsingContext.SetPipelineAcceleratorsVisibility(techniqueContext._pipelineAccelerators->VisibilityBarrier());
         auto viewportDims = context._viewportMaxs - context._viewportMins;
         parsingContext.GetProjectionDesc() = RenderCore::Techniques::BuildProjectionDesc(context._cameraDesc, viewportDims[0] / float(viewportDims[1]));
+        parsingContext.GetViewport() = RenderCore::ViewportDesc{float(context._viewportMins[0]), float(context._viewportMins[1]), float(context._viewportMaxs[0]-context._viewportMins[0]), float(context._viewportMaxs[1]-context._viewportMins[1])};
 
         if ((filter & Type::Terrain) && _terrainManager) {
             auto intersection = FindTerrainIntersection(
