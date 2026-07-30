@@ -162,6 +162,7 @@ namespace SceneEngine
             Float3x4        _localToWorld;
             std::string     _model;
             std::string     _material;
+            std::string     _compilationConfiguration;
             std::string     _supplements;
 
             ObjTransDef() {}

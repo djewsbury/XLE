@@ -62,6 +62,7 @@ namespace SceneEngine
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
     static const unsigned s_PlacementsChunkVersionNumber = 1;
+    static const unsigned s_compilationConfigurationSentinel = ~0u;
 
     struct PlacementsScaffoldHeader
     {
@@ -85,7 +86,8 @@ namespace SceneEngine
             while (i != _objects.cend() 
                 && i->_materialFilenameOffset == starti->_materialFilenameOffset 
                 && i->_modelFilenameOffset == starti->_modelFilenameOffset
-                && i->_supplementsOffset == starti->_supplementsOffset) { ++i; }
+                && i->_supplementsOffset == starti->_supplementsOffset
+                && i->_compilationConfigurationOffset == starti->_compilationConfigurationOffset) { ++i; }
             ++configCount;
         }
         Log(Verbose) << "    (" << configCount << ") configurations" << std::endl;
@@ -96,12 +98,16 @@ namespace SceneEngine
             while (i != _objects.cend() 
                 && i->_materialFilenameOffset == starti->_materialFilenameOffset 
                 && i->_modelFilenameOffset == starti->_modelFilenameOffset
-                && i->_supplementsOffset == starti->_supplementsOffset) { ++i; }
+                && i->_supplementsOffset == starti->_supplementsOffset
+                && i->_compilationConfigurationOffset == starti->_compilationConfigurationOffset) { ++i; }
 
             auto modelName = (const char*)PtrAdd(AsPointer(_filenamesBuffer.begin()), starti->_modelFilenameOffset + sizeof(uint64_t));
             auto materialName = (const char*)PtrAdd(AsPointer(_filenamesBuffer.begin()), starti->_materialFilenameOffset + sizeof(uint64_t));
             auto supplementCount = !_supplementsBuffer.empty() ? _supplementsBuffer[starti->_supplementsOffset] : 0;
-            Log(Verbose) << "    [" << (i-starti) << "] objects (" << modelName << "), (" << materialName << "), (" << supplementCount << ")" << std::endl;
+            Log(Verbose) << "    [" << (i-starti) << "] objects (" << modelName << "), (" << materialName << "), (" << supplementCount << ")";
+            if (i->_compilationConfigurationOffset != s_compilationConfigurationSentinel)
+                Log(Verbose) << ", cfg: (" << (const char*)PtrAdd(AsPointer(_filenamesBuffer.begin()), starti->_compilationConfigurationOffset + sizeof(uint64_t)) << ")";
+            Log(Verbose) << std::endl;
         }
     }
 
@@ -157,6 +163,10 @@ namespace SceneEngine
                     if (o->_materialFilenameOffset > replacementStart) {
                         o->_materialFilenameOffset -= preReplacementEnd - postReplacementEnd;
                         assert(o->_materialFilenameOffset > replacementStart);
+                    }
+                    if (o->_compilationConfigurationOffset > replacementStart) {
+                        o->_compilationConfigurationOffset -= preReplacementEnd - postReplacementEnd;
+                        assert(o->_compilationConfigurationOffset > replacementStart);
                     }
                 }
                 return;
@@ -280,7 +290,7 @@ namespace SceneEngine
             CapturedCellMetadata result;
             result._placementCount = (unsigned)_scaffold.GetObjectReferences().size();
             result._similarPlacementCount = 0;
-            unsigned searchingModelFilenameOffset = ~0u, searchingMaterialFilenameOffset = ~0u;
+            unsigned searchingModelFilenameOffset = ~0u, searchingMaterialFilenameOffset = ~0u, searchingCompilationConfiguration = ~0u;
             for (auto& i:_scaffold.GetObjectReferences()) {
                 if (i._guid == objectGuid) {
                     if (!_scaffold.GetCellSpaceBoundaries().empty()) {
@@ -290,11 +300,12 @@ namespace SceneEngine
                     }
                     searchingModelFilenameOffset = i._modelFilenameOffset;
                     searchingMaterialFilenameOffset = i._materialFilenameOffset;
+                    searchingCompilationConfiguration = i._compilationConfigurationOffset;
                 }
             }
             if (searchingModelFilenameOffset != ~0u || searchingMaterialFilenameOffset != ~0u) {
                 for (auto& i:_scaffold.GetObjectReferences())
-                    if (i._modelFilenameOffset == searchingModelFilenameOffset && i._materialFilenameOffset == searchingMaterialFilenameOffset)
+                    if (i._modelFilenameOffset == searchingModelFilenameOffset && i._materialFilenameOffset == searchingMaterialFilenameOffset && i._compilationConfigurationOffset == searchingCompilationConfiguration)
                         ++ result._similarPlacementCount;
             }
             return result;
@@ -327,18 +338,23 @@ namespace SceneEngine
         std::sort(sortedObjectReferences.begin(), sortedObjectReferences.end(), [](const auto* lhs, const auto* rhs) { 
             if (lhs->_modelFilenameOffset < rhs->_modelFilenameOffset) return true;
             if (lhs->_modelFilenameOffset > rhs->_modelFilenameOffset) return false;
-            return lhs->_materialFilenameOffset < rhs->_materialFilenameOffset;
+            if (lhs->_materialFilenameOffset < rhs->_materialFilenameOffset) return true;
+            if (lhs->_materialFilenameOffset > rhs->_materialFilenameOffset) return false;
+            return lhs->_compilationConfigurationOffset < rhs->_compilationConfigurationOffset;
         });
         
         auto* filenamesBuffer = placements.GetFilenamesBuffer();
         result->_objectToRenderer.resize(placements.GetObjectReferences().size(), ~0u);
         for (auto i=sortedObjectReferences.begin(); i!=sortedObjectReferences.end();) {
             auto endi = i+1;
-            while (endi!=sortedObjectReferences.end() && (*endi)->_modelFilenameOffset == (*i)->_modelFilenameOffset  && (*endi)->_materialFilenameOffset == (*i)->_materialFilenameOffset) ++endi;
+            while (endi!=sortedObjectReferences.end() && (*endi)->_modelFilenameOffset == (*i)->_modelFilenameOffset && (*endi)->_materialFilenameOffset == (*i)->_materialFilenameOffset && (*endi)->_compilationConfigurationOffset == (*i)->_compilationConfigurationOffset) ++endi;
 
             auto model = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
             model->SetOperationContext(cache.GetLoadingContext());
-            model->AddElement().SetModelAndMaterials(
+            auto e = model->AddElement();
+            if ((*i)->_compilationConfigurationOffset != s_compilationConfigurationSentinel)
+                e.SetCompilationConfiguration((const char*)PtrAdd(filenamesBuffer, (*i)->_compilationConfigurationOffset + sizeof(uint64_t)));
+            e.SetModelAndMaterials(
                 (const char*)PtrAdd(filenamesBuffer, (*i)->_modelFilenameOffset + sizeof(uint64_t)),
                 (const char*)PtrAdd(filenamesBuffer, (*i)->_materialFilenameOffset + sizeof(uint64_t)));
             auto modelPtr = cache.CreateModel(model);
@@ -1689,6 +1705,7 @@ namespace SceneEngine
             IRigidModelScene& cache,
             const Float3x4& objectToCell, 
             StringSection<> modelFilename, StringSection<> materialFilename,
+            StringSection<> compilationConfiguration,
             SupplementRange supplements,
             uint64_t objectGuid);
         void DeletePlacement(uint64_t);
@@ -1697,6 +1714,7 @@ namespace SceneEngine
             IRigidModelScene& cache,
             const Float3x4& objectToCell, 
             StringSection<> modelFilename, StringSection<> materialFilename,
+            StringSection<> compilationConfiguration,
             SupplementRange supplements);
 
         IteratorRange<const PlacementsScaffold::ObjectReference*> GetObjectReferences() const override { return _objects; }
@@ -1719,7 +1737,7 @@ namespace SceneEngine
     private:
         struct RenderRegistration
         {
-            unsigned _model = ~0u, _material = ~0u;
+            unsigned _model = ~0u, _material = ~0u, _compilationConfiguration = ~0u;
             unsigned _referenceCount = 0;
         };
         std::vector<RenderRegistration> _rendererRegistrations;
@@ -1744,6 +1762,7 @@ namespace SceneEngine
         IRigidModelScene& cache,
         const Float3x4& objectToCell,
         StringSection<> modelFilename, StringSection<> materialFilename,
+        StringSection<> compilationConfiguration,
         SupplementRange supplements,
         uint64_t objectGuid)
     {
@@ -1752,6 +1771,7 @@ namespace SceneEngine
         newReference._localToCell = objectToCell;
         newReference._modelFilenameOffset = AddString(modelFilename);
         newReference._materialFilenameOffset = AddString(materialFilename);
+        newReference._compilationConfigurationOffset = !compilationConfiguration.IsEmpty() ? AddString(compilationConfiguration) : s_compilationConfigurationSentinel;
         newReference._supplementsOffset = AddSupplements(supplements);
         newReference._guid = objectGuid;
         ScaleRotationTranslationM decomposed(objectToCell);
@@ -1779,7 +1799,7 @@ namespace SceneEngine
         auto& obj = _objects[objectIdx];
         auto r = _rendererRegistrations.begin();
         while (r!=_rendererRegistrations.end()) {
-            if (r->_model == obj._modelFilenameOffset && r->_material == obj._materialFilenameOffset)
+            if (r->_model == obj._modelFilenameOffset && r->_material == obj._materialFilenameOffset && r->_compilationConfiguration == obj._compilationConfigurationOffset)
                 break;
             ++r;
         }
@@ -1787,14 +1807,17 @@ namespace SceneEngine
         if (r == _rendererRegistrations.end() || !r->_referenceCount) {
             auto model = std::make_shared<RenderCore::Assets::ModelRendererConstruction>();
             model->SetOperationContext(cache.GetLoadingContext());
-            model->AddElement().SetModelAndMaterials(
+            auto e = model->AddElement();
+            if (obj._compilationConfigurationOffset != s_compilationConfigurationSentinel)
+                e.SetCompilationConfiguration((const char*)PtrAdd(_filenamesBuffer.data(), obj._compilationConfigurationOffset + sizeof(uint64_t)));
+            e.SetModelAndMaterials(
                 (const char*)PtrAdd(_filenamesBuffer.data(), obj._modelFilenameOffset + sizeof(uint64_t)),
                 (const char*)PtrAdd(_filenamesBuffer.data(), obj._materialFilenameOffset + sizeof(uint64_t)));
             auto modelPtr = cache.CreateModel(model);
             auto renderer = cache.CreateRenderer(modelPtr, nullptr);
             if (r == _rendererRegistrations.end()) {
                 auto rendererIdx = _rendererRegistrations.size();
-                _rendererRegistrations.push_back(RenderRegistration{obj._modelFilenameOffset, obj._materialFilenameOffset, 1});
+                _rendererRegistrations.push_back(RenderRegistration{obj._modelFilenameOffset, obj._materialFilenameOffset, obj._compilationConfigurationOffset, 1});
                 _renderers.push_back(renderer);
                 _models.push_back(modelPtr);
                 _objectToRenderer[objectIdx] = (unsigned)rendererIdx;
@@ -1839,6 +1862,7 @@ namespace SceneEngine
         IRigidModelScene& cache,
         const Float3x4& objectToCell, 
         StringSection<> modelFilename, StringSection<> materialFilename,
+        StringSection<> compilationConfiguration,
         SupplementRange supplements)
     {
         auto i = std::lower_bound(
@@ -1855,7 +1879,8 @@ namespace SceneEngine
 
         auto newModel = AddString(modelFilename);
         auto newMaterial = AddString(materialFilename);
-        if (newModel != i->_modelFilenameOffset || newMaterial != i->_materialFilenameOffset) {
+        auto newCompilationConfiguration = !compilationConfiguration.IsEmpty() ? AddString(compilationConfiguration) : s_compilationConfigurationSentinel;
+        if (newModel != i->_modelFilenameOffset || newMaterial != i->_materialFilenameOffset || newCompilationConfiguration != i->_compilationConfigurationOffset) {
             auto objIdx = std::distance(_objects.begin(), i);
 
             auto rendererIdx = _objectToRenderer[objIdx];
@@ -1868,6 +1893,7 @@ namespace SceneEngine
 
             i->_modelFilenameOffset = newModel;
             i->_materialFilenameOffset = newMaterial;
+            i->_compilationConfigurationOffset = newCompilationConfiguration;
             AssignRenderer(cache, (unsigned)std::distance(_objects.begin(), i));
         }
     }
@@ -1897,6 +1923,8 @@ namespace SceneEngine
             p._localToCell = o._localToCell;
             p._resource._name = (const char*)PtrAdd(_filenamesBuffer.data(), o._modelFilenameOffset+sizeof(uint64_t));
             p._resource._material = (const char*)PtrAdd(_filenamesBuffer.data(), o._materialFilenameOffset+sizeof(uint64_t));
+            if (o._compilationConfigurationOffset != s_compilationConfigurationSentinel)
+                p._resource._compilationConfiguration = (const char*)PtrAdd(_filenamesBuffer.data(), o._compilationConfigurationOffset+sizeof(uint64_t));
             auto supplements = AsSupplements(_supplementsBuffer.data(), o._supplementsOffset);
             p._resource._supplements = {supplements.begin(), supplements.end()};
             p._resource._cellSpaceBoundary = cellSpaceBoundaries[c];
@@ -2604,7 +2632,7 @@ namespace SceneEngine
                     dynPlacements->AddPlacement(
                         _editorPimpl->_placementsCache->GetRigidModelScene(),
                         localToCell,
-                        MakeStringSection(newState._model), MakeStringSection(materialFilename), 
+                        MakeStringSection(newState._model), MakeStringSection(materialFilename), MakeStringSection(newState._compilationConfiguration),
                         MakeIteratorRange(suppGuid), id);
 
                     guid = PlacementGUID(i->_filenameHash, id);
@@ -2664,7 +2692,7 @@ namespace SceneEngine
                 dynPlacements->AddPlacement(
                     _editorPimpl->_placementsCache->GetRigidModelScene(),
                     localToCell,
-                    MakeStringSection(newState._model), MakeStringSection(materialFilename), 
+                    MakeStringSection(newState._model), MakeStringSection(materialFilename), MakeStringSection(newState._compilationConfiguration),
                     MakeIteratorRange(supp), id);
 
                 guid.second = id;
@@ -2760,12 +2788,12 @@ namespace SceneEngine
                     guid.second,
                     _editorPimpl->_placementsCache->GetRigidModelScene(),
                     localToCell,
-                    newState._model, materialFilename, suppGuids);
+                    newState._model, materialFilename, newState._compilationConfiguration, suppGuids);
             } else {
                 dynPlacements->AddPlacement(
                     _editorPimpl->_placementsCache->GetRigidModelScene(),
                     localToCell,
-                    MakeStringSection(newState._model), MakeStringSection(materialFilename), 
+                    MakeStringSection(newState._model), MakeStringSection(materialFilename), newState._compilationConfiguration,
                     MakeIteratorRange(suppGuids), newReplacementGuid);
                 guid.second = newReplacementGuid;
             }
@@ -2857,6 +2885,8 @@ namespace SceneEngine
                         def._localToWorld = Combine(pIterator->_localToCell, cellToWorld);
                         def._model = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_modelFilenameOffset);
                         def._material = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_materialFilenameOffset);
+                        if (pIterator->_compilationConfigurationOffset != s_compilationConfigurationSentinel)
+                            def._compilationConfiguration = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_compilationConfigurationOffset);
                         def._supplements = SupplementsGuidsToString(AsSupplements(placements->GetSupplementsBuffer(), pIterator->_supplementsOffset));
                         def._transaction = ObjTransDef::Unchanged;
                         Absorb(*i, def);
@@ -2880,6 +2910,8 @@ namespace SceneEngine
                         def._localToWorld = Combine(pIterator->_localToCell, cellToWorld);
                         def._model = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_modelFilenameOffset);
                         def._material = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_materialFilenameOffset);
+                        if (pIterator->_compilationConfigurationOffset != s_compilationConfigurationSentinel)
+                            def._compilationConfiguration = (const char*)PtrAdd(placements->GetFilenamesBuffer(), sizeof(uint64_t) + pIterator->_compilationConfigurationOffset);
                         def._supplements = SupplementsGuidsToString(AsSupplements(placements->GetSupplementsBuffer(), pIterator->_supplementsOffset));
                         def._transaction = ObjTransDef::Unchanged;
                         Absorb(*i, def);
@@ -3079,15 +3111,15 @@ namespace SceneEngine
 
     void PlacementsEditor::Serialize(Formatters::TextOutputFormatter& fmttr)
     {
-        char buffer[256];
         for (auto& cell:_pimpl->_cellSet->_pimpl->_cells) {
             auto ce = fmttr.BeginKeyedElement(cell._filename);
 
-            fmttr.FormatKeyedValue("CellToWorld", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._cellToWorld));
-            fmttr.FormatKeyedValue("AABBMin", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._aabbMin));
-            fmttr.FormatKeyedValue("AABBMax", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._aabbMax));
-            fmttr.FormatKeyedValue("CaptureMins", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._captureMins));
-            fmttr.FormatKeyedValue("CaptureMaxs", StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(cell._captureMaxs));
+            fmttr.FormatKeyedValue("Version", 1u);
+            fmttr.FormatKeyedValue("CellToWorld", ImpliedTyping::AsVariantNonRetained(cell._cellToWorld));
+            fmttr.FormatKeyedValue("AABBMin", ImpliedTyping::AsVariantNonRetained(cell._aabbMin));
+            fmttr.FormatKeyedValue("AABBMax", ImpliedTyping::AsVariantNonRetained(cell._aabbMax));
+            fmttr.FormatKeyedValue("CaptureMins", ImpliedTyping::AsVariantNonRetained(cell._captureMins));
+            fmttr.FormatKeyedValue("CaptureMaxs", ImpliedTyping::AsVariantNonRetained(cell._captureMaxs));
 
             // note that GetDynPlacements will create the dynamic placements if it doesn't already exist
             if (auto dynPlacement = _pimpl->GetDynPlacements(cell._filenameHash)) {
@@ -3115,9 +3147,12 @@ namespace SceneEngine
                 std::lower_bound(b2e(_pimpl->_cellSet->_pimpl->_cells), protoCell._filenameHash, CompareFilenameHash{}),
                 protoCell);
 
+            unsigned version = 0;
             Formatters::RequireBeginElement(fmttr);
             while (fmttr.TryKeyedItem(kn)) {
-                if (XlEqString(kn, "CellToWorld")) {
+                if (XlEqString(kn, "Version")) {
+                    version = Formatters::RequireCastValue<decltype(version)>(fmttr);
+                } else if (XlEqString(kn, "CellToWorld")) {
                     newCell._cellToWorld = Formatters::RequireCastValue<decltype(newCell._cellToWorld)>(fmttr);
                 } else if (XlEqString(kn, "AABBMin")) {
                     newCell._aabbMin = Formatters::RequireCastValue<decltype(newCell._aabbMin)>(fmttr);
@@ -3130,7 +3165,7 @@ namespace SceneEngine
                 } else if (XlEqString(kn, "Placements")) {
                     auto dynPlacements = _pimpl->GetDynPlacements(newCell._filenameHash);
                     Formatters::RequireBeginElement(fmttr);
-                    auto placements = DeserializePlacements(fmttr);
+                    auto placements = DeserializePlacements(fmttr, version);
                     Formatters::RequireEndElement(fmttr);
 
                     for (auto& p:placements) {
@@ -3148,7 +3183,7 @@ namespace SceneEngine
 
                         dynPlacements->AddPlacement(
                             _pimpl->_placementsCache->GetRigidModelScene(),
-                            p._localToCell, p._resource._name, p._resource._material, {}, id);
+                            p._localToCell, p._resource._name, p._resource._material, p._resource._compilationConfiguration, {}, id);
                     }
                 } else {
                     Formatters::SkipValueOrElement(fmttr);
@@ -3354,6 +3389,7 @@ namespace SceneEngine
             newReference._localToCell = p._localToCell;
             newReference._modelFilenameOffset = AddStringToSharedBuffer(filenamesBuffer, p._resource._name);
             newReference._materialFilenameOffset = AddStringToSharedBuffer(filenamesBuffer, p._resource._material);
+            newReference._compilationConfigurationOffset = !p._resource._compilationConfiguration.empty() ? AddStringToSharedBuffer(filenamesBuffer, p._resource._compilationConfiguration) : s_compilationConfigurationSentinel;
             newReference._supplementsOffset = AddSupplementsToSharedBuffer(supplementsBuffer, p._resource._supplements);
             ScaleRotationTranslationM decomposed{newReference._localToCell};
             newReference._decomposedRotation = decomposed._rotation;
@@ -3417,10 +3453,11 @@ namespace SceneEngine
             fmttr.WriteSequencedValue(StringMeldInPlace(buffer) << ImpliedTyping::AsVariantNonRetained(p._localToCell));
             fmttr.WriteSequencedValue(p._resource._name);
             fmttr.WriteSequencedValue(p._resource._material);
+            fmttr.WriteSequencedValue(p._resource._compilationConfiguration);
         }
     }
 
-    std::vector<NascentPlacement> DeserializePlacements(Formatters::TextInputFormatter<char>& fmttr)
+    std::vector<NascentPlacement> DeserializePlacements(Formatters::TextInputFormatter<char>& fmttr, unsigned version)
     {
         std::vector<NascentPlacement> result;
         while (fmttr.PeekNext() != Formatters::FormatterBlob::EndElement) {
@@ -3428,6 +3465,7 @@ namespace SceneEngine
             p._localToCell = Formatters::RequireCastValue<decltype(p._localToCell)>(fmttr);
             p._resource._name = Formatters::RequireStringValue(fmttr).AsString();
             p._resource._material = Formatters::RequireStringValue(fmttr).AsString();
+            if (version >= 1) p._resource._compilationConfiguration = Formatters::RequireStringValue(fmttr).AsString();
             result.emplace_back(std::move(p));
         }
         return result;
@@ -3447,6 +3485,8 @@ namespace SceneEngine
             p._preassignedGuid = o._guid;
             p._resource._name = (const char*)PtrAdd(fns, sizeof(uint64_t)+o._modelFilenameOffset);
             p._resource._material = (const char*)PtrAdd(fns, sizeof(uint64_t)+o._materialFilenameOffset);
+            if (o._compilationConfigurationOffset != s_compilationConfigurationSentinel)
+                p._resource._compilationConfiguration = (const char*)PtrAdd(fns, sizeof(uint64_t)+o._compilationConfigurationOffset);
             p._resource._cellSpaceBoundary = bs[&o-os.begin()];
             result.emplace_back(p);
         }

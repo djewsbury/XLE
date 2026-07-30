@@ -22,9 +22,10 @@ namespace SceneEngine
 		struct ObjectReference
 		{
 			Float3x4    _localToCell;
-			unsigned    _modelFilenameOffset;       // note -- hash values should be stored with the filenames
+			unsigned    _modelFilenameOffset;
 			unsigned    _materialFilenameOffset;
 			unsigned    _supplementsOffset;
+			unsigned	_compilationConfigurationOffset;
 			uint64_t    _guid;
 			Float3x3    _decomposedRotation;
 			Float3      _decomposedScale;
@@ -67,6 +68,7 @@ namespace SceneEngine
 		struct Resource
 		{
 			std::string _name, _material;
+			std::string _compilationConfiguration;
 			std::vector<uint64_t> _supplements;
 			std::pair<Float3, Float3> _cellSpaceBoundary;
 		};
@@ -76,7 +78,7 @@ namespace SceneEngine
 	};
 	::Assets::Blob SerializePlacements(IteratorRange<const NascentPlacement*>);
 	void SerializePlacements(Formatters::TextOutputFormatter&, IteratorRange<const NascentPlacement*>);
-	std::vector<NascentPlacement> DeserializePlacements(Formatters::TextInputFormatter<char>&);
+	std::vector<NascentPlacement> DeserializePlacements(Formatters::TextInputFormatter<char>&, unsigned version=1);
 
 	std::vector<NascentPlacement> AsNascentPlacements(const PlacementsScaffold&);
 
