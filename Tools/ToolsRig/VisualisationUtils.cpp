@@ -345,13 +345,13 @@ namespace ToolsRig
 					RenderLoadingIndicator(overlays, rect, _loadingIndicatorCounter++);
 					overlays.ReleaseState();
 
-					auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
+					auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithOptionalInitialize(parserContext);
 					RenderOverlays::ExecuteDraws(parserContext, rpi, *_immediateDrawables, *_debugShapesDelegate);
 
 					StringMeldAppend(parserContext._stringHelpers->_pendingAssets, ArrayEnd(parserContext._stringHelpers->_pendingAssets)) << "Scene Layer\n";
 				} else {
 					// clear, but don't draw anything
-					auto rpi = RenderCore::Techniques::RenderPassToPresentationTarget(parserContext, RenderCore::LoadStore::Clear);
+					auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithOptionalInitialize(parserContext);
 				}
 
 			} else {
@@ -378,7 +378,7 @@ namespace ToolsRig
 
 	void SimpleSceneOverlay::RebuildPreparedScene()
 	{
-		if (!_envSettings || _lightingTechniqueTargets.empty() || (!_scene && !_useNullScene)) {
+		if (!_envSettings || _lightingTechniqueTargetsHash == 0ull || (!_scene && !_useNullScene)) {
 			_preparedSceneFuture = nullptr;
 			_showingLoadingIndicator = false;
 			return;
