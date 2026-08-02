@@ -1382,7 +1382,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 			// Use another lookup table to try to reduce the amount of reordering we do as much as possible
 			// There may be a better way to do this, but it may not be trivial, without a priority queue, or something,
 			// because each span only includes possibly identical vertices -- they aren't verified yet
-			struct SpanHelper { std::vector<std::pair<uint64_t, unsigned>>::iterator _start, _end; };
+			struct SpanHelper { const std::pair<uint64_t, unsigned>* _start, * _end; };
 			std::vector<SpanHelper> spans;
 			spans.resize(input.GetUnifiedVertexCount());
 
@@ -1393,7 +1393,7 @@ namespace RenderCore { namespace Assets { namespace GeoProc
 				
 				for (auto i2=start; i2!=i; ++i2) {
 					assert(spans[i2->second]._start == spans[i2->second]._end);
-					spans[i2->second] = SpanHelper { start, i };
+					spans[i2->second] = SpanHelper { AsPointer(start), AsPointer(i) };
 				}
 			}
 
