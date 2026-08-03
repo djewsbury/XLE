@@ -509,6 +509,10 @@ namespace RenderCore { namespace Assets
 					&& 	MarkerTimesOut(strongThis->_internal->_skeletonScaffoldMarker, timeoutTime))
 					return ::Assets::PollStatus::Continue;
 
+				for (auto& f:strongThis->_internal->_compilationConfigurationMarkers)
+					if (MarkerTimesOut(f.second, timeoutTime))
+						return ::Assets::PollStatus::Continue;
+
 				return ::Assets::PollStatus::Finish;
 			},
 			[strongThis]() mutable {
@@ -541,6 +545,19 @@ namespace RenderCore { namespace Assets
 					} CATCH_END
 				}
 				if (strongThis->_internal->_skeletonScaffoldMarker.valid()) strongThis->_internal->_skeletonScaffoldMarker.get();
+				for (auto& f:strongThis->_internal->_compilationConfigurationMarkers) {
+					TRY {
+						f.second.get();
+					} CATCH(const ::Assets::Exceptions::ExceptionWithDepVal& e) {
+						auto i = LowerBound(strongThis->_internal->_compilationConfigurationInitializers, f.first);
+						if (i != strongThis->_internal->_compilationConfigurationInitializers.end() && i->first == f.first)
+							Throw(::Assets::Exceptions::InvalidAsset(i->second, e.GetDependencyValidation(), ::Assets::AsBlob(i->second + ": " + e.what())));
+					} CATCH (const std::exception& e) {
+						auto i = LowerBound(strongThis->_internal->_compilationConfigurationInitializers, f.first);
+						if (i != strongThis->_internal->_compilationConfigurationInitializers.end() && i->first == f.first)
+							Throw(::Assets::Exceptions::InvalidAsset(i->second, {}, ::Assets::AsBlob(i->second + ": " + e.what())));
+					} CATCH_END
+				}
 				return std::move(strongThis);
 			});
 	}
