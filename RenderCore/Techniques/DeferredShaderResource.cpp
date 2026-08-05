@@ -589,15 +589,13 @@ namespace RenderCore { namespace Techniques
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-    std::shared_ptr<IResource> CreateResourceImmediately(
-        IThreadContext& threadContext,
-        BufferUploads::IAsyncDataSource& pkt,
-        BindFlag::BitField bindFlags)
+    std::shared_ptr<IResource> CreateStagingResourceImmediately(
+        IDevice& device,
+        BufferUploads::IAsyncDataSource& pkt)
     {
         auto descFuture = pkt.GetDesc();
-        descFuture.wait();
+        YieldToPool(descFuture);
         auto desc = descFuture.get();
-        auto device = threadContext.GetDevice();
         std::vector<uint8_t> data(ByteCount(desc._textureDesc));
         auto arrayCount = ActualArrayLayerCount(desc._textureDesc), mipCount = (unsigned)desc._textureDesc._mipCount;
         VLA_UNSAFE_FORCE(BufferUploads::IAsyncDataSource::SubResource, srs, arrayCount*mipCount);
@@ -609,12 +607,12 @@ namespace RenderCore { namespace Techniques
                 srs[m+a*mipCount]._pitches = srOffset._pitches;
             }
         auto dataFuture = pkt.PrepareData({srs, &srs[arrayCount*mipCount]});
-        dataFuture.wait();
+        YieldToPool(dataFuture);
 
         auto stagingDesc = desc;
         stagingDesc._allocationRules = AllocationRules::HostVisibleSequentialWrite;
         stagingDesc._bindFlags = BindFlag::TransferSrc;
-        auto stagingResource = device->CreateResource(
+        return device.CreateResource(
             stagingDesc,
             (StringMeld<256>() << pkt.GetName() << "-staging").AsStringSection(),
             [data=std::move(data), textureDesc=desc._textureDesc](auto sr) {
@@ -624,12 +622,29 @@ namespace RenderCore { namespace Techniques
                     srOffset._pitches
                 };
             });
+    }
+    
+    std::shared_ptr<IResource> CopyStagingResourceToFinal(
+        IThreadContext& threadContext,
+        IResource& stagingResource, BindFlag::BitField bindFlags,
+        StringSection<> name)
+    {
+        auto desc = stagingResource.GetDesc();
         desc._bindFlags |= bindFlags | BindFlag::TransferDst;
-        auto finalResource = device->CreateResource(desc, pkt.GetName());
+        auto finalResource = threadContext.GetDevice()->CreateResource(desc, name);
         auto& devContext = *Metal::DeviceContext::Get(threadContext);
-        Metal::CompleteInitialization(devContext, {stagingResource.get(), finalResource.get()});
-        devContext.BeginBlitEncoder().Copy(*finalResource, *stagingResource);
+        Metal::CompleteInitialization(devContext, {&stagingResource, finalResource.get()});
+        devContext.BeginBlitEncoder().Copy(*finalResource, stagingResource);
         return finalResource;
+    }
+
+    std::shared_ptr<IResource> CreateResourceImmediately(
+        IThreadContext& threadContext,
+        BufferUploads::IAsyncDataSource& pkt,
+        BindFlag::BitField bindFlags)
+    {
+        auto staging = CreateStagingResourceImmediately(*threadContext.GetDevice(), pkt);
+        return CopyStagingResourceToFinal(threadContext, *staging, bindFlags, pkt.GetName());
     }
 
     std::shared_ptr<IResource> DestageResource(

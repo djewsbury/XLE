@@ -102,6 +102,15 @@ namespace RenderCore { namespace Techniques
         BufferUploads::IAsyncDataSource& pkt,
         BindFlag::BitField bindFlags);
 
+    std::shared_ptr<IResource> CreateStagingResourceImmediately(
+        IDevice&,
+        BufferUploads::IAsyncDataSource& pkt);
+
+    std::shared_ptr<IResource> CopyStagingResourceToFinal(
+        IThreadContext& threadContext,
+        IResource& stagingResource, BindFlag::BitField bindFlags,
+        StringSection<> name = {});
+
     std::shared_ptr<IResource> DestageResource(
         IThreadContext& threadContext,
         const std::shared_ptr<IResource>& input);

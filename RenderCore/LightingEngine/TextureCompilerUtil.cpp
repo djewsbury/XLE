@@ -26,6 +26,7 @@
 
 using namespace Utility::Literals;
 
+
 namespace RenderCore { namespace LightingEngine
 {
 	class DataSourceFromResourceSynchronized : public BufferUploads::IAsyncDataSource
@@ -192,7 +193,8 @@ namespace RenderCore { namespace LightingEngine
 		if (filter != EquirectFilterMode::ProjectToSphericalHarmonic)
 			assert(ActualArrayLayerCount(targetDesc) == 6 && targetDesc._dimensionality == TextureDesc::Dimensionality::CubeMap);
 
-		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(Techniques::Services::GetInstance().GetDevicePtr());
+		auto device = Techniques::Services::GetInstance().GetDevicePtr();
+		auto pipelineCollection = std::make_shared<Techniques::PipelineCollection>(device);
 
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "Input"_h);
@@ -289,11 +291,15 @@ namespace RenderCore { namespace LightingEngine
 		// Delay creating the metal context as long as possible (particularly after any resource stalls)
 		// Since the metal context can construct a command list, which will make it impossible to release
 		// GPU resources until we're finished with it
+		auto stagingResource = Techniques::CreateStagingResourceImmediately(*device, dataSrc);
 		auto threadContext = Techniques::GetThreadContext();
-		auto metalContext = Metal::DeviceContext::Get(*threadContext);
-		auto inputRes = Techniques::CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
+		assert(threadContext->GetDevice() == device);
+		auto inputRes = Techniques::CopyStagingResourceToFinal(*threadContext, *stagingResource, BindFlag::ShaderResource, dataSrc.GetName());
+		stagingResource = {};
+
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
-		Metal::CompleteInitialization(*metalContext, {outputRes.get()});
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
+		Metal::CompleteInitialization(metalContext, {outputRes.get()});
 		if (auto* threadContextVulkan = query_interface_cast<IThreadContextVulkan*>(threadContext.get()))
 			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
 
@@ -370,16 +376,16 @@ namespace RenderCore { namespace LightingEngine
 				CreateDesc(BindFlag::UnorderedAccess, TextureDesc::Plain1D(densitiesDims[1], Format::R32_FLOAT)),
 				"marginal-vertical-cdf")->CreateTextureView(BindFlag::UnorderedAccess);
 			RenderCore::IResource* toComplete[] { marginalHorizontalCFG->GetResource().get(), marginalVerticalCFG->GetResource().get() };
-			Metal::CompleteInitialization(*metalContext, toComplete);
+			Metal::CompleteInitialization(metalContext, toComplete);
 
 			IResourceView* resViews[] = { inputView.get(), nullptr, marginalHorizontalCFG.get(), marginalVerticalCFG.get(), nullptr, nullptr };
 			UniformsStream us;
 			us._resourceViews = MakeIteratorRange(resViews);
 
 			horizontalDensities->Dispatch(*threadContext, (densitiesDims[0]+8-1)/8, (densitiesDims[1]+8-1)/8, 1, &usi, us);
-			Metal::BarrierHelper(*metalContext).Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
+			Metal::BarrierHelper(metalContext).Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
 			normalizeDensities->Dispatch(*threadContext, 1, 1, 1, &usi, us);
-			Metal::BarrierHelper(*metalContext)
+			Metal::BarrierHelper(metalContext)
 				.Add(*marginalHorizontalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess)
 				.Add(*marginalVerticalCFG->GetResource(), BindFlag::UnorderedAccess, BindFlag::UnorderedAccess);
 
@@ -697,21 +703,25 @@ namespace RenderCore { namespace LightingEngine
 		BufferUploads::IAsyncDataSource& dataSrc,
 		const TextureDesc& targetDesc)
 	{
-		auto threadContext = Techniques::GetThreadContext();
-		
 		UniformsStreamInterface usi;
 		usi.BindResourceView(0, "Output"_h);
 		usi.BindResourceView(1, "Input"_h);
 		usi.BindImmediateData(0, "ControlUniforms"_h);
 
+		auto device = Techniques::Services::GetInstance().GetDevicePtr();
  		auto computeOpFuture = Techniques::CreateComputeOperator(
-			std::make_shared<Techniques::PipelineCollection>(threadContext->GetDevice()),
+			std::make_shared<Techniques::PipelineCollection>(device),
 			shader, {}, TOOLSHELPER_OPERATORS_PIPELINE ":ComputeMain");
 
-		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
-		auto inputRes = Techniques::CreateResourceImmediately(*threadContext, dataSrc, BindFlag::ShaderResource);
+		auto stagingResource = Techniques::CreateStagingResourceImmediately(*device, dataSrc);
+		auto threadContext = Techniques::GetThreadContext();
+		assert(threadContext->GetDevice() == device);
+		auto inputRes = Techniques::CopyStagingResourceToFinal(*threadContext, *stagingResource, BindFlag::ShaderResource, dataSrc.GetName());
+		stagingResource = {};
+
 		auto inputView = inputRes->CreateTextureView(BindFlag::ShaderResource);
 		auto outputRes = threadContext->GetDevice()->CreateResource(CreateDesc(BindFlag::UnorderedAccess|BindFlag::TransferSrc, targetDesc), "texture-compiler");
+		auto& metalContext = *Metal::DeviceContext::Get(*threadContext);
 		Metal::CompleteInitialization(metalContext, {outputRes.get()});
 		if (auto* threadContextVulkan = (RenderCore::IThreadContextVulkan*)threadContext->QueryInterface(TypeHashCode<RenderCore::IThreadContextVulkan>))
 			threadContextVulkan->AttachNameToCommandList(s_equRectFilterName);
