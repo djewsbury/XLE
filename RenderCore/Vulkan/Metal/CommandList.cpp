@@ -12,6 +12,8 @@
 
 namespace RenderCore { namespace Metal_Vulkan
 {
+	void Aftermath_Stall();
+
 	void CommandList::UpdateBuffer(
 		VkBuffer buffer, VkDeviceSize offset, 
 		VkDeviceSize byteCount, const void* data)
@@ -578,8 +580,10 @@ namespace RenderCore { namespace Metal_Vulkan
 		#endif
 
 		auto res = vkQueueSubmit(_underlying, 1, &submitInfo, fenceOnCompletion);
-		if (res != VK_SUCCESS)
+		if (res != VK_SUCCESS) {
+			Aftermath_Stall();
 			Throw(VulkanAPIFailure(res, "Failure while queuing command list"));
+		}
 
 		_maxInorderActuallySubmitted = std::max(_maxInorderActuallySubmitted, (uint64_t)trackerSubmitInfo._maxInorderMarker);
 		if (!asyncTrackerMarkers.empty())

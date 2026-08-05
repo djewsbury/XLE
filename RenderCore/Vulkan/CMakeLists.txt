@@ -98,6 +98,7 @@ target_include_directories(RenderCore_Vulkan PUBLIC ${INTERNAL_FOUND_VULKAN_INCL
 
 find_dxcompiler()
 target_link_libraries(RenderCore_Vulkan PRIVATE dxil dxcompiler)
+# target_link_libraries(RenderCore_Vulkan PRIVATE C:\\codelibrary\\Aftermath\\lib\\x64\\GFSDK_Aftermath_Lib.x64.lib)
 
 add_custom_command(
 	TARGET RenderCore_Vulkan POST_BUILD 

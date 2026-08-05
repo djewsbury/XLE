@@ -28,6 +28,12 @@
 #include "../../Core/SelectConfiguration.h"
 #include <memory>
 
+// #define AFTERMATH 1
+#if AFTERMATH
+	#include "C:\codelibrary\Aftermath\include\GFSDK_Aftermath.h"
+	#include "C:\codelibrary\Aftermath\include\GFSDK_Aftermath_GpuCrashDump.h"
+#endif
+
 namespace RenderCore { namespace Metal_Vulkan
 {
 	class GlobalsContainer
@@ -45,6 +51,8 @@ namespace RenderCore { namespace Metal_Vulkan
 	GlobalPools& GetGlobalPools() { return s_globalsContainer.lock()->_pools; }
 
 	VkImageUsageFlags AsImageUsageFlags(BindFlag::BitField bindFlags);
+
+	void Aftermath_InitDevice();
 }}
 
 namespace RenderCore { namespace ImplVulkan
@@ -1481,6 +1489,23 @@ namespace RenderCore { namespace ImplVulkan
 		if (enableDebugLayer)
 			deviceLayers[deviceLayerCount++] = "VK_LAYER_KHRONOS_validation";
 
+		#if AFTERMATH
+			deviceLayers[deviceLayerCount++] = VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME;
+			deviceLayers[deviceLayerCount++] = VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME;
+
+			VkDeviceDiagnosticsConfigFlagsNV aftermathFlags =
+				VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV |  // Enable automatic call stack checkpoints.
+				VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_RESOURCE_TRACKING_BIT_NV |      // Enable tracking of resources.
+				VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_DEBUG_INFO_BIT_NV |      // Generate debug information for shaders.
+				VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_ERROR_REPORTING_BIT_NV;  // Enable additional runtime shader error reporting.
+
+			VkDeviceDiagnosticsConfigCreateInfoNV aftermathInfo = {};
+			aftermathInfo.sType = VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV;
+			aftermathInfo.flags = aftermathFlags;
+			appender->pNext = (VkBaseInStructure*)&aftermathInfo;
+			appender = (VkBaseInStructure*)&aftermathInfo;
+		#endif
+
 		device_info.enabledExtensionCount = deviceExtensionCount;
 		device_info.ppEnabledExtensionNames = deviceExtensions;
 		device_info.enabledLayerCount = deviceLayerCount;
@@ -2037,6 +2062,8 @@ namespace RenderCore { namespace ImplVulkan
 				if (queueProps[qi].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 					_physicalDevices.push_back({dev, qi, dedicatedTransferQueueFamily, dedicatedComputeQueueFamily});
 		}
+
+		Metal_Vulkan::Aftermath_InitDevice();
 	}
 
 	APIInstance::~APIInstance()
@@ -3240,6 +3267,92 @@ namespace RenderCore { namespace ImplVulkan
 		return rules;
 	}
 }}
+
+namespace RenderCore { namespace Metal_Vulkan
+{
+
+	#if AFTERMATH
+
+		struct GpuCrashTracker {};
+		GpuCrashTracker g_aftermathCrashTracker;
+
+		// Static wrapper for the GPU crash dump handler. See the 'Handling GPU crash dump Callbacks' section for details.
+		void Aftermath_GpuCrashDumpCallback(const void* pGpuCrashDump, const uint32_t gpuCrashDumpSize, void* pUserData)
+		{
+			GpuCrashTracker* pGpuCrashTracker = reinterpret_cast<GpuCrashTracker*>(pUserData);
+			int c=0;
+			(void)c;
+		}
+
+		// Static wrapper for the shader debug information handler. See the 'Handling Shader Debug Information callbacks' section for details.
+		void Aftermath_ShaderDebugInfoCallback(const void* pShaderDebugInfo, const uint32_t shaderDebugInfoSize, void* pUserData)
+		{
+			GpuCrashTracker* pGpuCrashTracker = reinterpret_cast<GpuCrashTracker*>(pUserData);
+			int c=0;
+			(void)c;
+		}
+
+		// Static wrapper for the GPU crash dump description handler. See the 'Handling GPU Crash Dump Description Callbacks' section for details.
+		void Aftermath_CrashDumpDescriptionCallback(PFN_GFSDK_Aftermath_AddGpuCrashDumpDescription addDescription, void* pUserData)
+		{
+			GpuCrashTracker* pGpuCrashTracker = reinterpret_cast<GpuCrashTracker*>(pUserData);
+			int c=0;
+			(void)c;
+		}
+
+		// Static wrapper for the resolve marker handler. See the 'Handling Marker Resolve Callbacks' section for details.
+		void Aftermath_ResolveMarkerCallback(const void* pMarkerData, const uint32_t markerDataSize, void* pUserData, PFN_GFSDK_Aftermath_ResolveMarker resolveMarker)
+		{
+			GpuCrashTracker* pGpuCrashTracker = reinterpret_cast<GpuCrashTracker*>(pUserData);
+			int c=0;
+			(void)c;
+		}
+
+		void Aftermath_InitDevice()
+		{
+			// Enable GPU crash dumps and register callbacks.
+			auto res = GFSDK_Aftermath_EnableGpuCrashDumps(
+				GFSDK_Aftermath_Version_API,
+				GFSDK_Aftermath_GpuCrashDumpWatchedApiFlags_DX,
+				GFSDK_Aftermath_GpuCrashDumpFeatureFlags_Default,   // Default behavior.
+				Aftermath_GpuCrashDumpCallback,                     // Register callback for GPU crash dumps.
+				Aftermath_ShaderDebugInfoCallback,                  // Register callback for shader debug information.
+				Aftermath_CrashDumpDescriptionCallback,             // Register callback for GPU crash dump description.
+				Aftermath_ResolveMarkerCallback,                    // Register callback for marker resolution (R495 or later NVIDIA graphics driver).
+				&g_aftermathCrashTracker);                          // Set the GpuCrashTracker object as user data passed back by the above callbacks.
+			assert(res == GFSDK_Aftermath_Result_Success);
+		}
+
+		void Aftermath_Stall()
+		{
+			GFSDK_Aftermath_CrashDump_Status status = GFSDK_Aftermath_CrashDump_Status_Unknown;
+			auto res = GFSDK_Aftermath_GetCrashDumpStatus(&status);
+			assert(res == GFSDK_Aftermath_Result_Success);
+
+			auto tStart = std::chrono::steady_clock::now();
+			auto tElapsed = std::chrono::milliseconds::zero();
+			auto deviceLostTimeout = std::chrono::milliseconds{5000};
+
+			// Loop while Aftermath crash dump data collection has not finished or
+			// the application is still processing the crash dump data.
+			while (status != GFSDK_Aftermath_CrashDump_Status_CollectingDataFailed &&
+				status != GFSDK_Aftermath_CrashDump_Status_Finished &&
+				tElapsed < deviceLostTimeout)
+			{
+				// Sleep a couple of milliseconds and poll the status again.
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
+				res = GFSDK_Aftermath_GetCrashDumpStatus(&status);
+				assert(res == GFSDK_Aftermath_Result_Success);
+
+				tElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tStart);
+			}
+		}
+	#else
+		void Aftermath_InitDevice() {}
+		void Aftermath_Stall() {}
+	#endif
+}}
+
 
 namespace RenderCore
 {
