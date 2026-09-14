@@ -1068,6 +1068,7 @@ namespace RenderOverlays
 			auto estimatedQuadCount = instanceCount - firstRenderInstance;
 			if (!begun)
 				workingVertices = WorkingVertexSetFontResource{immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true};
+			begun = true;
 			workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
 
 			for (auto* inst:MakeIteratorRange(&sortedInstances[firstRenderInstance], &sortedInstances[instanceCount])) {
