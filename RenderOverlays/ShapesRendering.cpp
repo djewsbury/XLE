@@ -137,7 +137,7 @@ namespace RenderOverlays
 
         static void ConstructToPromise(std::promise<std::shared_ptr<StandardResources>>&& promise)
         {
-            auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>( std::make_shared<::AssetsNew::AssetHeap>() );
+            auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>( std::make_shared<::AssetsNew::AssetHeap>(::ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor()) );
             auto fillRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillRoundedRect");
             auto fillAndOutlineRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":FillAndOutlineRoundedRect");
             auto outlineRoundedRect = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":OutlineRoundedRect");

@@ -937,7 +937,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
         static void ConstructToPromise(std::promise<std::shared_ptr<DebugDisplayResources>>&& promise)
         {
-            auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>( std::make_shared<::AssetsNew::AssetHeap>() );
+            auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>( std::make_shared<::AssetsNew::AssetHeap>(::ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor()) );
             auto horizTweakerBarMaterial = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":HorizTweakerBar");
             auto tagShaderMaterial = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":TagShader");
             auto gridBackgroundMaterial = RenderCore::Assets::GetResolvedMaterialFuture(util, RENDEROVERLAYS_SHAPES_MATERIAL ":GridBackgroundShader");

@@ -367,7 +367,7 @@ namespace RenderCore { namespace Assets
 			depVals.emplace_back(sourceModelHelper.GetModelMatDepVal());		// record a dependency here incase it's empty
 		}
 
-		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>(std::make_shared<::AssetsNew::AssetHeap>());
+		auto util = std::make_shared<::AssetsNew::CompoundAssetUtil>(std::make_shared<::AssetsNew::AssetHeap>(::ConsoleRig::GlobalServices::GetInstance().GetContinuationExecutor()));
 
 			//  for each configuration, we want to build a resolved material
 		Internal::PendingAssets pendingAssets;
