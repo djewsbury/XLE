@@ -622,8 +622,7 @@ namespace PlatformRig
 			lua_call(L, 1, 1);
 			s = lua_tolstring(L, -1, &l);  /* get result */
 			if (s == NULL) {
-				return luaL_error(L,
-					LUA_QL("tostring") " must return a string to " LUA_QL("print"));
+				return luaL_error(L, "tostring must return a string to print");
 			}
 
 			if (i>1) {
