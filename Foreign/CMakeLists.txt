@@ -29,7 +29,6 @@ if(NOT CLIENT_HAS_LUA)
         Lua/src/lapi.c
         Lua/src/lauxlib.c
         Lua/src/lbaselib.c
-        Lua/src/lbitlib.c
         Lua/src/lcode.c
         Lua/src/lcorolib.c
         Lua/src/lctype.c
