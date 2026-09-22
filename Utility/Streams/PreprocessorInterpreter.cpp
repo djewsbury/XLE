@@ -1052,6 +1052,9 @@ namespace Utility
 
 		static EvaluatedValue AsEvaluatedValue(StringSection<> token)
 		{
+			if (token.size() >= 2 && *token.begin() == '"' && *(token.end()-1) == '"')
+				return MakeStringSection(token.begin()+1, token.end()-1);
+
 			EvaluatedValue v;
 			v._type = ImpliedTyping::ParseFullMatch(
 				token,
