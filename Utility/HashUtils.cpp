@@ -80,11 +80,21 @@ namespace Utility
         return Hash64(AsPointer(str.begin()), AsPointer(str.end()), seed);
     }
 
-	uint64_t Hash64(StringSection<char> str, uint64_t seed)
+	uint32_t Hash32(StringSection<char> str, uint32_t seed)
+	{
+		return Hash32(str.begin(), str.end(), seed);
+	}
+    
+    uint64_t Hash64(StringSection<char> str, uint64_t seed)
 	{
 		return Hash64(str.begin(), str.end(), seed);
 	}
-    
+
+    uint32_t Hash32(IteratorRange<const void*> data, uint32_t seed)
+    {
+        return Hash32(data.begin(), data.end(), seed);
+    }
+
     uint64_t Hash64(IteratorRange<const void*> data, uint64_t seed)
     {
         return Hash64(data.begin(), data.end(), seed);

@@ -94,10 +94,12 @@ namespace Utility
     XL_UTILITY_API uint64_t Hash64(const std::string& str, uint64_t seed = DefaultSeed64);
 
 	template <typename CharType> class StringSection;
-	XL_UTILITY_API uint64_t Hash64(StringSection<char> str, uint64_t seed = DefaultSeed64);
+	XL_UTILITY_API uint32_t Hash32(StringSection<char> str, uint32_t seed = DefaultSeed32);
+    XL_UTILITY_API uint64_t Hash64(StringSection<char> str, uint64_t seed = DefaultSeed64);
 
     template <typename Type> class IteratorRange;
-	XL_UTILITY_API uint64_t Hash64(IteratorRange<const void*> data, uint64_t seed = DefaultSeed64);
+	XL_UTILITY_API uint32_t Hash32(IteratorRange<const void*> data, uint32_t seed = DefaultSeed32);
+    XL_UTILITY_API uint64_t Hash64(IteratorRange<const void*> data, uint64_t seed = DefaultSeed64);
 
 	constexpr uint64_t HashCombine(uint64_t high, uint64_t low)
 	{
