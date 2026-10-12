@@ -78,6 +78,7 @@ namespace Assets
 
 		virtual bool AllowStore() = 0;
 		virtual void FlushToDisk() = 0;
+		virtual void ReleaseCache() = 0;
 		virtual ~IIntermediatesStore();
 	};
 

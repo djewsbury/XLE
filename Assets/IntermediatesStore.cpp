@@ -94,6 +94,7 @@ namespace Assets
 
 		bool AllowStore() override;
 		void FlushToDisk() override;
+		void ReleaseCache() override;
 
 		struct ReadRefCountLock
 		{
@@ -311,6 +312,12 @@ namespace Assets
 		for (const auto&group:_groups)
 			if (group.second._archiveCacheSet)
 				group.second._archiveCacheSet->FlushToDisk();
+	}
+
+	void IntermediatesStoreBase::ReleaseCache()
+	{
+		// Called before dll detach. Release anything that might have been cached by a dll
+		_groups.clear();
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

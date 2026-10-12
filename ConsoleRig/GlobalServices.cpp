@@ -322,8 +322,10 @@ namespace ConsoleRig
             _pimpl->_continuationExecutor->stop();
         if (_pimpl->_taskPool)
             _pimpl->_taskPool->StallAndDrainQueue();
-        if (_pimpl->_intermediatesStore)
+        if (_pimpl->_intermediatesStore) {
             _pimpl->_intermediatesStore->FlushToDisk();
+            _pimpl->_intermediatesStore->ReleaseCache();
+        }
         if (_pimpl->_cachedBoxManager)
             _pimpl->_cachedBoxManager->Clear();
         if (_pimpl->_assetsSetsManager)
