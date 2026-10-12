@@ -47,16 +47,8 @@ namespace ConsoleRig
 
 		while (currentOffset < stringLength) {
 			auto start = currentOffset;
-			auto s = std::find_first_of(message.begin()+currentOffset, message.end(), newlineChars, ArrayEnd(newlineChars)) - message.begin();
-			size_t end;
-			bool completeLine = false;
-
-			if (s != std::string::npos) {
-				end = s;
-				completeLine = true;
-			} else {
-				end = message.size();
-			}
+			auto end = std::find_first_of(message.begin()+currentOffset, message.end(), newlineChars, ArrayEnd(newlineChars)) - message.begin();
+			auto containsLineEnd = end != message.size();
 
 			if (end > start) {
 				if (!lastLineComplete && !_lines.empty()) {
@@ -68,7 +60,7 @@ namespace ConsoleRig
 					pendingPrintLine = true;
 				}
 			}
-			lastLineComplete = completeLine;
+			lastLineComplete = containsLineEnd;
 
 			currentOffset = end;
 			while (currentOffset < stringLength && (message[currentOffset]=='\r'||message[currentOffset]=='\n'))
