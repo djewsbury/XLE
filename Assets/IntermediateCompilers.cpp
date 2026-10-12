@@ -663,6 +663,8 @@ namespace Assets
 	{
 		auto& pluginSet = ConsoleRig::GlobalServices::GetInstance().GetPluginSet();
 		_library = pluginSet.LoadLibrary(libraryName.AsString());
+		if (!_library)
+			Throw(::Exceptions::BasicLabel("Error while linking asset conversion DLL. Some interface functions are missing. From DLL: (%s)", libraryName.AsString().c_str()));
 
 		_createCompileOpFunction = _library->GetFunction<decltype(_createCompileOpFunction)>("CreateCompileOperation");
 
