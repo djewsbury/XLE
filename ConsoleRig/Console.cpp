@@ -12,6 +12,7 @@
 #include "../Math/Vector.h"
 #include "../Core/Exceptions.h"
 #include <algorithm>
+#include <iostream>
 
 #pragma GCC diagnostic ignored "-Wundefined-bool-conversion"
 
@@ -24,9 +25,10 @@ namespace ConsoleRig
 	{
 	public:
 		std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>> _lines;
-		bool _lastLineComplete;
+		bool _lastLineComplete = false;
 		Threading::Mutex _linesMutex;
 		std::shared_ptr<ConsoleVariableStorage> _cvars;
+		bool _chainToStdOut = false;
 
 		std::mutex _scriptingInterfaceMutex;
 		std::vector<std::shared_ptr<IConsoleScriptingInterface>> _scriptingInterfaces;
@@ -41,6 +43,7 @@ namespace ConsoleRig
 		bool lastLineComplete = _lastLineComplete;
 		const char newlineChars[] = "\r\n";
 		auto now = std::chrono::steady_clock::now();
+		bool pendingPrintLine = !lastLineComplete && !_lines.empty();
 
 		while (currentOffset < stringLength) {
 			auto start = currentOffset;
@@ -60,7 +63,9 @@ namespace ConsoleRig
 					_lines.back().second = Concatenate(_lines.back().second, MakeStringSection(message.begin()+start, message.begin()+end));
 					_lines.back().first = now;
 				} else {
+					if (pendingPrintLine&_chainToStdOut) std::cout << _lines.back().second << std::endl;
 					_lines.emplace_back(now, MakeStringSection(message.begin()+start, message.begin()+end).AsString());
+					pendingPrintLine = true;
 				}
 			}
 			lastLineComplete = completeLine;
@@ -71,6 +76,7 @@ namespace ConsoleRig
 		}
 
 		_lastLineComplete = lastLineComplete;
+		if (pendingPrintLine&_chainToStdOut&_lastLineComplete) std::cout << _lines.back().second << std::endl;
 	}
 
 	Console*        Console::s_instance = nullptr;
@@ -174,10 +180,14 @@ namespace ConsoleRig
 		_pimpl->_scriptingInterfaces.pop_back();
 	}
 
+	void Console::ChainToStdOut(bool newState)
+	{
+		_pimpl->_chainToStdOut = newState;
+	}
+
 	Console::Console()  
 	{
 		_pimpl = std::make_unique<Pimpl>();
-		_pimpl->_lastLineComplete = false;
 		_pimpl->_lines.push_back({});
 		_pimpl->_cvars = std::make_shared<ConsoleVariableStorage>();
 

@@ -60,6 +60,8 @@ namespace ConsoleRig
         void PushScriptingInterface(std::shared_ptr<IConsoleScriptingInterface> interf);
         void PopScriptingInterface(IConsoleScriptingInterface&);
 
+        void ChainToStdOut(bool newState);
+
         ConsoleVariableStorage& GetCVars();
         std::shared_ptr<ConsoleVariableStorage> GetCVarsPtr();
 
