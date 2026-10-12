@@ -564,13 +564,10 @@ namespace Formatters
             case '~':
                 if (TryEat(_marker, Consts::CommentPrefix)) {
                         // this is a comment... Read forward until the end of the line
-                    _marker += 2;
-                    {
-                        const auto* end = _marker.End();
-                        const auto* ptr = _marker.Pointer();
-                        while (ptr < end && *ptr!='\r' && *ptr!='\n') ++ptr;
-                        _marker.SetPointer(ptr);
-                    }
+                    const auto* end = _marker.End();
+                    const auto* ptr = _marker.Pointer();
+                    while (ptr < end && *ptr!='\r' && *ptr!='\n') ++ptr;
+                    _marker.SetPointer(ptr);
                     break;
                 }
 
