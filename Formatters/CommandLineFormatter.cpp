@@ -35,14 +35,20 @@ namespace Formatters
 		++_data.front()._start;
 		if (next == '-' && !_data.front().IsEmpty() && _data.front()[0] == '-')
 			++_data.front()._start;		// double "--"
-		
-		auto start = _data.front()._start;
-		while (!_data.front().IsEmpty() && (_data.front()[0] != ' ' && _data.front()[0] != '\t' && _data.front()[0] != '-' && _data.front()[0] != '/' && _data.front()[0] != '='))
-			++_data.front()._start;
 
-		name = MakeStringSection(start, _data.front()._start);
+		if (!_preSplit) {
+			auto start = _data.front()._start;
+			while (!_data.front().IsEmpty() && (_data.front()[0] != ' ' && _data.front()[0] != '\t' && _data.front()[0] != '-' && _data.front()[0] != '/' && _data.front()[0] != '='))
+				++_data.front()._start;
 
-		SkipWhitespace();
+			name = MakeStringSection(start, _data.front()._start);
+
+			SkipWhitespace();
+		} else {
+			// always return the entire remainder of this section. We're trusting the OS to merge strings together, etc
+			name = _data.front();
+			_data.erase(_data.begin());
+		}
 
 		return true;
 	}
@@ -56,34 +62,40 @@ namespace Formatters
 		if (_data.front()[0] == '-')
 			return false;
 
-		assert(!_data.front().IsEmpty());
-		if (_data.front()[0] == '=')
-			++_data.front()._start;
+		if (!_preSplit) {
+			// In this mode we act as if the OS has just given us a single string containing the full command line
+			// we have to separate it into sections ourselves.
+			if (!_data.front().IsEmpty() && (_data.front()[0] == '"' || _data.front()[0] == '\'')) {
 
-		if (!_data.front().IsEmpty() && (_data.front()[0] == '"' || _data.front()[0] == '\'')) {
-
-			auto term = _data.front()[0];
-			++_data.front()._start;
-			auto start = _data.front()._start;
-
-			while (!_data.front().IsEmpty() && _data.front()[0] != term)
+				auto term = _data.front()[0];
 				++_data.front()._start;
+				auto start = _data.front()._start;
 
-			value = MakeStringSection(start, _data.front()._start);
-			if (!_data.front().IsEmpty())
-				++_data.front()._start;
+				while (!_data.front().IsEmpty() && _data.front()[0] != term)
+					++_data.front()._start;
+
+				value = MakeStringSection(start, _data.front()._start);
+				if (!_data.front().IsEmpty())
+					++_data.front()._start;
+
+			} else {
+
+				auto start = _data.front()._start;
+				while (!_data.front().IsEmpty() && (_data.front()[0] != ' ' && _data.front()[0] != '\t'))
+					++_data.front()._start;
+
+				value = MakeStringSection(start, _data.front()._start);
+
+			}
+
+			SkipWhitespace();
 
 		} else {
-
-			auto start = _data.front()._start;
-			while (!_data.front().IsEmpty() && (_data.front()[0] != ' ' && _data.front()[0] != '\t'))
-				++_data.front()._start;
-
-			value = MakeStringSection(start, _data.front()._start);
-
+			// In this mode, we act as if the OS as already split the command line to discrete sections for us. We'll respect that split, conforming to the OS's particular behavior
+			// always return the entire remainder of this section. We're trusting the OS to merge strings together, etc
+			value = _data.front();
+			_data.erase(_data.begin());
 		}
-
-		SkipWhitespace();
 
 		return true;
 	}
@@ -113,6 +125,7 @@ namespace Formatters
 	template<typename CharType>
 		CommandLineFormatter<CharType>::CommandLineFormatter(int argc, CharType const* const* argv)
 	{
+		_preSplit = true;
 		_data.reserve(argc);
 		for (int c=1; c<argc; ++c) {
 			StringSection<CharType> s = argv[c];

@@ -2,6 +2,8 @@
 // accompanying file "LICENSE" or the website
 // http://www.opensource.org/licenses/mit-license.php)
 
+#pragma once
+
 #include "TextFormatter.h"
 #include <memory>
 #include <vector>
@@ -29,6 +31,7 @@ namespace Formatters
 
 	private:
 		std::vector<StringSection<CharType>> _data;
+		bool _preSplit = false;
 		void SkipWhitespace();
 	};
 
