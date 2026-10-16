@@ -572,21 +572,21 @@ namespace UnitTests
             static_assert(constExprMSVCEvalHash != 0, "Should fail if constexpr is not actually evaluating at compile time");
             REQUIRE(constExprEvalHash == constExprMSVCEvalHash);
 
-            auto expectedHash = Hash32(KEY);
+            auto expectedHash = Hash32(MakeStringSectionLiteral(KEY));
             REQUIRE(ConstHash32(KEY, std::strlen(KEY)) == expectedHash);
             REQUIRE(constExprEvalHash == expectedHash);
             REQUIRE(constExprMSVCEvalHash == expectedHash);
             REQUIRE(uint64_t(HashedToEnum::HashValue32) == (uint64_t)expectedHash);
 
-            REQUIRE(CONCAT(KEY_3, _h32) == Hash32(KEY_3));
-            REQUIRE(CONCAT(KEY_8, _h32) == Hash32(KEY_8));
-            REQUIRE(CONCAT(KEY_9, _h32) == Hash32(KEY_9));
-            REQUIRE(CONCAT(KEY_10, _h32) == Hash32(KEY_10));
-            REQUIRE(CONCAT(KEY_11, _h32) == Hash32(KEY_11));
-            REQUIRE(CONCAT(KEY_12, _h32) == Hash32(KEY_12));
-            REQUIRE(CONCAT(KEY_13, _h32) == Hash32(KEY_13));
-            REQUIRE(CONCAT(KEY_14, _h32) == Hash32(KEY_14));
-            REQUIRE(CONCAT(KEY_15, _h32) == Hash32(KEY_15));
+            REQUIRE(CONCAT(KEY_3, _h32) == Hash32(MakeStringSectionLiteral(KEY_3)));
+            REQUIRE(CONCAT(KEY_8, _h32) == Hash32(MakeStringSectionLiteral(KEY_8)));
+            REQUIRE(CONCAT(KEY_9, _h32) == Hash32(MakeStringSectionLiteral(KEY_9)));
+            REQUIRE(CONCAT(KEY_10, _h32) == Hash32(MakeStringSectionLiteral(KEY_10)));
+            REQUIRE(CONCAT(KEY_11, _h32) == Hash32(MakeStringSectionLiteral(KEY_11)));
+            REQUIRE(CONCAT(KEY_12, _h32) == Hash32(MakeStringSectionLiteral(KEY_12)));
+            REQUIRE(CONCAT(KEY_13, _h32) == Hash32(MakeStringSectionLiteral(KEY_13)));
+            REQUIRE(CONCAT(KEY_14, _h32) == Hash32(MakeStringSectionLiteral(KEY_14)));
+            REQUIRE(CONCAT(KEY_15, _h32) == Hash32(MakeStringSectionLiteral(KEY_15)));
 
             static_assert(CONCAT(KEY_11, _h32) != 0, "Should fail if constexpr is not actually evaluating at compile time");
         }
