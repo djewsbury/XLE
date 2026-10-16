@@ -27,7 +27,7 @@ options
 {
 	language = C;
 	output = AST;
-	backtrack = true; 
+	backtrack = true;
 	memoize = true;
 }
 
@@ -149,28 +149,38 @@ entrypoint
 	;
 	
 toplevel
-	:	global
-	|	structure
+	:	global ';'!
+	|	structure ';'!
 	|	cbuffer
-	|	function
-	|	function_signature
+	|	'export'? function_signature (';' | block) -> ^(FUNCTION function_signature block?)
 	|	';'!			// empty statement
 	;
 
 global
 	:	uniform
 	;
+
+structure_field
+	:	variable ';'!
+	|	isolated_macro ';'?
+	;
+
+class_field
+	:	variable ';'!
+	|	cbuffer
+	|	function_signature ';'!
+	;
 	
 variablename_single : id=ident sub+=subscript* sem=semantic? registerAssignment? ('=' e=expression)? -> ^(VARIABLE_NAME $id $sub* $sem?);
 variablename_list	: variablename_single (',' variablename_single)* -> variablename_single+;
 
 uniform
-	:	(storage_class|type_modifier)* ty=type_name names=variablename_list ';' 
+	:	(storage_class|type_modifier)* ty=type_name names=variablename_list registerAssignment?
 		-> ^(UNIFORM $ty $names)
 	;
 
 variable
-	:	(storage_class|type_modifier)* ty=type_name names=variablename_list ';' 
+	:	(storage_class|type_modifier)* ty=type_name names=variablename_list
 		-> ^(VARIABLE $ty $names)
 	;
 	
@@ -186,29 +196,18 @@ registerAssignment
 	;
 	
 structure
-	:	'struct' ident '{' fields+=structure_field* '}' variablename_list? ';' 
+	:	'struct' ident '{' fields+=structure_field* '}' variablename_list?
 		-> ^(STRUCT ident $fields*)
 	;
 
 interface_class
-	:	('interface'|'class') ident '{' fields+=class_field* '}' ';'
+	:	('interface'|'class') ident '{' fields+=class_field* '}'
 		-> ^(CLASS ident $fields*)
 	;
 
 cbuffer
 	:	('cbuffer'|'tbuffer') ident registerAssignment? '{' fields+=structure_field* '}'
 		-> ^(CBUFFER ident $fields*)
-	;
-	
-structure_field
-	:	variable
-	|	isolated_macro
-	;
-
-class_field
-	:	variable
-	|	cbuffer
-	|	function_signature
 	;
 	
 functionAttributeType 
@@ -222,14 +221,9 @@ identifierOrLiteral : literal|StringLiteral|ident;
 identifierOrLiteralList : identifierOrLiteral (','! identifierOrLiteral)*;
 functionAttributes : ('[' functionAttributeType ('(' identifierOrLiteralList ')')? ']')*;
 
-function
-	:	'export'? functionAttributes ret=type_name name=ident '(' args=formal_arglist ')' semantic? block
-		-> ^(FUNCTION $name $ret $args semantic? block)
-	;
-
 function_signature
-	:	'export'? functionAttributes ret=type_name name=ident '(' args=formal_arglist ')' semantic? ';'
-		-> ^(FUNCTION $name $ret $args semantic?)
+	:	functionAttributes ret=type_name name=ident '(' args=formal_arglist ')' semantic?
+		-> $name $ret $args semantic?
 	;
 
 // Note --	
@@ -290,7 +284,7 @@ ident
 	;	
 	
 block
-	:	'{' statements+=statement* '}' -> ^(BLOCK)		// Don't output statements (ie, with: $statements*) because we don't actually parse that in the tree walker
+	:	'{' statement* '}' -> ^(BLOCK)		// Don't output statements (ie, with: $statements*) because we don't actually parse that in the tree walker
 	;
 	
 formal_arglist
