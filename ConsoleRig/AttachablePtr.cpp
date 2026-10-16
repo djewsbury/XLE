@@ -186,7 +186,8 @@ namespace ConsoleRig
 		void InfraModuleManager::Reset(TypeKey id, const std::shared_ptr<void>& obj)
 		{
 			// flow will return here via PropagateChange
-			CrossModule::GetInstance().Reset(id, obj, _pimpl->_crossModuleRegistration);
+			if (_pimpl->_crossModuleRegistration != ~0u)
+				CrossModule::GetInstance().Reset(id, obj, _pimpl->_crossModuleRegistration);
 		}
 
 		void InfraModuleManager::CrossModuleShuttingDown()

@@ -55,10 +55,6 @@ namespace ConsoleRig
         void Set(StringSection<>, OSServices::MessageTargetConfiguration& cfg);
         void CheckHotReload();
 
-        static LogCentralConfiguration& GetInstance() { assert(s_instance); return *s_instance; }
-        void AttachCurrentModule();
-        void DetachCurrentModule();
-
         LogCentralConfiguration(const std::string& logCfgFile);
         ~LogCentralConfiguration();
     private:
@@ -67,7 +63,6 @@ namespace ConsoleRig
         std::string _logCfgFile;
         std::weak_ptr<OSServices::LogCentral> _attachedLogCentral;
 
-        static LogCentralConfiguration* s_instance;
         void Apply();
     };
 
@@ -185,7 +180,7 @@ namespace ConsoleRig
         #if !ALLOW_IMPLICIT_CROSSMODULE
             CrossModule _crossModule;
         #endif
-		AttachablePtr<LogCentralConfiguration> _logCfg;
+        std::shared_ptr<OSServices::LogCentral> _logCentral;
         std::unique_ptr<ThreadPool> _taskPool;
         std::shared_ptr<OSServices::PollingThread> _pollingThread;
 		StartupConfig _cfg;
@@ -199,6 +194,7 @@ namespace ConsoleRig
         AttachablePtr<::Assets::IIntermediatesStore> _intermediatesStore;
         AttachablePtr<::Assets::IIntermediateCompilers> _intermediatesCompilers;
         AttachablePtr<::Assets::AssetSetManager> _assetsSetsManager;
+        std::shared_ptr<LogCentralConfiguration> _logCfg;
 	};
 
     GlobalServices* GlobalServices::s_instance = nullptr;
@@ -219,6 +215,8 @@ namespace ConsoleRig
             std::chrono::microseconds(500),
 			thousandeyes::futures::detail::InvokerWithNewThread{},
 			::Assets::InvokerToThreadPool{*_pimpl->_taskPool});
+
+        _pimpl->_logCentral = std::make_shared<OSServices::LogCentral>();
 
         if (!_pimpl->_depValSys)
             _pimpl->_depValSys = ::Assets::CreateDepValSys();
@@ -338,16 +336,14 @@ namespace ConsoleRig
         assert(s_instance == nullptr);
         s_instance = this;
         ::Assets::MainFileSystem::Init(_pimpl->_mountingTree, _pimpl->_defaultFilesystem);
+        _pimpl->_logCentral->AttachCurrentModule();
         MainRig_Attach();
-        // We can't do this in AttachCurrentModule, because it interacts with other globals (eg, ::Assets::GetDepValSys()), which
-        // may creates requirements for what modules are attached in what order
-		//if (!_pimpl->_logCfg)
-		//	_pimpl->_logCfg = std::make_shared<LogCentralConfiguration>(_pimpl->_cfg._logConfigFile);
     }
 
     void GlobalServices::DetachCurrentModule()
     {
         MainRig_Detach();
+        _pimpl->_logCentral->DetachCurrentModule();
         ::Assets::MainFileSystem::Shutdown();
         assert(s_instance == this);
         s_instance = nullptr;
@@ -436,7 +432,7 @@ namespace ConsoleRig
             // Reapply all configurations to the LogCentral in the local module
             auto logCentral = _attachedLogCentral.lock();
             if (logCentral)
-                logCentral->SetConfiguration(_cfgSet);
+                logCentral->SetConfiguration(*_cfgSet);
             /*
             auto& central = LogCentral::GetInstance();
             auto hash = Hash64(id);
@@ -454,36 +450,10 @@ namespace ConsoleRig
                 std::tie(_cfgSet, _cfgSetDepVal) = LoadConfigSet(_logCfgFile);
                 auto logCentral = _attachedLogCentral.lock();
                 if (logCentral)
-                    logCentral->SetConfiguration(_cfgSet);
+                    logCentral->SetConfiguration(*_cfgSet);
             }
         #endif
     }
-
-    void LogCentralConfiguration::AttachCurrentModule()
-    {
-        assert(s_instance == nullptr);
-		s_instance = this;
-
-		auto logCentral = OSServices::LogCentral::GetInstance();
-		if (logCentral)
-			logCentral->SetConfiguration(_cfgSet);
-
-		if (!_attachedLogCentral.lock() && logCentral)
-			_attachedLogCentral = logCentral;
-    }
-
-    void LogCentralConfiguration::DetachCurrentModule()
-    {
-        assert(s_instance == this);
-        s_instance = nullptr;
-
-		auto logCentral = _attachedLogCentral.lock();
-        if (logCentral)
-            logCentral->SetConfiguration(nullptr);
-        _attachedLogCentral.reset();
-    }
-
-    LogCentralConfiguration* LogCentralConfiguration::s_instance = nullptr;
 
     LogCentralConfiguration::LogCentralConfiguration(const std::string& logCfgFile)
     {

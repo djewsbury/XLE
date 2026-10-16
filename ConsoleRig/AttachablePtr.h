@@ -213,6 +213,7 @@ namespace ConsoleRig
 	{
 		Internal::TryConfigureType<Obj>();
 		_managerRegistry = Internal::InfraModuleManager::GetInstance().Register(Internal::KeyForType<Obj>(), this, true);
+		_internalPointer = copyFrom;
 		Internal::InfraModuleManager::GetInstance().Reset(Internal::KeyForType<Obj>(), copyFrom);
 	}
 
@@ -221,6 +222,7 @@ namespace ConsoleRig
 	{
 		if (copyFrom.get() != get()) {
 			auto oldValue = std::move(_internalPointer);
+			_internalPointer = copyFrom;
 			Internal::InfraModuleManager::GetInstance().Reset(Internal::KeyForType<Obj>(), copyFrom);
 
 			// We don't actually release our reference on the old _internal pointer until after all of the 

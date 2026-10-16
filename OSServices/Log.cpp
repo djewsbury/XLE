@@ -3,16 +3,11 @@
 // http://www.opensource.org/licenses/mit-license.php)
 
 #include "Log.h"
-#include "../Assets/IFileSystem.h"
-#include "../Assets/AssetUtils.h"
-#include "../Assets/DepVal.h"
-#include "../Utility/StringFormat.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Formatters/FormatterUtils.h"
 #include "../Formatters/TextFormatter.h"
 #include "../Formatters/StreamDOM.h"
 #include "../Utility/Threading/Mutex.h"
-// #include "../Foreign/fmt/format.h"
 #include <iostream>
 
 namespace OSServices
@@ -48,10 +43,10 @@ namespace OSServices
     template<typename CharType, typename CharTraits>
         std::streamsize MessageTarget<CharType, CharTraits>::xsputn(const CharType* s, std::streamsize count)
     {
-        if (_cfg._enabledSinks & MessageTargetConfiguration::Sink::Console) {
+        if (_cfg->_enabledSinks & MessageTargetConfiguration::Sink::Console) {
             auto result = FormatAndOutput(
                 MakeStringSection(s, s + count),
-                _sourceLocationPrimed ? _cfg._template : std::string(),
+                _sourceLocationPrimed ? _cfg->_template : std::string(),
                 _pendingSourceLocation);
             _sourceLocationPrimed = false;
             return result;
@@ -65,7 +60,7 @@ namespace OSServices
     {
 #if defined(OSSERVICES_ENABLE_LOG)
         if (std::basic_streambuf<CharType, CharTraits>::traits_type::not_eof(ch)) {
-            if (_cfg._enabledSinks & MessageTargetConfiguration::Sink::Console) {
+            if (_cfg->_enabledSinks & MessageTargetConfiguration::Sink::Console) {
                 std::cout.rdbuf()->sputc((CharType)ch);
                 _sourceLocationPrimed |= std::basic_streambuf<CharType, CharTraits>::traits_type::eq_int_type(ch, (int_type)'\n');
                 static_assert(0!=std::basic_streambuf<CharType, CharTraits>::traits_type::eof(), "Expecting char traits EOF character to be something other than 0");
@@ -89,13 +84,55 @@ namespace OSServices
         return *std::cout.rdbuf();
     }
 
+    class LocalModuleRegistry
+    {
+    public:
+        Threading::Mutex _lock;
+        std::vector<std::pair<uint64_t, std::shared_ptr<MessageTargetConfiguration>>> _activeTargets;
+
+        std::shared_ptr<MessageTargetConfiguration> Register(StringSection<> id)
+        {
+            assert(!id.IsEmpty());      // empty id's are not supported -- without the id, there's no way to assign a configuration
+            ScopedLock(_lock);
+
+            auto hash = Hash64(id);
+            auto i = LowerBound(_activeTargets, hash);
+            if (i != _activeTargets.end() && i->first == hash)
+                return i->second;
+            
+            auto cfg = std::make_shared<MessageTargetConfiguration>();
+            _activeTargets.emplace(i, hash, cfg);
+            return cfg;
+        }
+
+    };
+
+    static LocalModuleRegistry& GetLocalModuleRegistry()
+    {
+        static LocalModuleRegistry s_instance;
+        return s_instance;
+    }
+
+    template<typename CharType, typename CharTraits>
+        MessageTarget<CharType, CharTraits>::MessageTarget(StringSection<> id, std::basic_streambuf<CharType, CharTraits>& chain)
+    : _chain(&chain)
+    {
+        #if defined(OSSERVICES_ENABLE_LOG)
+            _cfg = GetLocalModuleRegistry().Register(id);
+        #endif
+    }
+
+    template<typename CharType, typename CharTraits>
+        MessageTarget<CharType, CharTraits>::~MessageTarget()
+    {
+        _chain->pubsync();
+    }
+
     template class MessageTarget<>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if defined(OSSERVICES_ENABLE_LOG)
-
-    
 
     static void MergeIn(MessageTargetConfiguration& dst, const MessageTargetConfiguration& src)
     {
@@ -105,30 +142,28 @@ namespace OSServices
         dst._enabledSinks &= ~src._disabledSinks;
     }
 
-    MessageTargetConfiguration LogConfigurationSet::ResolveConfig(StringSection<> name) const
+    std::optional<MessageTargetConfiguration> LogConfigurationSet::ResolveConfig(uint64_t h) const
     {
-        MessageTargetConfiguration result;
-        auto i = std::find_if(_configs.begin(), _configs.end(),
-            [name](const std::pair<std::string, Config>&p) { return XlEqString(MakeStringSection(p.first), name); });
-        if (i == _configs.end()) return result;
+        auto i = std::find_if(b2e(_configs), [h](const auto&p) { return p.first == h; });
+        if (i == _configs.end()) return {};
 
+        MessageTargetConfiguration result;
         const auto& src = i->second;
         for (const auto&inherit:src._inherit)
-            MergeIn(result, ResolveConfig(inherit));
+            if (auto r = ResolveConfig(inherit))
+                MergeIn(result, *r);
         MergeIn(result, src._cfg);
         return result;
     }
 
     void LogConfigurationSet::Set(StringSection<> id, MessageTargetConfiguration& cfg)
     {
-        auto str = id.AsString();
-        auto existing = std::find_if(
-            _configs.begin(), _configs.end(),
-            [str](const std::pair<std::string, Config>& p) { return p.first == str; });
+        uint64_t h = Hash64(id);
+        auto existing = std::find_if(b2e(_configs), [h](const auto& p) { return p.first == h; });
         if (existing != _configs.end()) {
-            existing->second = {{}, cfg};
+            existing->second = {id.AsString(), {}, cfg};
         } else {
-            _configs.emplace_back(std::make_pair(str, Config{{}, cfg}));
+            _configs.emplace_back(std::make_pair(h, Config{id.AsString(), {}, cfg}));
         }
     }
 
@@ -141,7 +176,8 @@ namespace OSServices
             RequireBeginElement(formatter);
 
             auto cfg = LoadConfig(formatter);
-            _configs.emplace_back(std::make_pair(eleName.AsString(), std::move(cfg)));
+            cfg._name = eleName.AsString();
+            _configs.emplace_back(Hash64(eleName), std::move(cfg));
 
             RequireEndElement(formatter);
         }
@@ -159,7 +195,7 @@ namespace OSServices
         cfg._cfg._template = doc.RootElement().Attribute("Template").Value().AsString();
 
         for (const auto& inherentElement:doc.RootElement().Element("Inherit").children())
-            cfg._inherit.push_back(inherentElement.Name().AsString());
+            cfg._inherit.push_back(Hash64(inherentElement.Name()));
 
         return cfg;
     }
@@ -173,76 +209,49 @@ namespace OSServices
     class LogCentral::Pimpl
     {
     public:
-        struct Target
-        {
-            std::string _id;
-            MessageTarget<>* _target;
-        };
-        std::vector<std::pair<uint64_t, Target>> _activeTargets;
-
         #if defined(OSSERVICES_ENABLE_LOG)
-            std::shared_ptr<LogConfigurationSet> _activeCfgSet;
+            Threading::Mutex _lock;
+            std::vector<std::pair<uint64_t, std::shared_ptr<MessageTargetConfiguration>>> _cfgs;
         #endif
     };
 
-    static std::shared_ptr<LogCentral> s_instance;
-    
-    const std::shared_ptr<LogCentral>& LogCentral::GetInstance()
+    void LogCentral::AttachCurrentModule()
     {
-        if (!s_instance) {
-            static Threading::Mutex s_logCentralInstanceLock;
-            ScopedLock(s_logCentralInstanceLock);
-            if (!s_instance) {
-                s_instance = std::make_shared<LogCentral>();
-            }
-        }
-        return s_instance;
-    }
-
-    void LogCentral::DestroyInstance()
-    {
-        s_instance.reset();
-    }
-
-    void LogCentral::Register(MessageTarget<>& target, StringSection<> id)
-    {
-        assert(!id.IsEmpty());      // empty id's are not supported -- without the id, there's no way to assign a configuration
-
-        auto hash = Hash64(id);
-        auto i = LowerBound(_pimpl->_activeTargets, hash);
-
-        // We allow multiple targets with the same name. Despite that fact that they are different
-        // objects, they should contain the same data
-        _pimpl->_activeTargets.insert(i, std::make_pair(hash, Pimpl::Target{id.AsString(), &target}));
-
         #if defined(OSSERVICES_ENABLE_LOG)
-            // Set the initial configuration
-            if (_pimpl->_activeCfgSet)
-                target.SetConfiguration(_pimpl->_activeCfgSet->ResolveConfig(id));
+            auto& localModule = GetLocalModuleRegistry();
+            std::unique_lock<Threading::Mutex> lk0 { _pimpl->_lock, std::defer_lock };
+            std::unique_lock<Threading::Mutex> lk1 { localModule._lock, std::defer_lock };
+            std::lock(lk0, lk1);
+            auto i = localModule._activeTargets.begin();
+            auto i2 = _pimpl->_cfgs.begin();
+            while (i!=localModule._activeTargets.end() || i2!=_pimpl->_cfgs.end()) {
+                while (i2!= _pimpl->_cfgs.end() && (i==localModule._activeTargets.end() || i2->first < i->first)) {
+                    i = localModule._activeTargets.emplace(i, i2->first, i2->second);
+                    ++i; ++i2;
+                }
+
+                while (i!= localModule._activeTargets.end() && (i2==_pimpl->_cfgs.end() || i->first < i2->first)) {
+                    i2 = _pimpl->_cfgs.emplace(i2, i->first, i->second);
+                    ++i; ++i2;
+                }
+
+                if (i!=localModule._activeTargets.end() && i2!=_pimpl->_cfgs.end() && i->first == i2->first) {
+                    *i->second = *i2->second;       // copy values
+                    ++i; ++i2;
+                }
+            }
         #endif
     }
 
-    void LogCentral::Deregister(MessageTarget<>& target)
-    {
-        auto i = std::find_if(_pimpl->_activeTargets.begin(), _pimpl->_activeTargets.end(),
-            [&target](const std::pair<uint64_t, Pimpl::Target>& p) { return p.second._target == &target; });
-        assert(i!=_pimpl->_activeTargets.end());
-        _pimpl->_activeTargets.erase(i);
-    }
+    void LogCentral::DetachCurrentModule()
+    {}
 
-    void LogCentral::SetConfiguration(const std::shared_ptr<LogConfigurationSet>& cfgs)
+    void LogCentral::SetConfiguration(const LogConfigurationSet& cfgs)
     {
         #if defined(OSSERVICES_ENABLE_LOG)
-            _pimpl->_activeCfgSet = cfgs;
-            if (cfgs) {
-                for (const auto&t:_pimpl->_activeTargets)
-                    t.second._target->SetConfiguration(cfgs->ResolveConfig(t.second._id));
-            } else {
-                Error.SetConfiguration(MessageTargetConfiguration{});
-                Warning.SetConfiguration(MessageTargetConfiguration{});
-                Debug.SetConfiguration(MessageTargetConfiguration{});
-                Verbose.SetConfiguration(MessageTargetConfiguration{ std::string(), 0, MessageTargetConfiguration::Sink::Console });
-            }
+            for (const auto&t:_pimpl->_cfgs)
+                if (auto update = cfgs.ResolveConfig(t.first))
+                    *t.second = *update;
         #endif
     }
 

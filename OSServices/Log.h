@@ -9,6 +9,7 @@
 #include <ostream>
 #include <memory>
 #include <functional>
+#include <optional>
 
 #if defined(_DEBUG)
     #define OSSERVICES_ENABLE_LOG
@@ -50,10 +51,10 @@ namespace OSServices
     {
     public:
         void SetNextSourceLocation(const SourceLocation& sourceLocation) { _pendingSourceLocation = sourceLocation; _sourceLocationPrimed = true; }
-        void SetConfiguration(const MessageTargetConfiguration& cfg) { _cfg = cfg; }
+        void SetConfiguration(const MessageTargetConfiguration& cfg) { *_cfg = cfg; }
         void SetExternalMessageHandler(std::function<std::streamsize(const CharType*, std::streamsize)> externalMessageHandler) { _externalMessageHandler = externalMessageHandler; }
-		bool IsEnabled() const { return _cfg._enabledSinks != 0; }
-        void Disable() { _cfg._enabledSinks = 0; }
+		bool IsEnabled() const { return _cfg->_enabledSinks != 0; }
+        void Disable() { _cfg->_enabledSinks = 0; }
 
         MessageTarget(StringSection<> id, std::basic_streambuf<CharType, CharTraits>& chain = DefaultChain());
         ~MessageTarget();
@@ -66,9 +67,8 @@ namespace OSServices
         std::basic_streambuf<CharType, CharTraits>* _chain;
         SourceLocation              _pendingSourceLocation;
         bool                        _sourceLocationPrimed;
-        MessageTargetConfiguration _cfg;
+        std::shared_ptr<MessageTargetConfiguration> _cfg;
         std::function<std::streamsize(const CharType* s, std::streamsize count)> _externalMessageHandler;
-        std::weak_ptr<LogCentral>   _registeredLogCentral;
 
         using int_type = typename std::basic_streambuf<CharType>::int_type;
         virtual std::streamsize xsputn(const CharType* s, std::streamsize count) override;
@@ -79,6 +79,8 @@ namespace OSServices
             StringSection<char> msg,
             const std::string& fmtTemplate,
             const SourceLocation& sourceLocation);
+
+        class LogCentral;
     };
 
     class LogConfigurationSet;
@@ -94,23 +96,10 @@ namespace OSServices
     class LogCentral
     {
     public:
-        // We want to try to ensure that there's only a single instance of LogCentral
-        // across the entire process, regardless of the number of modules. We can do
-        // that with visibility attributes when using clang. This ensures that shared
-        // libraries that are loaded by the main executable will use the implementation
-        // from that main executable
-        #if COMPILER_ACTIVE == COMPILER_TYPE_CLANG
-            static const std::shared_ptr<LogCentral>& GetInstance() __attribute__((visibility("default")));
-            static void DestroyInstance() __attribute__((visibility("default")));
-        #else
-            static const std::shared_ptr<LogCentral>& GetInstance();
-            static void DestroyInstance();
-        #endif
+        void SetConfiguration(const LogConfigurationSet& cfgs);
 
-        void Register(MessageTarget<>& target, StringSection<> id);
-        void Deregister(MessageTarget<>& target);
-
-        void SetConfiguration(const std::shared_ptr<LogConfigurationSet>& cfgs);
+        void AttachCurrentModule();
+        void DetachCurrentModule();
 
         LogCentral();
         ~LogCentral();
@@ -124,21 +113,21 @@ namespace OSServices
     class LogConfigurationSet
     {
     public:
-        MessageTargetConfiguration ResolveConfig(StringSection<> name) const;
+        std::optional<MessageTargetConfiguration> ResolveConfig(uint64_t) const;
         void Set(StringSection<> id, MessageTargetConfiguration& cfg);
 
         LogConfigurationSet();
         LogConfigurationSet(Formatters::TextInputFormatter<char>& formatter);
         ~LogConfigurationSet();
     private:
-        class Config
+        struct Config
         {
-        public:
-            std::vector<std::string> _inherit;
+            std::string _name;
+            std::vector<uint64_t> _inherit;
             MessageTargetConfiguration _cfg;
         };
 
-        std::vector<std::pair<std::string, Config>> _configs;
+        std::vector<std::pair<uint64_t, Config>> _configs;
 
         Config LoadConfig(Formatters::TextInputFormatter<char>& formatter);
     };
@@ -146,37 +135,6 @@ namespace OSServices
     inline void DeserializationOperator(Formatters::TextInputFormatter<char>& str, LogConfigurationSet& cls)
     {
         cls = LogConfigurationSet(str);
-    }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    template<typename CharType, typename CharTraits>
-        MessageTarget<CharType, CharTraits>::MessageTarget(StringSection<> id, std::basic_streambuf<CharType, CharTraits>& chain)
-    : _chain(&chain)
-    {
-        #if defined(OSSERVICES_ENABLE_LOG)
-            auto logCentral = LogCentral::GetInstance();
-            if (logCentral) {
-                logCentral->Register(*this, id);
-                _registeredLogCentral = logCentral;
-            }
-        #endif
-    }
-
-    template<typename CharType, typename CharTraits>
-        MessageTarget<CharType, CharTraits>::~MessageTarget()
-    {
-        _chain->pubsync();
-        #if defined(OSSERVICES_ENABLE_LOG)
-            // DavidJ --
-            //      For global MessageTargets objects, the LogCentral instance can be destroyed
-            //      first. So we can't access the singleton GetInstance() method from here. We
-            //      need to keep a weak pointer to the LogCentral instance we registered with,
-            //      and check it to make sure it still exists.
-            auto logCentral = _registeredLogCentral.lock();
-            if (logCentral)
-                logCentral->Deregister(*this);
-        #endif
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,6 +179,8 @@ namespace OSServices
     extern std::ostream* g_fakeOStream;
     #define Log(X) if (true) {} else (*::OSServices::g_fakeOStream)
 #endif
+
+    std::shared_ptr<OSServices::MessageTarget<>> CreateMessageTarget();
 
 }
 
