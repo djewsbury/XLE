@@ -827,12 +827,6 @@ namespace Utility
                                 }
                             }
 
-                            if (!expressionSubstitution) {
-                                #if defined(_DEBUG)
-                                    std::cout << "Substitution for " << symbol._value << " is not an expression" << std::endl;
-                                #endif
-                            }
-
                             if (expressionSubstitution) {
                                 #if defined(_DEBUG)
                                     if (XlEqStringI(directive._value, "define") && XlEndsWith(symbol._value, MakeStringSectionLiteral("_H"))) {
