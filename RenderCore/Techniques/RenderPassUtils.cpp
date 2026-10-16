@@ -221,6 +221,18 @@ namespace RenderCore { namespace Techniques
 		return RenderPassInstance { parsingContext, std::move(_workingFragment), MakeIteratorRange(_attachments), frameBufferPool };
 	}
 
+	std::pair<FragmentStitchingContext::StitchResult, FrameBufferProperties> SelfContainedRenderPassHelper::Stitch(FragmentStitchingContext& stitching)
+	{
+		FrameBufferProperties fbProps;
+		for (const auto& r:_attachments)
+			if (auto d = r->GetDesc(); d._type == ResourceDesc::Type::Texture) {
+				fbProps._width = std::max(fbProps._width, d._textureDesc._width);
+				fbProps._height = std::max(fbProps._height, d._textureDesc._height);
+			}
+
+		return { SimpleStitch(_workingFragment, fbProps, _attachments, stitching), fbProps };
+	}
+
 	SelfContainedRenderPassHelper::SelfContainedRenderPassHelper(std::string subpassName)
 	{
 		_workingFragment.AddSubpass(SubpassDesc{}.SetName(std::move(subpassName)));

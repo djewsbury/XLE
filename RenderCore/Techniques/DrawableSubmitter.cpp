@@ -429,7 +429,7 @@ namespace RenderCore { namespace Techniques
 			unsigned subpassIndex) override
 		{
 			std::promise<Techniques::PreparedResourcesVisibility> promisedPrepare;
-				auto futurePrepare = promisedPrepare.get_future();
+			auto futurePrepare = promisedPrepare.get_future();
 			PrepareResources(std::move(promisedPrepare), techniqueDelegate, fbDesc, subpassIndex);
 			YieldToPool(futurePrepare);
 			auto prepare = futurePrepare.get();

@@ -84,6 +84,7 @@ namespace RenderCore { namespace Techniques
 		SelfContainedRenderPassHelper&& AppendNonFrameBufferAttachmentView(IResource& resource, BindFlag::Enum usage = BindFlag::ShaderResource, const TextureViewDesc& = {});
 
 		RenderPassInstance Complete(ParsingContext&, IFrameBufferPool&);
+		std::pair<FragmentStitchingContext::StitchResult, FrameBufferProperties> Stitch(FragmentStitchingContext& stitching);
 		SelfContainedRenderPassHelper(std::string subpassName = {});
 	};
 

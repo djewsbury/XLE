@@ -147,6 +147,7 @@ namespace RenderCore { namespace Techniques
 		techniqueContext._systemUniformsDelegate = apparatus._systemUniformsDelegate;
 		techniqueContext._graphicsSequencerDS = apparatus._graphicsSequencerDS;
 		techniqueContext._computeSequencerDS = apparatus._computeSequencerDS;
+		techniqueContext._systemAttachmentFormats = Techniques::CalculateDefaultSystemFormats(*apparatus._device);
 	}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
