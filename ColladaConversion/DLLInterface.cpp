@@ -58,8 +58,8 @@ extern "C"
 	dll_export void AttachLibrary(ConsoleRig::CrossModule& crossModule)
 	{
 		auto versionDesc = ConsoleRig::GetLibVersionDesc();
-		Log(Verbose) << "Attached Collada Compiler DLL: {" << versionDesc._versionString << "} -- {" << versionDesc._buildDateString << "}" << std::endl;
 		crossModule.RegisterCurrentModule();
+		Log(Verbose) << "Attached Collada Compiler DLL: {" << versionDesc._versionString << "} -- {" << versionDesc._buildDateString << "}" << std::endl;
 	}
 
 	dll_export void DetachLibrary()
