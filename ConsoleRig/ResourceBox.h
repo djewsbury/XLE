@@ -211,6 +211,57 @@ namespace ConsoleRig
 		return res->get();
 	}
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	template <typename Box, typename... Params> 
+		std::enable_if_t<
+			::Assets::Internal::HasGetDependencyValidation<Box> && ::Assets::Internal::HasConstructToPromiseClassOverride<std::shared_ptr<Box>, Params...>::value,
+			Box&> ActualizeCachedBox(Params... params)
+	{
+		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
+		auto& boxTable = Internal::GetBoxFutureTable<std::decay_t<Box>>();
+		auto i = LowerBound(boxTable, hashValue);
+		if (i!=boxTable.end() && i->first==hashValue) {
+			#if defined(_DEBUG)	// requires frequent locks of the dep val global lock -- too expensive for release
+				if (::Assets::IsInvalidated(*i->second)) {
+					i->second = std::make_shared<::Assets::MarkerPtr<Box>>();
+					Box::ConstructToPromise(i->second->AdoptPromise(), std::forward<Params>(params)...);
+					Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- rebuilding due to validation failure. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;		
+				}
+			#endif
+			i->second->StallWhilePending();
+			return *i->second->Actualize();
+		}
+
+		auto future = std::make_shared<::Assets::MarkerPtr<Box>>();
+		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
+		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
+		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
+		i2->second->StallWhilePending();
+		return *i2->second->Actualize();
+	}
+
+	template <typename Box, typename... Params> 
+		std::enable_if_t<
+			!::Assets::Internal::HasGetDependencyValidation<Box> && ::Assets::Internal::HasConstructToPromiseClassOverride<std::shared_ptr<Box>, Params...>::value,
+			Box&> ActualizeCachedBox(Params... params)
+	{
+		auto hashValue = ::Assets::Internal::BuildParamHash(params...);
+		auto& boxTable = Internal::GetBoxFutureTable<std::decay_t<Box>>();
+		auto i = LowerBound(boxTable, hashValue);
+		if (i!=boxTable.end() && i->first==hashValue) {
+			i->second->StallWhilePending();
+			return *i->second->Actualize();
+		}
+
+		auto future = std::make_shared<::Assets::MarkerPtr<Box>>();
+		Box::ConstructToPromise(future->AdoptPromise(), std::forward<Params>(params)...);
+		Log(Verbose) << "Created cached box for type (" << typeid(Box).name() << ") -- first time. HashValue:(0x" << std::hex << hashValue << std::dec << ")" << std::endl;
+		auto i2 = boxTable.emplace(i, std::make_pair(hashValue, std::move(future)));
+		i2->second->StallWhilePending();
+		return *i2->second->Actualize();
+	}
+
 	///////////////////////////////////////////////////////////////////////////////////////////////
 
 }

@@ -183,6 +183,12 @@ namespace RenderOverlays
         }
     };
 
+    void StallForShapeRenderingResources()
+    {
+        // Awkward way to just stall for the basic cached box here -- really need to push this resource management to the client
+        ConsoleRig::ActualizeCachedBox<StandardResources>();
+    }
+
     namespace Internal
     {
         struct Vertex_PCCTT

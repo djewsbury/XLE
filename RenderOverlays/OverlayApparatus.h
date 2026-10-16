@@ -10,6 +10,7 @@
 #include <memory>
 
 namespace RenderCore { namespace Techniques { class DrawingApparatus; class IDrawableSubmitter; class Services; class ParsingContext; class RenderPassInstance; class IPipelineAcceleratorPool; class PipelineCollection; }}
+namespace RenderCore { class FrameBufferDesc; }
 
 namespace RenderOverlays
 {
@@ -51,5 +52,16 @@ namespace RenderOverlays
 		RenderCore::Techniques::RenderPassInstance&,
 		RenderCore::Techniques::IDrawableSubmitter&,
 		ShapesRenderingDelegate&);
+
+	void StallAndPrepareResources(
+		const RenderCore::FrameBufferDesc&,
+		OverlayApparatus&);
+	void StallAndPrepareResources(
+		const RenderCore::FrameBufferDesc&,
+		RenderCore::Techniques::IDrawableSubmitter&,
+		ShapesRenderingDelegate&);
+
+	void AbandonDraws(
+		OverlayApparatus&);
 }
 

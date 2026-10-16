@@ -11,6 +11,7 @@
 #include "../RenderCore/Techniques/Services.h"
 #include "../RenderCore/Techniques/PipelineAccelerator.h"
 #include "../RenderCore/Techniques/PipelineCollection.h"
+#include "../RenderCore/Techniques/Drawables.h"
 #include "../xleres/FileList.h"
 
 namespace RenderOverlays
@@ -61,5 +62,26 @@ namespace RenderOverlays
 		ShapesRenderingDelegate& shapesRenderingDelegate)
 	{
 		immediateDrawables.ExecuteDraws(parsingContext, shapesRenderingDelegate.GetTechniqueDelegate(), rpi);
+	}
+
+	void StallAndPrepareResources(
+		const RenderCore::FrameBufferDesc& fbDesc,
+		OverlayApparatus& apparatus)
+	{
+		apparatus._immediateDrawables->StallAndPrepareResources(apparatus._shapeRenderingDelegate->GetTechniqueDelegate(), fbDesc, 0);
+	}
+
+	void StallAndPrepareResources(
+		const RenderCore::FrameBufferDesc& fbDesc,
+		RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
+		ShapesRenderingDelegate& shapesRenderingDelegate)
+	{
+		immediateDrawables.StallAndPrepareResources(shapesRenderingDelegate.GetTechniqueDelegate(), fbDesc, 0);
+	}
+
+	void AbandonDraws(
+		OverlayApparatus& apparatus)
+	{
+		apparatus._immediateDrawables->AbandonDraws();
 	}
 }
