@@ -662,9 +662,13 @@ namespace Assets
 	CompilerLibrary::CompilerLibrary(StringSection<> libraryName)
 	{
 		auto& pluginSet = ConsoleRig::GlobalServices::GetInstance().GetPluginSet();
-		_library = pluginSet.LoadLibrary(libraryName.AsString());
-		if (!_library)
-			Throw(::Exceptions::BasicLabel("Error while linking asset conversion DLL. Some interface functions are missing. From DLL: (%s)", libraryName.AsString().c_str()));
+		#if XLE_ATTACHABLE_LIBRARIES_ENABLE
+			_library = pluginSet.LoadLibrary(libraryName.AsString());
+			if (!_library)
+				Throw(::Exceptions::BasicLabel("Error while linking asset conversion DLL. Some interface functions are missing. From DLL: (%s)", libraryName.AsString().c_str()));
+		#else
+			return;		// prevent unnecessary throw when this flag is off
+		#endif
 
 		_createCompileOpFunction = _library->GetFunction<decltype(_createCompileOpFunction)>("CreateCompileOperation");
 

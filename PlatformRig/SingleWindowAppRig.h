@@ -153,6 +153,7 @@ namespace PlatformRig
 
 		struct ConfigureAssetCompilers
 		{
+			bool _loadDefaultPlugins = true;
 		};
 
 		struct ConfigureRenderDevice

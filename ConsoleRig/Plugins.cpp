@@ -48,13 +48,13 @@ namespace ConsoleRig
 					plugin->Initialize();
 					_pimpl->_plugins.emplace_back(std::move(plugin));
 				}
-				_pimpl->_pluginLibraries.insert(std::make_pair(simplified, std::move(library)));
+				_pimpl->_pluginLibraries.insert(std::make_pair(simplified, library));
 			} CATCH(const std::exception& e) {
 				Log(Error) << "Plugin (" << simplified << ") failed during the Initialize method with error msg (" << e.what() << ")" << std::endl;
 				_pimpl->_failedPlugins.insert(std::make_pair(simplified, e.what()));
 				// we must keep the AttachableLibrary, even after this failure -- it may still be too early to unload the code, because
 				// Initialize() may have registered some pointers with global managers
-				_pimpl->_pluginLibraries.insert(std::make_pair(simplified, std::move(library)));
+				_pimpl->_pluginLibraries.insert(std::make_pair(simplified, library));
 			} CATCH_END
 			return library;
 		} else {

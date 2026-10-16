@@ -366,7 +366,8 @@ namespace PlatformRig
 				if (_appLogFile)
 					*_appLogFile << "> Post-device services successful" << std::endl;
 
-				::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
+				if (_configAssetCompilers._loadDefaultPlugins)
+					::ConsoleRig::GlobalServices::GetInstance().LoadDefaultPlugins();
 
 				if (_appLogFile) {
 					*_appLogFile << "> Load default plugins successful" << std::endl;
