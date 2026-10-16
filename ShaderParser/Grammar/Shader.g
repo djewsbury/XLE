@@ -97,12 +97,23 @@ tokens
 	{
 		ANTLR3_BASE_RECOGNIZER* r = (ANTLR3_BASE_RECOGNIZER*)recognizer;
 		ANTLR3_UINT8 ** t = (ANTLR3_UINT8 **)tokenNames;
-		ANTLR3_COMMON_TOKEN* token = (ANTLR3_COMMON_TOKEN*)r->state->exception->token;
+		ANTLR3_EXCEPTION* e = (ANTLR3_EXCEPTION*)r->state->exception;
+
+		if (e == NULL) return;
+
+		// We can pull from the recognizer's follow-set to give some sense of what the parser
+		// was expecting in the error report.
+		// This is useful for the "no viable alternative" errors.
+		if (e->expectingSet == NULL && r->state->following != NULL) {
+			ANTLR3_UINT32 depth = (*r->state->following->size)(r->state->following);
+			if (depth > 0)
+				e->expectingSet = (pANTLR3_BITSET_LIST)(*r->state->following->get)(r->state->following, depth - 1);
+		}
 
 		if (g_ShaderParserExceptionHandler) {
 			(*g_ShaderParserExceptionHandler)(
 				g_ShaderParserExceptionHandlerUserData, 
-				r->state->exception,
+				e,
 				t);
 		}
 	}

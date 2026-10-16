@@ -97,6 +97,7 @@ namespace ShaderSourceParser { namespace AntlrHelper
 	{
 	public:
 		std::vector<Error> _errors;
+        StringSection<> _sourceText;
 
 		static void __cdecl HandleException(
 			ExceptionSet* pimpl,
