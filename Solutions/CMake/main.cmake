@@ -98,8 +98,11 @@ macro(xle_internal_configure_compiler TargetName)
 
         target_compile_options(${TargetName} PRIVATE -Wno-deprecated-literal-operator)      # many external libraries trigger this deprecation warning
 
+        target_compile_options(${TargetName} PRIVATE -fdiagnostics-color -fansi-escape-codes)
+
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(${TargetName} PRIVATE /arch:SSE4.2)      # AVX2 would be more ideal, but causes issues on Windows for Arm JIT interpreter
+        target_compile_options(${TargetName} PRIVATE /diagnostics:column)
     endif()
 endmacro()
 
