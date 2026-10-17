@@ -18,6 +18,7 @@ namespace Formatters
     {
     public:
         using InteriorSection = StringSection<char>;
+        using value_type = char;
         using Blob = FormatterBlob;
         virtual Blob PeekNext() = 0;
 
