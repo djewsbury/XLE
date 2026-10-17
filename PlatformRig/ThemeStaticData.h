@@ -59,31 +59,63 @@ namespace PlatformRig
 		if (!Formatters::TryRawValue(fmttr, value, typeDesc))
 			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
 
-		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
-			return *intForm;
-		} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
-			return RenderOverlays::ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
-		} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
-			return RenderOverlays::ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+		if (typeDesc._typeHint != ImpliedTyping::TypeHint::String) {
+			switch (typeDesc._arrayCount) {
+			case 1:
+				if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>())
+					return *intForm;
+				break;
+			case 3:
+				if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>())
+					return RenderOverlays::ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
+				break;
+			case 4:
+				if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>())
+					return RenderOverlays::ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+				break;
+			}
 		} else {
-			Throw(Formatters::FormatException("Could not interpret value as color", fmttr.GetLocation()));
+			if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
+				return *intForm;
+			} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
+				return RenderOverlays::ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
+			} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
+				return RenderOverlays::ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+			}
 		}
+		Throw(Formatters::FormatException("Could not interpret value as color", fmttr.GetLocation()));
 	}
 
 	inline RenderOverlays::ColorB DeserializeColor(const ImpliedTyping::VariantNonRetained& value)
 	{
-		if (auto intForm = value.TryCastValue<unsigned>()) {
-			return *intForm;
-		} else if (auto tripletForm = value.TryCastValue<UInt3>()) {
-			return RenderOverlays::ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
-		} else if (auto quadForm = value.TryCastValue<UInt4>()) {
-			return RenderOverlays::ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+		if (value._type._typeHint != ImpliedTyping::TypeHint::String) {
+			switch (value._type._arrayCount) {
+			case 1:
+				if (auto intForm = value.TryCastValue<unsigned>())
+					return *intForm;
+				break;
+			case 3:
+				if (auto tripletForm = value.TryCastValue<UInt3>())
+					return RenderOverlays::ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
+				break;
+			case 4:
+				if (auto quadForm = value.TryCastValue<UInt4>())
+					return RenderOverlays::ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+				break;
+			}
 		} else {
-			if (auto str = value.TryCastValue<std::string>()) {
-				Throw(std::runtime_error("Could not interpret value as color: " + *str));
-			} else
-				Throw(std::runtime_error("Could not interpret value as color"));
+			if (auto intForm = value.TryCastValue<unsigned>()) {
+				return *intForm;
+			} else if (auto tripletForm = value.TryCastValue<UInt3>()) {
+				return RenderOverlays::ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
+			} else if (auto quadForm = value.TryCastValue<UInt4>()) {
+				return RenderOverlays::ColorB{uint8_t((*quadForm)[0]), uint8_t((*quadForm)[1]), uint8_t((*quadForm)[2]), uint8_t((*quadForm)[3])};
+			}
 		}
+		if (auto str = value.TryCastValue<std::string>()) {
+			Throw(std::runtime_error("Could not interpret value as color: " + *str));
+		} else
+			Throw(std::runtime_error("Could not interpret value as color"));
 	}
 }
 
