@@ -150,6 +150,7 @@ namespace RenderOverlays
 	public:
 		YGNodeRef NewNode();
 		ImbuedNode* NewImbuedNode(uint64_t guid);
+		ImbuedNode* ImbueNode(YGNodeRef node, uint64_t guid);
 
 		YGNodeRef InsertNewNode();
 		ImbuedNode* InsertNewImbuedNode(uint64_t guid);
@@ -192,12 +193,12 @@ namespace RenderOverlays
 		std::function<YGSize(float, YGMeasureMode, float, YGMeasureMode)> _measureDelegate;
 		std::function<void(YGNodeRef, Rect, Rect)> _postCalculateDelegate;
 
-		YGNodeRef YGNode() { return _ygNode.get(); }
+		YGNodeRef YGNode() { return _ygNode; }
 		operator YGNodeRef() { return YGNode(); }
 		uint64_t Guid() const { return _nodeAttachments._guid; }
-		ImbuedNode(YogaNodePtr&& ygNode, uint64_t guid, unsigned rootIndex) : _ygNode(std::move(ygNode)), _rootIndex(rootIndex) { _nodeAttachments._guid = guid; }
+		ImbuedNode(YGNodeRef ygNode, uint64_t guid, unsigned rootIndex) : _ygNode(std::move(ygNode)), _rootIndex(rootIndex) { _nodeAttachments._guid = guid; }
 	private:
-		YogaNodePtr _ygNode;
+		YGNodeRef _ygNode;
 		unsigned _rootIndex;
 		friend class LayoutEngine;
 	};

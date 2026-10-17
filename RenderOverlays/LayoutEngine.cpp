@@ -167,7 +167,15 @@ namespace RenderOverlays
 
 	ImbuedNode* LayoutEngine::NewImbuedNode(uint64_t guid)
 	{
-		auto ptr = std::make_unique<ImbuedNode>(MakeUniqueYogaNode(), guid, unsigned(_roots.size()-1));
+		auto ptr = std::make_unique<ImbuedNode>(NewNode(), guid, unsigned(_roots.size()-1));
+		auto res = ptr.get();
+		_imbuedNodes.push_back(std::move(ptr));
+		return res;
+	}
+
+	ImbuedNode* LayoutEngine::ImbueNode(YGNodeRef node, uint64_t guid)
+	{
+		auto ptr = std::make_unique<ImbuedNode>(node, guid, unsigned(_roots.size()-1));
 		auto res = ptr.get();
 		_imbuedNodes.push_back(std::move(ptr));
 		return res;
