@@ -219,7 +219,7 @@ namespace RenderOverlays
 		return nullptr;
 	}
 
-	LayedOutWidgets LayoutEngine::BuildLayedOutWidgets(Coord2 offsetToOutput, std::optional<Rect> viewportRect)
+	LayedOutWidgets LayoutEngine::BuildLayedOutWidgets(Coord2 offsetToOutput, std::optional<Rect> viewportRect, bool captureNodeLayouts)
 	{
 		// If you hit this, it means that a node was using PushNode, but not popped with PopNode. It probably means that
 		// there's container type node that wasn't closed
@@ -301,6 +301,10 @@ namespace RenderOverlays
 			result._maxs += offsetToOutput;
 		}
 
+		// We have to call BuildLayedOutNodes after we've called YGNodeCalculateLayout, but before we begin to tear our internal state down
+		if (captureNodeLayouts)
+			result._finalNodeState = BuildLayedOutNodes();
+
 		result._nodeAttachments.reserve(_imbuedNodes.size());
 		for (auto& n:_imbuedNodes)
 			result._nodeAttachments.emplace_back(std::move(n->_nodeAttachments));
@@ -309,6 +313,78 @@ namespace RenderOverlays
 		_workingStack = {};
 		_roots.clear();
 		_guidStack.Reset();
+		return result;
+	}
+
+	static void CaptureLaidOut_VisitNode(std::vector<LayedOutNode>& result, std::vector<std::pair<YGNodeRef, uint64_t>>& guidByNode, YGNodeRef node, unsigned parent)
+	{
+		LayedOutNode n;
+		n._parent = parent;
+
+		Float2 topLeft { YGNodeLayoutGetLeft(node), YGNodeLayoutGetTop(node) };
+		auto p = YGNodeGetParent(node);
+		while (p) {
+			topLeft += Float2 { YGNodeLayoutGetLeft(p), YGNodeLayoutGetTop(p) };
+			p = YGNodeGetParent(p);
+		}
+		n._frame = Rect {
+			(Coord)topLeft[0], (Coord)topLeft[1],
+			(Coord)(topLeft[0] + YGNodeLayoutGetWidth(node)),
+			(Coord)(topLeft[1] + YGNodeLayoutGetHeight(node))
+		};
+
+		if (auto gi = LowerBound(guidByNode, node); gi!=guidByNode.end() && gi->first == node)
+			n._guid = gi->second;
+
+		n._direction = (unsigned)YGNodeStyleGetDirection(node);
+		n._flexDirection = (unsigned)YGNodeStyleGetFlexDirection(node);
+		n._justifyContent = (unsigned)YGNodeStyleGetJustifyContent(node);
+		n._alignItems = (unsigned)YGNodeStyleGetAlignItems(node);
+		n._alignSelf = (unsigned)YGNodeStyleGetAlignSelf(node);
+		n._flexWrap = (unsigned)YGNodeStyleGetFlexWrap(node);
+		n._positionType = (unsigned)YGNodeStyleGetPositionType(node);
+		n._overflow = (unsigned)YGNodeStyleGetOverflow(node);
+		n._display = (unsigned)YGNodeStyleGetDisplay(node);
+		n._flexGrow = YGNodeStyleGetFlexGrow(node);
+		n._flexShrink = YGNodeStyleGetFlexShrink(node);
+		n._flexBasis = YGNodeStyleGetFlexBasis(node).value;
+		n._width = YGNodeStyleGetWidth(node).value;
+		n._height = YGNodeStyleGetHeight(node).value;
+		n._minWidth = YGNodeStyleGetMinWidth(node).value;
+		n._maxWidth = YGNodeStyleGetMaxWidth(node).value;
+		n._minHeight = YGNodeStyleGetMinHeight(node).value;
+		n._maxHeight = YGNodeStyleGetMaxHeight(node).value;
+		n._margin[0] = YGNodeStyleGetMargin(node, YGEdgeLeft).value;
+		n._margin[1] = YGNodeStyleGetMargin(node, YGEdgeTop).value;
+		n._margin[2] = YGNodeStyleGetMargin(node, YGEdgeRight).value;
+		n._margin[3] = YGNodeStyleGetMargin(node, YGEdgeBottom).value;
+		n._padding[0] = YGNodeStyleGetPadding(node, YGEdgeLeft).value;
+		n._padding[1] = YGNodeStyleGetPadding(node, YGEdgeTop).value;
+		n._padding[2] = YGNodeStyleGetPadding(node, YGEdgeRight).value;
+		n._padding[3] = YGNodeStyleGetPadding(node, YGEdgeBottom).value;
+		n._position[0] = YGNodeStyleGetPosition(node, YGEdgeLeft).value;
+		n._position[1] = YGNodeStyleGetPosition(node, YGEdgeTop).value;
+		n._position[2] = YGNodeStyleGetPosition(node, YGEdgeRight).value;
+		n._position[3] = YGNodeStyleGetPosition(node, YGEdgeBottom).value;
+		n._columnGap = YGNodeStyleGetGap(node, YGGutterColumn);
+		n._rowGap = YGNodeStyleGetGap(node, YGGutterRow);
+		n._aspectRatio = YGNodeStyleGetAspectRatio(node);
+
+		result.emplace_back(std::move(n));
+		auto idx = (unsigned)result.size() - 1;
+		for (size_t c=0; c<YGNodeGetChildCount(node); ++c)
+			CaptureLaidOut_VisitNode(result, guidByNode, YGNodeGetChild(node, c), idx);
+	};
+
+	std::vector<LayedOutNode> LayoutEngine::BuildLayedOutNodes()
+	{
+		std::vector<std::pair<YGNodeRef, uint64_t>> guidByNode;
+		for (auto& n:_imbuedNodes)
+			if (n->Guid() != 0)
+				guidByNode.emplace(LowerBound(guidByNode, n->YGNode()), n->YGNode(), n->Guid());
+
+		std::vector<LayedOutNode> result;
+		for (auto& r:_roots) CaptureLaidOut_VisitNode(result, guidByNode, r.first, -1);
 		return result;
 	}
 

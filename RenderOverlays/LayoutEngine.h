@@ -78,6 +78,7 @@ namespace RenderOverlays
 
 	struct DrawContext;
 	struct IOContext;
+	struct LayedOutNode;
 
 	class LayedOutWidgets
 	{
@@ -86,7 +87,7 @@ namespace RenderOverlays
 		{
 			std::function<void(DrawContext&, Rect frame, Rect content)> _drawDelegate;
 			std::function<PlatformRig::ProcessInputResult(IOContext&, Rect frame, Rect content)> _ioDelegate;
-			uint64_t _guid;
+			uint64_t _guid = 0;
 
 			uint64_t GetGuid() const { return _guid; }
 
@@ -99,6 +100,7 @@ namespace RenderOverlays
 		std::vector<NodeDelegates> _nodeAttachments;
 		Coord2 _dimensions;
 		Coord2 _mins, _maxs;
+		std::vector<LayedOutNode> _finalNodeState;
 
 		void Draw(DrawContext& draw, const Float3x3& transform = Identity<Float3x3>());
 		PlatformRig::ProcessInputResult ProcessInput(IOContext&, const Float3x3& transform = Identity<Float3x3>());
@@ -106,6 +108,34 @@ namespace RenderOverlays
 		LayedOutWidgets() = default;
 		LayedOutWidgets(LayedOutWidgets&&) = default;
 		LayedOutWidgets& operator=(LayedOutWidgets&&) = default;
+	};
+
+	struct LayedOutNode
+	{
+		uint64_t _guid = 0;			// 0 if the node has no guid
+		Rect _frame;				// absolute, in the tree root's coordinate space
+		unsigned _parent = ~0u;		// index into the capture vector; ~0u = a root
+
+		//  yoga style snapshot (enum values are the raw C-enum integers)
+		unsigned _direction = 0;		// YGDirection
+		unsigned _flexDirection = 0;	// YGFlexDirection
+		unsigned _justifyContent = 0;	// YGJustify
+		unsigned _alignItems = 0;		// YGAlign
+		unsigned _alignSelf = 0;		// YGAlignSelf
+		unsigned _flexWrap = 0;			// YGWrap
+		unsigned _positionType = 0;		// YGPositionType
+		unsigned _overflow = 0;			// YGOverflow
+		unsigned _display = 0;			// YGDisplay
+		float _flexGrow = 0.f;
+		float _flexShrink = 0.f;
+		float _flexBasis = 0.f;	// "auto" is reported as 0
+		float _width = 0.f, _height = 0.f;			// "auto" is reported as 0
+		float _minWidth = 0.f, _maxWidth = 0.f, _minHeight = 0.f, _maxHeight = 0.f;
+		float _margin[4] = { 0, 0, 0, 0 };	// left, top, right, bottom
+		float _padding[4] = { 0, 0, 0, 0 };
+		float _position[4] = { 0, 0, 0, 0 };
+		float _columnGap = 0.f, _rowGap = 0.f;
+		float _aspectRatio = 0.f;
 	};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,7 +190,7 @@ namespace RenderOverlays
 
 		ImbuedNode* Find(uint64_t guid);
 
-		LayedOutWidgets BuildLayedOutWidgets(Coord2 offsetToOutput = Coord2(0,0), std::optional<Rect> viewportRect = {});
+		LayedOutWidgets BuildLayedOutWidgets(Coord2 offsetToOutput = Coord2(0,0), std::optional<Rect> viewportRect = {}, bool captureNodeLayouts = false);
 
 		void InsertChildToStackTop(YGNodeRef);
 		YGNodeRef GetTopmostNode();
@@ -181,6 +211,8 @@ namespace RenderOverlays
 
 		std::vector<std::unique_ptr<ImbuedNode>> _imbuedNodes;
 		std::vector<YogaNodePtr> _retainedNodes;
+
+		std::vector<LayedOutNode> BuildLayedOutNodes();
 	};
 
 	YogaNodePtr MakeUniqueYogaNode();
