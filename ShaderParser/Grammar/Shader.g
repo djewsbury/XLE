@@ -152,7 +152,7 @@ toplevel
 	:	global ';'!
 	|	structure ';'!
 	|	cbuffer
-	|	'export'? function_signature (';' | block) -> ^(FUNCTION function_signature block?)
+	|	('export'|'static'|) function_signature (';' | block) -> ^(FUNCTION function_signature block?)
 	|	';'!			// empty statement
 	;
 
