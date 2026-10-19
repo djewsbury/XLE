@@ -163,6 +163,7 @@ namespace RenderCore { namespace Techniques
 		_techniqueServices->SetBufferUploads(_bufferUploads);
 
 		_techniqueServices->RegisterTextureLoader("*.[dD][dD][sS]", RenderCore::Assets::CreateDDSTextureLoader());
+		_techniqueServices->RegisterTextureLoader(RenderCore::Assets::CreateDDSBlobTextureLoader());
 		_techniqueServices->RegisterTextureLoader("*.[hH][dD][rR]", RenderCore::Assets::CreateHDRTextureLoader());
 		_techniqueServices->SetFallbackTextureLoader(RenderCore::Assets::CreateWICTextureLoader());
 

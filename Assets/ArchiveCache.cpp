@@ -787,7 +787,7 @@ namespace Assets
 				auto i = std::find_if(
 					pendingCommit._data.begin(), pendingCommit._data.end(), 
 					[&r](const auto& c) { return c._chunkTypeCode == r->_chunkTypeCode; });
-				if (i == pendingCommit._data.end() && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob)
+				if (i == pendingCommit._data.end() && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob && r->_dataType != ArtifactRequest::DataType::OptionalFilename)
 					Throw(Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::MissingFile,
 						GetDependencyValidation_AlreadyLocked().first,
@@ -806,7 +806,7 @@ namespace Assets
 				auto i = std::find_if(
 					pendingCommit._data.begin(), pendingCommit._data.end(), 
 					[&r](const auto& c) { return c._chunkTypeCode == r._chunkTypeCode; });
-				if (r._dataType == ArtifactRequest::DataType::OptionalSharedBlob && i == pendingCommit._data.end()) {
+				if ((r._dataType == ArtifactRequest::DataType::OptionalSharedBlob || r._dataType == ArtifactRequest::DataType::OptionalFilename) && i == pendingCommit._data.end()) {
 					result.emplace_back();
 					continue;
 				}
@@ -843,7 +843,7 @@ namespace Assets
 					Throw(std::runtime_error("Type code is repeated multiple times in call to ResolveRequests"));
 
 				if (r->_chunkTypeCode == ChunkType_Log || r->_chunkTypeCode == ChunkType_Metrics) {
-					if (r->_dataType != ArtifactRequest::DataType::SharedBlob && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob)
+					if (r->_dataType != ArtifactRequest::DataType::SharedBlob && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob && r->_dataType != ArtifactRequest::DataType::OptionalFilename)
 						Throw(std::runtime_error("Attempting to open a log or metrics chunk in non-shared-blob mode. This isn't supported"));
 					requiresLogOrMetrics = true;
 					continue;
@@ -855,7 +855,7 @@ namespace Assets
 				auto i = std::find_if(
 					range.first, range.second, 
 					[&r](const auto& c) { return c._chunkTypeCode == r->_chunkTypeCode; });
-				if (i == range.second && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob)
+				if (i == range.second && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob && r->_dataType != ArtifactRequest::DataType::OptionalFilename)
 					Throw(Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::MissingFile,
 						GetDependencyValidation_AlreadyLocked().first,
@@ -911,7 +911,7 @@ namespace Assets
 				}  else {
 					auto i = std::find_if(range.first, range.second, [&r](const auto& c) { return c._chunkTypeCode == r._chunkTypeCode; });
 
-					if (r._dataType == ArtifactRequest::DataType::OptionalSharedBlob && i == range.second) {
+					if ((r._dataType == ArtifactRequest::DataType::OptionalSharedBlob || r._dataType == ArtifactRequest::DataType::OptionalFilename) && i == range.second) {
 						result.emplace_back();
 						continue;
 					}

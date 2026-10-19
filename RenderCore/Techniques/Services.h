@@ -37,9 +37,11 @@ namespace RenderCore { namespace Techniques
 		//   T E X T U R E   L O A D E R S
 		////////////////////////////////////////////
 		unsigned 	RegisterTextureLoader(StringSection<> wildcardPattern, std::function<Assets::TextureLoaderSignature>&& loader);
+		unsigned 	RegisterTextureLoader(std::function<Assets::BlobTextureLoaderSignature>&& loader);
 		void 		DeregisterTextureLoader(unsigned pluginId);
 		void 		SetFallbackTextureLoader(std::function<Assets::TextureLoaderSignature>&& loader);
 		std::shared_ptr<BufferUploads::IAsyncDataSource> CreateTextureDataSource(StringSection<> identifier, Assets::TextureLoaderFlags::BitField flags);
+		std::shared_ptr<BufferUploads::IAsyncDataSource> CreateTextureDataSource(::Assets::Blob, ::Assets::DependencyValidation, Assets::TextureLoaderFlags::BitField flags);
 
 		/////////////////////////////
 		//   D E F O R M   C O N F I G U R E

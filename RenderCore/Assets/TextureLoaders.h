@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../ResourceDesc.h"
+#include "../../Assets/Assets.h"
 #include "../../Utility/StringUtils.h"
 #include <functional>
 #include <memory>
@@ -20,7 +21,9 @@ namespace RenderCore { namespace Assets
     }
     
     using TextureLoaderSignature = std::shared_ptr<BufferUploads::IAsyncDataSource>(StringSection<>, TextureLoaderFlags::BitField);
+	using BlobTextureLoaderSignature = std::shared_ptr<BufferUploads::IAsyncDataSource>(const ::Assets::Blob&, const ::Assets::DependencyValidation&, TextureLoaderFlags::BitField);
     std::function<TextureLoaderSignature> CreateDDSTextureLoader();
+	std::function<BlobTextureLoaderSignature> CreateDDSBlobTextureLoader();
     std::function<TextureLoaderSignature> CreateWICTextureLoader();
     std::function<TextureLoaderSignature> CreateHDRTextureLoader();
 

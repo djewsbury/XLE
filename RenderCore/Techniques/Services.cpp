@@ -27,6 +27,12 @@ namespace RenderCore { namespace Techniques
 			unsigned _id;
 		};
 		std::vector<TexturePlugin> _texturePlugins;
+		struct BlobTexturePlugin
+		{
+			std::function<Assets::BlobTextureLoaderSignature> _loader;
+			unsigned _id;
+		};
+		std::vector<BlobTexturePlugin> _blobTexturePlugins;
 		std::function<Assets::TextureLoaderSignature> _fallbackTextureLoader;
 		unsigned _nextTexturePluginId = 1;
 
@@ -60,12 +66,28 @@ namespace RenderCore { namespace Techniques
 		return res;
 	}
 
+	unsigned 	Services::RegisterTextureLoader(std::function<Assets::BlobTextureLoaderSignature>&& loader)
+	{
+		ScopedLock(_pimpl->_lock);
+		auto res = _pimpl->_nextTexturePluginId++;
+
+		Pimpl::BlobTexturePlugin plugin;
+		plugin._loader = std::move(loader);
+		plugin._id = res;
+		_pimpl->_blobTexturePlugins.push_back(std::move(plugin));
+		return res;
+	}
+
 	void Services::DeregisterTextureLoader(unsigned pluginId)
 	{
 		ScopedLock(_pimpl->_lock);
-		auto i = std::find_if(_pimpl->_texturePlugins.begin(), _pimpl->_texturePlugins.end(), [pluginId](const auto& c) { return c._id == pluginId; });
+		auto i = std::find_if(b2e(_pimpl->_texturePlugins), [pluginId](const auto& c) { return c._id == pluginId; });
 		if (i != _pimpl->_texturePlugins.end())
 			_pimpl->_texturePlugins.erase(i);
+
+		auto i2 = std::find_if(b2e(_pimpl->_blobTexturePlugins), [pluginId](const auto& c) { return c._id == pluginId; });
+		if (i2 != _pimpl->_blobTexturePlugins.end())
+			_pimpl->_blobTexturePlugins.erase(i2);
 	}
 
 	void Services::SetFallbackTextureLoader(std::function<Assets::TextureLoaderSignature>&& loader)
@@ -84,6 +106,17 @@ namespace RenderCore { namespace Techniques
 		}
 		if (_pimpl->_fallbackTextureLoader)
 			return _pimpl->_fallbackTextureLoader(identifier, flags);
+		return nullptr;
+	}
+
+	std::shared_ptr<BufferUploads::IAsyncDataSource> Services::CreateTextureDataSource(::Assets::Blob blob, ::Assets::DependencyValidation depVal, Assets::TextureLoaderFlags::BitField flags)
+	{
+		assert(blob && !blob->empty());
+		ScopedLock(_pimpl->_lock);
+		for (const auto& plugin:_pimpl->_blobTexturePlugins) {
+			auto resource = plugin._loader(blob, depVal, flags);
+			if (resource) return resource;
+		}
 		return nullptr;
 	}
 

@@ -436,7 +436,7 @@ namespace Assets
 							foundExactMatch = true;
 							break;
 						}
-				} else if (requests[r]._dataType == ArtifactRequest::DataType::Filename) {
+				} else if (requests[r]._dataType == ArtifactRequest::DataType::OptionalFilename) {
 					for (const auto&prod:_productsFile._compileProducts)
 						if (prod._type == requests[r]._chunkTypeCode) {
 							result[r] = {nullptr, 0, {}, nullptr, Concatenate(_fsMountPt, prod._intermediateArtifact)};
@@ -486,7 +486,7 @@ namespace Assets
 						foundMulti = true;
 						break;
 					}
-				if (!foundMulti && requestsForMulti[0]._dataType != ArtifactRequest::DataType::OptionalSharedBlob)
+				if (!foundMulti && requestsForMulti[0]._dataType != ArtifactRequest::DataType::OptionalSharedBlob && requestsForMulti[0]._dataType != ArtifactRequest::DataType::OptionalFilename)
 					Throw(Exceptions::ConstructionError(
 						Exceptions::ConstructionError::Reason::MissingFile,
 						_depVal,

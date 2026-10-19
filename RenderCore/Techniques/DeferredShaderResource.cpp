@@ -674,12 +674,19 @@ namespace RenderCore { namespace Techniques
 
     std::shared_ptr<BufferUploads::IAsyncDataSource> BeginDataSource(const Assets::TextureArtifact& artifact, Assets::TextureLoaderFlags::BitField loadedFlags)
 	{
-		return Techniques::Services::GetInstance().CreateTextureDataSource(artifact.GetArtifactFile(), loadedFlags);
+		if (!artifact.GetArtifactFile().empty())
+			return Techniques::Services::GetInstance().CreateTextureDataSource(artifact.GetArtifactFile(), loadedFlags);
+		assert(artifact.GetBlob() && !artifact.GetBlob()->empty());
+		return Techniques::Services::GetInstance().CreateTextureDataSource(artifact.GetBlob(), artifact.GetDependencyValidation(), loadedFlags);
 	}
 
 	auto BeginLoadRawData(const Assets::TextureArtifact& artifact, Assets::TextureLoaderFlags::BitField loadedFlags) -> std::future<TextureRawData>
 	{
-		auto pkt = Techniques::Services::GetInstance().CreateTextureDataSource(artifact.GetArtifactFile(), 0);
+		std::shared_ptr<BufferUploads::IAsyncDataSource> pkt;
+		if (!artifact.GetArtifactFile().empty())
+			pkt = Techniques::Services::GetInstance().CreateTextureDataSource(artifact.GetArtifactFile(), 0);
+		else
+			pkt = Techniques::Services::GetInstance().CreateTextureDataSource(artifact.GetBlob(), artifact.GetDependencyValidation(), 0);
 		if (!pkt) {
 			std::promise<TextureRawData> promise;
 			promise.set_exception(std::make_exception_ptr(

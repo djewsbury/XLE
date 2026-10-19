@@ -29,6 +29,7 @@ namespace RenderCore { namespace Assets
 	public:
 		const ::Assets::DependencyValidation GetDependencyValidation() const { return _depVal; }
 		const std::string& GetArtifactFile() const { return _artifactFile; }
+		const ::Assets::Blob& GetBlob() const { return _blob; }
 
 		static void ConstructToPromise(
 			std::promise<std::shared_ptr<TextureArtifact>>&&,
@@ -55,9 +56,11 @@ namespace RenderCore { namespace Assets
 		TextureArtifact& operator=(const TextureArtifact&);
 		TextureArtifact(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal);
 		TextureArtifact(std::string file);
-		static const ::Assets::ArtifactRequest ChunkRequests[1];
+		TextureArtifact(::Assets::Blob file, ::Assets::DependencyValidation depVal);
+		static const ::Assets::ArtifactRequest ChunkRequests[2];
 	private:
 		std::string _artifactFile;
+		::Assets::Blob _blob;
 		::Assets::DependencyValidation _depVal;
 	};
 

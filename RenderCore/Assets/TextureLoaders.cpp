@@ -354,6 +354,146 @@ namespace RenderCore { namespace Assets
 		};
 	}
 
+	static const std::string s_inMemoryFile { "in-memory-file" };
+
+	class DDSBlobDataSource : public BufferUploads::IAsyncDataSource, public std::enable_shared_from_this<DDSBlobDataSource>
+	{
+	public:
+		virtual std::future<ResourceDesc> GetDesc() override
+		{
+			struct Captures
+			{
+				std::promise<ResourceDesc> _promise;
+			};
+			auto cap = std::make_shared<Captures>();
+			auto result = cap->_promise.get_future();
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+				[weakThis{weak_from_this()}, captures=std::move(cap)]() {
+					try
+					{
+						auto that = weakThis.lock();
+						if (!that)
+							Throw(std::runtime_error("Data source has expired"));
+
+						ScopedLock(that->_lock);
+
+						if (!that->_hasReadMetadata) {
+							auto breakdown = BuildDDSBreakdown(*that->_blob, s_inMemoryFile);
+							if (!breakdown) {
+								// Sometimes we can get here if the file requires some conversion at load in. For example, there are some legacy formats (such as R8G8B8 formats)
+								// that are valid in DDS, but aren't supported by modern DX/DXGI. To support these, we need to drop back to a less efficient way of loading
+								// the file. But this is much less efficient, and really not recommended
+								auto hres = DirectX::GetMetadataFromDDSMemory((const uint8_t*)that->_blob->data(), that->_blob->size(), DirectX::DDS_FLAGS_NONE, that->_fallbackTexMetadata);
+								if (!SUCCEEDED(hres))
+									Throw(std::runtime_error("Failed while attempting reading header from DDS file (" + s_inMemoryFile + ")"));
+
+								// We succeeded after allowing conversions. Let's use the fallback path
+								Log(Warning) << "Falling back to inefficient path for loading DDS file (" << s_inMemoryFile << "). This usually means that the file is using a legacy pixel format that isn't natively supported by modern hardware and graphics APIs. This path is not recommended because it can result in slowdowns and memory spikes during loading." << std::endl;
+								hres = LoadFromDDSMemory((const uint8_t*)that->_blob->data(), that->_blob->size(), DirectX::DDS_FLAGS_NONE, &that->_fallbackTexMetadata, that->_fallbackScratchImage);
+								if (!SUCCEEDED(hres))
+									Throw(std::runtime_error("Failed while attempting reading header from DDS file (" + s_inMemoryFile + ") in fallback phase"));
+								that->_fallbackTexMetadata = that->_fallbackScratchImage.GetMetadata();
+								that->_useFallbackScratchImage = true;
+								that->_resourceDesc = CreateDesc(0, BuildTextureDesc(that->_fallbackTexMetadata));
+							} else {
+								that->_ddsBreakdown = *breakdown;
+								that->_resourceDesc = CreateDesc(0, that->_ddsBreakdown._textureDesc);
+							}
+
+							that->_hasReadMetadata = true;
+						}
+
+						captures->_promise.set_value(that->_resourceDesc);
+					} catch(...) {
+						captures->_promise.set_exception(std::current_exception());
+					}
+				});
+
+			return result;
+		}
+
+		virtual std::future<void> PrepareData(IteratorRange<const SubResource*> subResources) override
+		{
+			struct Captures
+			{
+				std::promise<void> _promise;
+				std::vector<SubResource> _subResources;
+				Captures(IteratorRange<const SubResource*> subResources) :_subResources(subResources.begin(), subResources.end()) {}
+			};
+			auto cap = std::make_shared<Captures>(subResources);
+			auto result = cap->_promise.get_future();
+			ConsoleRig::GlobalServices::GetInstance().GetShortTaskThreadPool().Enqueue(
+				[weakThis{weak_from_this()}, captures = std::move(cap)]() mutable {
+					try
+					{
+						auto that = weakThis.lock();
+						if (!that)
+							Throw(std::runtime_error("Data source has expired"));
+
+						ScopedLock(that->_lock);
+						assert(that->_hasReadMetadata);
+
+						if (!that->_useFallbackScratchImage) {
+							for (const auto& sr:captures->_subResources) {
+								auto srcSrIdx = sr._id._arrayLayer * that->_ddsBreakdown._textureDesc._mipCount + sr._id._mip;
+								auto& srcSr = that->_ddsBreakdown._subresources[srcSrIdx];
+								assert(srcSr._pitches._rowPitch == sr._pitches._rowPitch);
+								assert(srcSr._pitches._slicePitch == sr._pitches._slicePitch);
+								assert(sr._destination.size() == (size_t)sr._pitches._slicePitch);
+								std::memcpy(
+									sr._destination.begin(),
+									srcSr._data,
+									std::min((size_t)srcSr._pitches._arrayPitch, sr._destination.size()));
+							}
+						} else {
+							// This is the inefficient path used when the DirectXTex library needs to do some conversion after loading
+							PrepareSubresourcesFromDXImage(captures->_subResources, that->_fallbackScratchImage);
+						}
+						captures->_promise.set_value();
+					} catch(...) {
+						captures->_promise.set_exception(std::current_exception());
+					}
+				});
+			return result;
+		}
+
+		StringSection<> GetName() const override { return s_inMemoryFile; }
+
+		::Assets::DependencyValidation GetDependencyValidation() const override { return _depVal; }
+
+		DDSBlobDataSource(::Assets::Blob blob, ::Assets::DependencyValidation depVal)
+		: _blob(std::move(blob)), _depVal(std::move(depVal))
+		{
+			_hasReadMetadata = false;
+			_useFallbackScratchImage = false;
+		}
+		~DDSBlobDataSource() {}
+	private:
+		::Assets::Blob _blob;
+		::Assets::DependencyValidation _depVal;
+
+		std::mutex _lock;
+		DDSBreakdown _ddsBreakdown;
+		RenderCore::ResourceDesc _resourceDesc;
+		bool _hasReadMetadata = false;
+
+		DirectX::TexMetadata _fallbackTexMetadata;
+		DirectX::ScratchImage _fallbackScratchImage;
+		bool _useFallbackScratchImage = false;
+	};
+
+	std::function<BlobTextureLoaderSignature> CreateDDSBlobTextureLoader()
+	{
+		CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
+		return [](const ::Assets::Blob& blob, const ::Assets::DependencyValidation& depVal, TextureLoaderFlags::BitField flags) -> std::shared_ptr<BufferUploads::IAsyncDataSource> {
+			// look for 4 byte DDS magic header...
+			assert(blob);
+			if (blob->size() < 4) return nullptr;
+			if (*(unsigned*)blob->data() != ' SDD') return nullptr;
+			return std::make_shared<DDSBlobDataSource>(blob, depVal);
+		};
+	}
+
 	enum class TexFmt
 	{
 		DDS, TGA, WIC, Unknown

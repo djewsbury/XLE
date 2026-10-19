@@ -9,7 +9,6 @@
 #include "ChunkFileContainer.h"
 #include "MemoryFile.h"
 #include "ICompileOperation.h"
-#include "../ConsoleRig/GlobalServices.h"
 #include "../Utility/StringUtils.h"
 #include "../Utility/StringFormat.h"
 #include "../Core/Exceptions.h"
@@ -155,6 +154,7 @@ namespace Assets
 			};
 		} else if (dataType == ArtifactRequest::DataType::SharedBlob || dataType == ArtifactRequest::DataType::OptionalSharedBlob) {
 			chunkResult._sharedBlob = blob;
+		} else if (dataType == ArtifactRequest::DataType::OptionalFilename) {
 		} else {
 			UNREACHABLE();
 		}
@@ -172,14 +172,10 @@ namespace Assets
 			// First scan through and check to see if we
 			// have all of the chunks we need
 		for (auto r=requests.begin(); r!=requests.end(); ++r) {
-			auto prevWithSameCode = std::find_if(requests.begin(), r, [r](const auto& t) { return t._chunkTypeCode == r->_chunkTypeCode; });
-			if (prevWithSameCode != r)
-				Throw(std::runtime_error("Type code is repeated multiple times in call to ResolveRequests"));
-
 			auto i = std::find_if(
 				_chunks.begin(), _chunks.end(), 
 				[&r](const auto& c) { return c._chunkTypeCode == r->_chunkTypeCode; });
-			if (i == _chunks.end() && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob)
+			if (i == _chunks.end() && r->_dataType != ArtifactRequest::DataType::OptionalSharedBlob && r->_dataType != ArtifactRequest::DataType::OptionalFilename)
 				Throw(Exceptions::ConstructionError(
 					Exceptions::ConstructionError::Reason::MissingFile,
 					_depVal,
@@ -196,11 +192,9 @@ namespace Assets
 		}
 
 		for (const auto& r:requests) {
-			auto i = std::find_if(
-				_chunks.begin(), _chunks.end(), 
-				[&r](const auto& c) { return c._chunkTypeCode == r._chunkTypeCode; });
+			auto i = std::find_if(_chunks.begin(), _chunks.end(), [&r](const auto& c) { return c._chunkTypeCode == r._chunkTypeCode; });
 			
-			if (r._dataType == ArtifactRequest::DataType::OptionalSharedBlob && i == _chunks.end()) {
+			if ((r._dataType == ArtifactRequest::DataType::OptionalSharedBlob || r._dataType == ArtifactRequest::DataType::OptionalFilename) && i == _chunks.end()) {
 				result.emplace_back();
 				continue;
 			}

@@ -762,12 +762,21 @@ namespace RenderCore { namespace Assets
 	TextureArtifact::TextureArtifact(IteratorRange<::Assets::ArtifactRequestResult*> chunks, const ::Assets::DependencyValidation& depVal)
 	: _depVal(depVal)
 	{
+		assert(chunks.size() >= 2);
 		_artifactFile = chunks[0]._artifactFilename;
+		_blob = chunks[1]._sharedBlob;
+		if (_artifactFile.empty() && (!_blob || _blob->empty()))
+			Throw(std::runtime_error("TextureArtifact has no initialization data"));
 	}
 	TextureArtifact::TextureArtifact(std::string file) : _artifactFile(file)
 	{
+		if (_artifactFile.empty()) Throw(std::runtime_error("TextureArtifact has no initialization data"));
 		StringSection<> fns[] { MakeStringSection(file) };
 		_depVal = ::Assets::GetDepValSys().Make(fns);
+	}
+	TextureArtifact::TextureArtifact(::Assets::Blob file, ::Assets::DependencyValidation depVal) : _blob(std::move(file)), _depVal(std::move(depVal))
+	{
+		if (!_blob || _blob->empty()) Throw(std::runtime_error("TextureArtifact has no initialization data"));
 	}
 	TextureArtifact::TextureArtifact() = default;
 	TextureArtifact::~TextureArtifact() = default;
@@ -776,8 +785,9 @@ namespace RenderCore { namespace Assets
 	TextureArtifact::TextureArtifact(const TextureArtifact&) = default;
 	TextureArtifact& TextureArtifact::operator=(const TextureArtifact&) = default;
 
-	const ::Assets::ArtifactRequest TextureArtifact::ChunkRequests[1] {
-		::Assets::ArtifactRequest{ "main", RenderCore::Assets::TextureCompilerProcessType, 0, ::Assets::ArtifactRequest::DataType::Filename }
+	const ::Assets::ArtifactRequest TextureArtifact::ChunkRequests[2] {
+		::Assets::ArtifactRequest{ "main", RenderCore::Assets::TextureCompilerProcessType, 0, ::Assets::ArtifactRequest::DataType::OptionalFilename },
+		::Assets::ArtifactRequest{ "main", RenderCore::Assets::TextureCompilerProcessType, 0, ::Assets::ArtifactRequest::DataType::OptionalSharedBlob }
 	};
 
 	void TextureArtifact::ConstructToPromise(

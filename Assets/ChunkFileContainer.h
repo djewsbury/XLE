@@ -31,7 +31,7 @@ namespace Assets
             ReopenFunction, 
 			Raw, BlockSerializer,
 			SharedBlob, OptionalSharedBlob,
-			Filename
+			OptionalFilename
         };
         DataType        _dataType;
     };
