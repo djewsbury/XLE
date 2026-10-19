@@ -1073,7 +1073,7 @@ namespace RenderCore { namespace LightingEngine
 			while (fmttr.TryKeyedItem(kn)) {
 				if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
 				else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
-				else if (XlEqString(kn, "ArrayLayerCount")) _height = Formatters::RequireCastValue<decltype(_arrayLayerCount)>(fmttr);
+				else if (XlEqString(kn, "ArrayLayerCount")) _arrayLayerCount = Formatters::RequireCastValue<decltype(_arrayLayerCount)>(fmttr);
 				else if (XlEqString(kn, "Shader")) _shader = Formatters::RequireStringValue(fmttr).AsString();
 				else if (TryDeserializeKey(fmttr, kn, _params)) {}
 				else Formatters::SkipValueOrElement(fmttr);
@@ -1145,26 +1145,44 @@ namespace RenderCore { namespace LightingEngine
 	class Compiler_ConversionComputeShader : public Assets::ITextureCompiler
 	{
 	public:
-		unsigned _width = 512, _height = 512;
+		std::optional<unsigned> _width, _height;
 		unsigned _arrayLayerCount = 0;
 		Format _format = Format::Unknown;
 		std::string _shader;
 		Assets::TextureCompilerSource _sourceComponent;
 
-		std::string GetIntermediateName() const override { return (StringMeld<1024>() << _sourceComponent._srcFile << "-" << _shader << "-" << _width << "x" << _height << "x" << _arrayLayerCount << "-" << AsString(_format)).AsString(); }
+		std::string GetIntermediateName() const override
+		{ 
+			StringMeld<1024> meld;
+			meld << _sourceComponent._srcFile << "-" << _shader;
+			if (_width && _height)  meld << "-" << *_width << "x" << *_height;
+			meld << "-" << _arrayLayerCount << "-" << AsString(_format);
+			return meld.AsString();
+		}
 		std::shared_ptr<BufferUploads::IAsyncDataSource> ExecuteCompile(Context& context) override
 		{
 			if (context._opContext) {
 				context._opContext->SetDescription(Concatenate("Generating texture from {color:66d0a4}conversion compute shader{color:}: ", ColouriseFilename(_shader), ", ", ColouriseFilename(_sourceComponent._srcFile)));
-				context._opContext->SetMessage((StringMeld<256>() << _width << "x" << _height << " " << AsString(_format)).AsString());
+				context._opContext->SetMessage((StringMeld<256>() << _width.value_or(0) << "x" << _height.value_or(0) << " " << AsString(_format)).AsString());
 			}
 
 			auto srcPkt = Techniques::Services::GetInstance().CreateTextureDataSource(_sourceComponent._srcFile, 0);
 			context._dependencies.push_back(srcPkt->GetDependencyValidation());
 
+			unsigned width, height;
+			if (_width && _height) {
+				width = *_width; height = *_height;
+			} else {
+				auto futureSrcDesc = srcPkt->GetDesc();
+				YieldToPool(futureSrcDesc);
+				auto desc = futureSrcDesc.get();
+				assert(desc._type == ResourceDesc::Type::Texture);
+				width = _width.value_or(desc._textureDesc._width);
+				height = _height.value_or(desc._textureDesc._height);
+			}
+
 			auto targetDesc = TextureDesc::Plain2D(
-				_width,
-				_height,
+				width, height,
 				_format,		// since we're not sampling, we can go directly to the output format
 				1, _arrayLayerCount);
 			assert(!_shader.empty());
@@ -1193,9 +1211,9 @@ namespace RenderCore { namespace LightingEngine
 		{
 			StringSection<> kn;
 			while (fmttr.TryKeyedItem(kn)) {
-				if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<decltype(_width)>(fmttr);
-				else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<decltype(_height)>(fmttr);
-				else if (XlEqString(kn, "ArrayLayerCount")) _height = Formatters::RequireCastValue<decltype(_arrayLayerCount)>(fmttr);
+				if (XlEqString(kn, "Width")) _width = Formatters::RequireCastValue<unsigned>(fmttr);
+				else if (XlEqString(kn, "Height")) _height = Formatters::RequireCastValue<unsigned>(fmttr);
+				else if (XlEqString(kn, "ArrayLayerCount")) _arrayLayerCount = Formatters::RequireCastValue<decltype(_arrayLayerCount)>(fmttr);
 				else if (XlEqString(kn, "Shader")) _shader = Formatters::RequireStringValue(fmttr).AsString();
 				else if (XlEqString(kn, "Format")) {
 					auto mode = Formatters::RequireStringValue(fmttr);
