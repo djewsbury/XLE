@@ -869,11 +869,12 @@ namespace RenderOverlays { namespace DebuggingDisplay
             lines[10*2+0] = corners._worldSpacePts[2]; lines[10*2+1] = corners._worldSpacePts[6];
             lines[11*2+0] = corners._worldSpacePts[3]; lines[11*2+1] = corners._worldSpacePts[7];
 
+            context.SetState(OverlayState{OverlayState::DepthMode::Ignore, BoundingBoxLineThickness});
             context.DrawLines( 
                 ProjectionMode::P3D, 
                 lines, dimof(lines), 
-                ColorB(entryColour.r, entryColour.g, entryColour.b, BoundingBoxLineAlpha), 
-                BoundingBoxLineThickness);
+                ColorB(entryColour.r, entryColour.g, entryColour.b, BoundingBoxLineAlpha));
+            context.SetState(OverlayState{});
         }
 
         if (partMask & 0x1) {

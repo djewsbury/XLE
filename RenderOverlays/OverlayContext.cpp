@@ -81,7 +81,7 @@ namespace RenderOverlays
 			data[c] = Vertex{v[c], HardwareColor(col[c]), float(size)};
 	}
 
-	void ImmediateOverlayContext::DrawLine       (ProjectionMode proj, const Float3& v0,    const ColorB& colV0,    const Float3& v1,     const ColorB& colV1, float thickness)
+	void ImmediateOverlayContext::DrawLine       (ProjectionMode proj, const Float3& v0,    const ColorB& colV0,    const Float3& v1,     const ColorB& colV1)
 	{
 		using Vertex = Vertex_PC;
 		auto inputElements = (proj == ProjectionMode::P2D) ? Vertex::s_inputElements2D : Vertex::s_inputElements3D;
@@ -90,7 +90,7 @@ namespace RenderOverlays
 		data[1] = Vertex{v1, HardwareColor(colV1)};
 	}
 
-	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB& col,    float thickness)
+	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB& col)
 	{
 		using Vertex = Vertex_PC;
 		auto inputElements = (proj == ProjectionMode::P2D) ? Vertex::s_inputElements2D : Vertex::s_inputElements3D;
@@ -99,7 +99,7 @@ namespace RenderOverlays
 			data[c] = Vertex{v[c], HardwareColor(col)};
 	}
 
-	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB col[],   float thickness)
+	void ImmediateOverlayContext::DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,       const ColorB col[])
 	{
 		using Vertex = Vertex_PC;
 		auto inputElements = (proj == ProjectionMode::P2D) ? Vertex::s_inputElements2D : Vertex::s_inputElements3D;
@@ -208,6 +208,11 @@ namespace RenderOverlays
 			uniforms._resourceViews.push_back(drawCall._textureResource);
 			mat._hash = _texturedUSI->GetHash() + mat._hash;
 			uniforms._hashForCombining = drawCall._textureResource->GetResource()->GetGUID();
+		}
+
+		if (drawCall._topology == Topology::LineList || drawCall._topology == Topology::LineStrip || drawCall._topology == Topology::LineListWithAdjacency || drawCall._topology == Topology::LineStripWithAdjacency) {
+			mat._stateSet.SetSmoothLines(true);
+			mat._stateSet.SetLineWeight(_currentState._lineWeight);
 		}
 
 		return _immediateDrawables->QueueDraw(

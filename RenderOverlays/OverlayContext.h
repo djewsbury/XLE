@@ -27,9 +27,9 @@ namespace RenderOverlays
         void    DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB& col,    uint8_t size) override;
         void    DrawPoints     (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB col[],   uint8_t size) override;
 
-        void    DrawLine       (ProjectionMode proj, const Float3& v0,    const ColorB& colV0,    const Float3& v1,     const ColorB& colV1, float thickness) override;
-        void    DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB& col,    float thickness) override;
-        void    DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB col[],   float thickness) override;
+        void    DrawLine       (ProjectionMode proj, const Float3& v0,    const ColorB& colV0,    const Float3& v1,     const ColorB& colV1) override;
+        void    DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB& col) override;
+        void    DrawLines      (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB col[]) override;
 
         void    DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB& col) override;
         void    DrawTriangles  (ProjectionMode proj, const Float3 v[],    uint32_t numPoints,     const ColorB col[]) override;

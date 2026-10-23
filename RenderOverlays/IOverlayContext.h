@@ -22,20 +22,11 @@ namespace RenderOverlays
 
 ////////////////////////////////////////////////////////////////////////////////
 
-    class OverlayState
+    struct OverlayState
     {
-    public:
-
-            //
-            //      Simplified render state settings for
-            //      rendering basic debugging things
-            //
-
-        struct DepthMode    { enum Enum { Ignore, Read, ReadAndWrite }; };
-        DepthMode::Enum     _depthMode;
-        OverlayState(DepthMode::Enum depthMode) : _depthMode(depthMode) {}
-        OverlayState() : _depthMode(DepthMode::Ignore) {}
-
+        enum class DepthMode { Ignore, Read, ReadAndWrite };
+        DepthMode _depthMode = DepthMode::Ignore;
+        float _lineWeight = 1.f;
     };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -61,9 +52,9 @@ namespace RenderOverlays
         virtual void    DrawPoints      (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB& col,    uint8_t size = 1) = 0;
         virtual void    DrawPoints      (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB col[],   uint8_t size = 1) = 0;
 
-        virtual void    DrawLine        (ProjectionMode proj, const Float3& v0,      const ColorB& colV0,    const Float3& v1,     const ColorB& colV1,        float thickness = 1.0f) = 0;
-        virtual void    DrawLines       (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB& col,    float thickness = 1.0f) = 0;
-        virtual void    DrawLines       (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB col[],   float thickness = 1.0f) = 0;
+        virtual void    DrawLine        (ProjectionMode proj, const Float3& v0,      const ColorB& colV0,    const Float3& v1,     const ColorB& colV1) = 0;
+        virtual void    DrawLines       (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB& col) = 0;
+        virtual void    DrawLines       (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB col[]) = 0;
 
         virtual void    DrawTriangles   (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB& col)    = 0;
         virtual void    DrawTriangles   (ProjectionMode proj, const Float3 v[],      uint32_t numPoints,     const ColorB col[])   = 0;
