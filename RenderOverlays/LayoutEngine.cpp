@@ -101,8 +101,8 @@ namespace RenderOverlays
 		auto i = _nodeAttachments.begin();
 		auto i2 = _layedOutLocations.begin();
 		for (;i!=_nodeAttachments.end(); ++i, ++i2) {
-			auto frame = TransformRect(transform, i2->first);
-			auto content = TransformRect(transform, i2->second);
+			auto frame = TransformRect(transform, i2->_frame);
+			auto content = TransformRect(transform, i2->_content);
 			if (i->_drawDelegate)
 				i->_drawDelegate(draw, frame, content);
 
@@ -119,8 +119,8 @@ namespace RenderOverlays
 		auto i2 = _layedOutLocations.rbegin();
 		for (;i!=_nodeAttachments.rend(); ++i, ++i2)
 			if (i->_ioDelegate && i->GetGuid() == topMostId) {
-				auto frame = TransformRect(transform, i2->first);
-				auto content = TransformRect(transform, i2->second);
+				auto frame = TransformRect(transform, i2->_frame);
+				auto content = TransformRect(transform, i2->_content);
 				auto result = i->_ioDelegate(ioContext, frame, content);
 				if (result != PlatformRig::ProcessInputResult::Passthrough)
 					return result;
@@ -229,16 +229,16 @@ namespace RenderOverlays
 		if (_roots.empty())
 			return {};
 
-		for (auto& n:_imbuedNodes)
-			if (n->_measureDelegate) {
-				YGNodeSetContext(n->YGNode(), n.get());
+		for (auto& n:_imbuedNodes) {
+			YGNodeSetContext(n->YGNode(), n.get());
+			if (n->_measureDelegate)
 				YGNodeSetMeasureFunc(
 					n->YGNode(),
 					[](YGNodeConstRef node, float width, YGMeasureMode widthMode, float height, YGMeasureMode heightMode) -> YGSize {
 						return ((ImbuedNode*)YGNodeGetContext(node))->_measureDelegate(width, widthMode, height, heightMode);
 					}
 				);
-			}
+		}
 
 		LayedOutWidgets result;
 		for (auto& r:_roots)
@@ -248,9 +248,15 @@ namespace RenderOverlays
 		for (auto& n:_imbuedNodes) {
 
 			auto ygNode = n->YGNode();
+			int zOrder = n->_zorderFixed.value_or(n->_zorderRel);
+			bool fixedZOrder = n->_zorderFixed.has_value();
 			Float2 topLeft { YGNodeLayoutGetLeft(ygNode), YGNodeLayoutGetTop(ygNode) };
 			auto parent = YGNodeGetParent(ygNode);
 			while (parent) {
+				if (auto* context = (ImbuedNode*)YGNodeGetContext(parent)) {
+					if (!fixedZOrder) zOrder += context->_zorderFixed.value_or(context->_zorderRel);
+					fixedZOrder |= context->_zorderFixed.has_value();
+				}
 				topLeft += Float2 { YGNodeLayoutGetLeft(parent), YGNodeLayoutGetTop(parent) };
 				parent = YGNodeGetParent(parent);
 			}
@@ -267,14 +273,10 @@ namespace RenderOverlays
 				bottomRight - Int2{ YGNodeLayoutGetPadding(ygNode, YGEdgeRight), YGNodeLayoutGetPadding(ygNode, YGEdgeBottom) }
 			};
 
-			if (!viewportRect.has_value() || Intersects(*viewportRect, frame)) {
-				result._layedOutLocations.emplace_back(frame, content);
-
+			result._layedOutLocations.emplace_back(LayedOutWidgets::LayedOutLocation{frame, content, zOrder});
+			if (!viewportRect.has_value() || Intersects(*viewportRect, frame))
 				if (n->_postCalculateDelegate)
-					n->_postCalculateDelegate(ygNode, frame, content);
-			} else {
-				result._layedOutLocations.emplace_back(Rect{0,0,0,0}, Rect{0,0,0,0});
-			}
+					n->_postCalculateDelegate(ygNode, frame, content, zOrder);
 
 		}
 
@@ -321,9 +323,21 @@ namespace RenderOverlays
 		LayedOutNode n;
 		n._parent = parent;
 
+		int zOrder = 0;
+		bool fixedZOrder = false;
+		if (auto* context = (ImbuedNode*)YGNodeGetContext(node)) {
+			zOrder = context->_zorderFixed.value_or(context->_zorderRel);
+			fixedZOrder = context->_zorderFixed.has_value();
+		}
+
 		Float2 topLeft { YGNodeLayoutGetLeft(node), YGNodeLayoutGetTop(node) };
 		auto p = YGNodeGetParent(node);
 		while (p) {
+			if (auto* context = (ImbuedNode*)YGNodeGetContext(p)) {
+				if (!fixedZOrder) zOrder += context->_zorderFixed.value_or(context->_zorderRel);
+				fixedZOrder |= context->_zorderFixed.has_value();
+			}
+
 			topLeft += Float2 { YGNodeLayoutGetLeft(p), YGNodeLayoutGetTop(p) };
 			p = YGNodeGetParent(p);
 		}
@@ -369,6 +383,7 @@ namespace RenderOverlays
 		n._columnGap = YGNodeStyleGetGap(node, YGGutterColumn);
 		n._rowGap = YGNodeStyleGetGap(node, YGGutterRow);
 		n._aspectRatio = YGNodeStyleGetAspectRatio(node);
+		n._zorder = zOrder;
 
 		result.emplace_back(std::move(n));
 		auto idx = (unsigned)result.size() - 1;

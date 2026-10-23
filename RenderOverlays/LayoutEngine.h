@@ -96,7 +96,8 @@ namespace RenderOverlays
 			NodeDelegates& operator=(NodeDelegates&&) = default;
 		};
 
-		std::vector<std::pair<Rect, Rect>> _layedOutLocations;
+		struct LayedOutLocation { Rect _frame; Rect _content; int _zorder; };
+		std::vector<LayedOutLocation> _layedOutLocations;
 		std::vector<NodeDelegates> _nodeAttachments;
 		Coord2 _dimensions;
 		Coord2 _mins, _maxs;
@@ -115,6 +116,7 @@ namespace RenderOverlays
 		uint64_t _guid = 0;			// 0 if the node has no guid
 		Rect _frame;				// absolute, in the tree root's coordinate space
 		unsigned _parent = ~0u;		// index into the capture vector; ~0u = a root
+		int _zorder = 0;
 
 		//  yoga style snapshot (enum values are the raw C-enum integers)
 		unsigned _direction = 0;		// YGDirection
@@ -223,7 +225,10 @@ namespace RenderOverlays
 		LayedOutWidgets::NodeDelegates _nodeAttachments;
 
 		std::function<YGSize(float, YGMeasureMode, float, YGMeasureMode)> _measureDelegate;
-		std::function<void(YGNodeRef, Rect, Rect)> _postCalculateDelegate;
+		std::function<void(YGNodeRef, Rect, Rect, int)> _postCalculateDelegate;
+
+		std::optional<int> _zorderFixed;
+		int _zorderRel = 0;		// relative to parent node
 
 		YGNodeRef YGNode() { return _ygNode; }
 		operator YGNodeRef() { return YGNode(); }
