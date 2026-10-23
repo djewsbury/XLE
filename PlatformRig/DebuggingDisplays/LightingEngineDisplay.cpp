@@ -230,7 +230,7 @@ namespace PlatformRig { namespace Overlays
 							lines[c*2+0] = corners[frustumEdges[c].v0];
 							lines[c*2+1] = corners[frustumEdges[c].v1];
 						}
-						context.DrawLines(ProjectionMode::P3D, lines, dimof(lines), ColorB{215, 100, 100}, 3.f);  // rgba(215, 100, 100, 1)
+						context.DrawLines(ProjectionMode::P3D, lines, dimof(lines), ColorB{215, 100, 100});  // rgba(215, 100, 100, 1)
 					}
 				}
 

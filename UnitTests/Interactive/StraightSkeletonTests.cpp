@@ -709,7 +709,9 @@ namespace UnitTests
 				}
 
 				const RenderOverlays::ColorB faceBoundaryColor { 214, 179, 39 };		// rgba(214, 179, 39, 1))
-				overlayContext.DrawLines(projectionMode, boundaryLines.data(), (uint32_t)boundaryLines.size(), faceBoundaryColor, 3.f);
+				overlayContext.SetState(RenderOverlays::OverlayState{RenderOverlays::OverlayState::DepthMode::Ignore, 3.f});
+				overlayContext.DrawLines(projectionMode, boundaryLines.data(), (uint32_t)boundaryLines.size(), faceBoundaryColor);
+				overlayContext.SetState({});
 
 				if (aveCount) {
 					avePt /= aveCount;
