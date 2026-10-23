@@ -65,6 +65,7 @@ struct ShapeResult
 
 ShapeResult ShapeResult_Empty() { ShapeResult temp; temp._border = temp._fill = 0.f; return temp; }
 ShapeResult MakeShapeResult(float fill, float border)  { ShapeResult temp; temp._fill = fill; temp._border = border; return temp; }
+ShapeResult DefaultValue_ShapeResult() { return MakeShapeResult(1, 0); }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 	//   D E B U G G I N G   S H A P E S   C O O R D S

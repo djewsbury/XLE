@@ -19,9 +19,6 @@ RawMaterial=Shared=~
 		ShapeSystem5=~
 			ShapesFrameworkEntry.hlsl::BuildShapeDHDP
 			Implements=SV_SystemPS
-		ShapeSystem6=~
-			ShapesFrameworkEntry.hlsl::BuildShapeFromInterface
-			Implements=SV_SystemPS
 
 Entity=HorizTweakerBar
 Inherit=HorizTweakerBar=~; Shared
@@ -108,7 +105,7 @@ RawMaterial=FillRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 Entity=FillAndOutlineRoundedRect
 Inherit=FillAndOutlineRoundedRect=~; SolidWithBorder
@@ -116,7 +113,7 @@ RawMaterial=FillAndOutlineRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 Entity=OutlineRoundedRect
 Inherit=OutlineRoundedRect=~; EmptySolidBorder
@@ -124,7 +121,7 @@ RawMaterial=OutlineRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 Entity=FillRaisedRect
 Inherit=FillRaisedRect=~; RaisedNoBorder
@@ -132,7 +129,7 @@ RawMaterial=FillRaisedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 Entity=FillRaisedRoundedRect
 Inherit=FillRaisedRoundedRect=~; RaisedNoBorder
@@ -140,7 +137,7 @@ RawMaterial=FillRaisedRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 Entity=FillReverseRaisedRoundedRect
 Inherit=FillReverseRaisedRoundedRect=~; ReverseRaisedNoBorder
@@ -148,7 +145,7 @@ RawMaterial=FillReverseRaisedRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 Entity=FillAndOutlineRect
 Inherit=FillAndOutlineRect=~; SolidWithBorder
@@ -156,7 +153,7 @@ RawMaterial=FillAndOutlineRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 Entity=FillEllipse
 Inherit=FillEllipse=~; SolidNoBorder
@@ -164,7 +161,7 @@ RawMaterial=FillEllipse=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 Entity=OutlineEllipse
 Inherit=OutlineEllipse=~; EmptySolidBorder
@@ -172,7 +169,7 @@ RawMaterial=OutlineEllipse=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::Ellipse_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 
 Entity=SoftShadowRect
 Inherit=SoftShadowRect=~; Shared
@@ -204,7 +201,7 @@ RawMaterial=ColorAdjustAndOutlineRoundedRect=~
 	Patches=~
 		=~
 			CommonShapes.hlsl::RoundedRectShape_Calculate
-			Implements=Interfaces.hlsl::IShape2D_Calculate
+			Implements=SV_AutoPS
 		=~
 			CommonBrushes.hlsl::SolidOutline_Calculate
 			Implements=SV_AutoPS

@@ -69,16 +69,3 @@ void BuildShapeDHDP(
 {
 	dhdp = ScreenSpaceDerivatives(coords, shapeDesc, aspectRatio);
 }
-
-void BuildShapeFromInterface(
-	out ShapeResult shape : ShapeResult,
-	DebuggingShapesCoords coords : DebuggingShapesCoords,
-	ShapeDesc shapeDesc : ShapeDesc,
-	float aspectRatio : AspectRatio)
-{
-	#if HAS_INSTANTIATION_IShape2D_Calculate
-		shape = IShape2D_Calculate(coords, shapeDesc, aspectRatio);
-	#else
-		shape = RectShape_Calculate(coords, shapeDesc);
-	#endif
-}
