@@ -181,6 +181,19 @@ namespace RenderCore { namespace Metal_Vulkan
         VkResult res;
         res = vkAllocateDescriptorSets(_device.get(), &desc_alloc_info, rawDescriptorSets);
         if (res == VK_ERROR_OUT_OF_POOL_MEMORY) {
+            #if XLE_ADDITIONAL_DESCRIPTOR_SET_DEBUGGING
+                std::cout << "Vulkan Descriptor set pool exceeded." << std::endl;
+                for (const auto& type: _knownTypesByHashCode) {
+                    std::cout << type.second._name << " [" << type.second._allocated << ", " << type.second._pendingDestroy << ", " << type.second._destroyed << "] ";
+                    bool first = true;
+                    for (unsigned c=0; c<type.second._slots.size(); ++c) {
+                        if (!first) std::cout << ", "; first = false;
+                        if (type.second._slots[c]._count > 1) std::cout << type.second._slots[c]._count << "x ";
+                        std::cout << AsString(type.second._slots[c]._type);
+                    }
+                    std::cout << std::endl;
+                }
+            #endif
             Throw(VulkanAPIFailure(res, "Vulkan descriptor set allocation failed because pool memory is exhausted")); 
         } else if (res != VK_SUCCESS)
 			Throw(VulkanAPIFailure(res, "Failure while allocating descriptor set")); 
@@ -201,6 +214,24 @@ namespace RenderCore { namespace Metal_Vulkan
                     this->QueueDestroy(set, descriptorCounts._counts); 
                 });
         }
+
+        #if XLE_ADDITIONAL_DESCRIPTOR_SET_DEBUGGING
+            auto MakeKnownType = [](const CompiledDescriptorSetLayout& layout) -> KnownType {
+                return { layout.GetName(), layout.GetDescriptorSlots().AsVector() };
+            };
+
+            for (unsigned c=0; c<desc_alloc_info.descriptorSetCount; ++c) {
+                if (!rawDescriptorSets[c]) continue;
+
+                auto hash = layouts[c]->GetHashCode();
+                auto i = LowerBound(_knownTypesByHashCode, hash);
+                if (i == _knownTypesByHashCode.end() || i->first != hash)
+                    i = _knownTypesByHashCode.emplace(i, hash, MakeKnownType(*layouts[c]));
+                ++i->second._allocated;
+
+                _allocatedToKnownType.emplace_back(rawDescriptorSets[c], hash);
+            }
+        #endif
 
         _setsAllocated += desc_alloc_info.descriptorSetCount;
         
@@ -345,6 +376,18 @@ namespace RenderCore { namespace Metal_Vulkan
 		countToDestroy = std::min(countToDestroy, _pendingDestroys.size());
 
 		if (countToDestroy) {
+
+            #if XLE_ADDITIONAL_DESCRIPTOR_SET_DEBUGGING
+                for (auto q:MakeIteratorRange(_pendingDestroys.begin(), _pendingDestroys.begin()+countToDestroy)) {
+                    auto i = LowerBound(_allocatedToKnownType, q);
+                    assert(i!=_allocatedToKnownType.end() && i->first == q);
+                    auto i2 = LowerBound(_knownTypesByHashCode, i->second);
+                    assert(i2!=_knownTypesByHashCode.end() && i2->first == i->second);
+                    --i2->second._pendingDestroy; ++i2->second._destroyed;
+                    _allocatedToKnownType.erase(i);
+                }
+            #endif
+
 			vkFreeDescriptorSets(
 				_device.get(), _pool.get(),
 				(uint32_t)countToDestroy, AsPointer(_pendingDestroys.begin()));
@@ -387,6 +430,16 @@ namespace RenderCore { namespace Metal_Vulkan
         DescriptorTypeCounts record;
         for (unsigned c=0; c<dimof(record._counts); ++c) record._counts[c] = descriptorCounts[c];
         _pendingDestroyCounts.push_back(record);
+
+        #if XLE_ADDITIONAL_DESCRIPTOR_SET_DEBUGGING
+            {
+                auto i = LowerBound(_allocatedToKnownType, set);
+                assert(i!=_allocatedToKnownType.end() && i->first == set);
+                auto i2 = LowerBound(_knownTypesByHashCode, i->second);
+                assert(i2!=_knownTypesByHashCode.end() && i2->first == i->second);
+                ++i2->second._pendingDestroy;
+            }
+        #endif
 	}
 
     DescriptorPoolMetrics DescriptorPool::GetMetrics() const
@@ -459,6 +512,18 @@ namespace RenderCore { namespace Metal_Vulkan
         _reusableGroups.clear();
         if (!_pendingDestroys.empty()) {
             // potentially dangerous early destruction (can happen in exception cases)
+
+            #if XLE_ADDITIONAL_DESCRIPTOR_SET_DEBUGGING
+                for (auto q:_pendingDestroys) {
+                    auto i = LowerBound(_allocatedToKnownType, q);
+                    assert(i!=_allocatedToKnownType.end() && i->first == q);
+                    auto i2 = LowerBound(_knownTypesByHashCode, i->second);
+                    assert(i2!=_knownTypesByHashCode.end() && i2->first == i->second);
+                    --i2->second._allocated; --i2->second._pendingDestroy; ++i2->second._destroyed;
+                    _allocatedToKnownType.erase(i);
+                }
+            #endif
+
             _setsAllocated -= (unsigned)_pendingDestroys.size();
 			vkFreeDescriptorSets(
 				_device.get(), _pool.get(),
@@ -489,6 +554,10 @@ namespace RenderCore { namespace Metal_Vulkan
     , _reusableGroups(std::move(moveFrom._reusableGroups))
     , _reusableGroupsInAllocationOrder(std::move(moveFrom._reusableGroupsInAllocationOrder))
     , _poolName(std::move(moveFrom._poolName))
+    #if XLE_ADDITIONAL_DESCRIPTOR_SET_DEBUGGING
+        , _knownTypesByHashCode(std::move(moveFrom._knownTypesByHashCode))
+        , _allocatedToKnownType(std::move(moveFrom._allocatedToKnownType))
+    #endif
     {
         std::memcpy(_descriptorsAllocated, moveFrom._descriptorsAllocated, sizeof(_descriptorsAllocated));
         std::memcpy(_descriptorsReserved, moveFrom._descriptorsReserved, sizeof(_descriptorsReserved));
@@ -512,6 +581,10 @@ namespace RenderCore { namespace Metal_Vulkan
         std::memcpy(_descriptorsReserved, moveFrom._descriptorsReserved, sizeof(_descriptorsReserved));
         _setsAllocated = moveFrom._setsAllocated;
         _setsReserved = moveFrom._setsReserved;
+        #if XLE_ADDITIONAL_DESCRIPTOR_SET_DEBUGGING
+            _knownTypesByHashCode = std::move(moveFrom._knownTypesByHashCode);
+            _allocatedToKnownType = std::move(moveFrom._allocatedToKnownType);
+        #endif
         return *this;
     }
 

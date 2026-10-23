@@ -118,6 +118,19 @@ namespace RenderCore { namespace Metal_Vulkan
         unsigned _setsReserved;
         std::string _poolName;
 
+        #if XLE_ADDITIONAL_DESCRIPTOR_SET_DEBUGGING
+            struct KnownType
+            {
+                std::string _name;
+                std::vector<DescriptorSlot> _slots;
+                int _allocated = 0;
+                int _pendingDestroy = 0;
+                int _destroyed = 0;
+            };
+            std::vector<std::pair<uint64_t, KnownType>> _knownTypesByHashCode;
+            std::vector<std::pair<VkDescriptorSet, uint64_t>> _allocatedToKnownType;
+        #endif
+
         void AllocateAlreadyLocked(
             IteratorRange<VulkanUniquePtr<VkDescriptorSet>*> dst,
             IteratorRange<const CompiledDescriptorSetLayout*const*> layouts);
