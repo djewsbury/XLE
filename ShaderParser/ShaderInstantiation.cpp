@@ -57,14 +57,12 @@ namespace ShaderSourceParser
 			}
 		}
 
-		static SerializableString TrimImplements(const GraphLanguage::NodeGraphSignature& signature)
+		static StringSection<> TrimImplements(StringSection<> signature)
 		{
-			auto res = signature.GetImplements();
 			// remove the anything before the scoping operator, if it exists
-			auto i = res.AsStringView().find_last_of(':');
-			if (i != std::string::npos)
-				res.erase(res.begin(), res.begin()+i+1);
-			return res;
+			if (auto i = XlFindLastOf(signature, ':'))
+				return {i+1, signature.end()};
+			return signature;
 		}
 
 		struct PendingInstantiation
@@ -165,12 +163,17 @@ namespace ShaderSourceParser
 								} else if (!dep._instantiation._implementsArchiveName.empty()) {
 									entryPoint._implementsName = implementsSig._name;
 									entryPoint._implementsSignature = implementsSig._signature;
+								} else if (!sig._signature.GetImplements().empty()) {
+									entryPoint._implementsName = sig._signature.GetImplements().AsString();
+									entryPoint._implementsSignature = sig._signature;
 								} else {
 									entryPoint._implementsName = entryPoint._name;
 									entryPoint._implementsSignature = entryPoint._signature;
 								}
+								_instantiationPrefixFromRawShaders.insert(Concatenate("#define HAS_INSTANTIATION_", entryPoint._name, " 1"));
+								if (auto impl = TrimImplements(entryPoint._implementsName); !XlEqString(impl, entryPoint._name) && !XlBeginsWith(impl, "SV_"))
+									_instantiationPrefixFromRawShaders.insert(Concatenate("#define HAS_INSTANTIATION_", impl, " 1"));
 								_entryPointsFromRawShaders.emplace_back(std::move(entryPoint));
-								_instantiationPrefixFromRawShaders.insert(Concatenate("#define HAS_INSTANTIATION_", (sig._signature.GetImplements().empty() ? sig._name : TrimImplements(sig._signature)), " 1"));
 							}
 						}
 					}
@@ -229,7 +232,7 @@ namespace ShaderSourceParser
 					}
 					result._entryPoints.emplace_back(std::move(entryPoint));
 					if (!scaffoldSignature.GetImplements().empty())
-						result._instantiationPrefix.insert(Concatenate("#define HAS_INSTANTIATION_", Internal::TrimImplements(scaffoldSignature), " 1"));
+						result._instantiationPrefix.insert(Concatenate("#define HAS_INSTANTIATION_", Internal::TrimImplements(scaffoldSignature.GetImplements()), " 1"));
 				}
 			}
 			else

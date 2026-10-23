@@ -666,7 +666,7 @@ const char*  XlFindNot(StringSection<char> s, const char delims[])
     return nullptr;
 }
 
-const char* XlFindCharReverse(const char* s, char ch)
+const char* XlFindLastOf(const char* s, char ch)
 {
     return strrchr(s, ch);
 }

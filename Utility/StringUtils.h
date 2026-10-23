@@ -243,7 +243,7 @@ namespace Utility
     XL_UTILITY_API const char*  XlFindNot           (const char s[], const char ch[]);
     XL_UTILITY_API char*        XlFindNot           (char s[], const char delims[]);
     XL_UTILITY_API const char*  XlFindNot           (StringSection<char> s, const char delims[]);
-    XL_UTILITY_API const char*  XlFindCharReverse   (const char* s, char ch);
+    XL_UTILITY_API const char*  XlFindLastOf        (const char* s, char ch);
     XL_UTILITY_API const char*  XlFindString        (const char* s, const char* x);
     XL_UTILITY_API char*        XlFindString        (char* s, const char* x);
     XL_UTILITY_API const char*  XlFindStringI       (const char* s, const char* x);
@@ -685,6 +685,14 @@ namespace Utility
                 a.Length() >= b.Length()
                 && XlEqStringI(StringSection<T>(a.end() - b.Length(), a.end()), b);
         }
+
+    template<typename T>
+        const T* XlFindLastOf(StringSection<T> str, T ch)
+    {
+        const T* result = nullptr;
+        for (auto i=str.begin(); i!=str.end(); ++i) if (*i == ch) result = i;
+        return result;
+    }
 
     std::string Concatenate(StringSection<> zero, StringSection<> one);
     std::string Concatenate(StringSection<> zero, StringSection<> one, StringSection<> two);
