@@ -175,7 +175,7 @@ namespace RenderOverlays
 		unsigned _currentLineIndex = 0;
 		unsigned _nextWordIndex = 0;
 		float _maxX = 0.f;
-		Float2 _iterator { 0.f, 0.f };
+		Float2 _iterator { 0.f, 0.f };			// note y coord is the base line -- not the top of the gylphs
 		ColorB _colorOverride { 0x0 };
 		unsigned _additionalLineSpacing = 0;
 	};
@@ -195,6 +195,8 @@ namespace RenderOverlays
 	/// This is also intended to support advanced cases where custom text rendering is required. That while,
 	/// while there are functions that render from spans in FontRendering.h, it's also possible to write
 	/// a customized version while still sharing all of the logic related to character layout, etc
+	///
+	/// ctrlBlock._iterator[1] should be the "base line" height (not the top of the gylphs)
 	const char* CalculateFontSpans(
 		std::vector<FontSpan>& result,
 		CalculateFontSpansControlBlock& ctrlBlock,

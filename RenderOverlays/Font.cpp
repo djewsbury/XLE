@@ -662,10 +662,9 @@ namespace RenderOverlays
 				int curGlyph;
 				Float2 v = font.GetKerning(prevGlyph, ch, &curGlyph);
 				x += xScale * v[0];
-				y += yScale * v[1];
 				prevGlyph = curGlyph;
 
-				instances[instanceCount++] = { ch, Float2{x, y}, ctrlBlock._colorOverride, ctrlBlock._currentLineIndex, ptr };
+				instances[instanceCount++] = { ch, Float2{x, y + yScale * v[1]}, ctrlBlock._colorOverride, ctrlBlock._currentLineIndex, ptr };
 
 				if (flags & DrawTextFlags::Outline) x += 2 * xScale;
 			}
@@ -1034,8 +1033,6 @@ namespace RenderOverlays
 		StringSection<> text,
 		unsigned maxLines)
 	{
-		auto tempOffset = font.GetFontProperties()._ascenderExcludingAccent; 		// drop down to where the first line should start
-		ctrlBlock._iterator[1] += tempOffset;
 		float maxY = ctrlBlock._iterator[1] + font.GetFontProperties()._lineHeight * maxLines;
 		while (!text.IsEmpty()) {
 			result.emplace_back();
@@ -1048,7 +1045,6 @@ namespace RenderOverlays
 			if (text._start == adv) break;
 			text._start = adv;
 		}
-		ctrlBlock._iterator[1] -= tempOffset;
 		return text._start;
 	}
 
