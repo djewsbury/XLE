@@ -47,6 +47,8 @@ namespace RenderCore { namespace Metal_Vulkan
         class VulkanRasterizerState : public VkPipelineRasterizationStateCreateInfo
         {
         public:
+            RasterizationDescFlags::BitField _flags = 0;
+
             void MakeCompatible(ObjectFactory&);
             VulkanRasterizerState(const RasterizationDesc& desc = {});
             VulkanRasterizerState(const VulkanRasterizerState&);

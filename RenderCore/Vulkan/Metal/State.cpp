@@ -134,8 +134,10 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 
 	void VulkanRasterizerState::MakeCompatible(ObjectFactory& factory)
 	{
-		if (!factory.GetXLEFeatures()._wideLines)
+		if (!factory.GetXLEFeatures()._wideLines) {
 			lineWidth = 1.f;
+			_flags &= ~RasterizationDescFlags::DynamicLineWeight;
+		}
 
 		if (!factory.GetXLEFeatures()._conservativeRaster)
 			if (pNext && ((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT) {
@@ -143,11 +145,13 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 				pNext = nullptr;
 			}
 
-		if (!factory.GetXLEFeatures()._smoothLines)
+		if (!factory.GetXLEFeatures()._smoothLines) {
 			if (pNext && ((VkBaseInStructure*)pNext)->sType == VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_LINE_STATE_CREATE_INFO_EXT) {
 				assert(((VkBaseInStructure*)pNext)->pNext == nullptr);
 				pNext = nullptr;
 			}
+			_flags &= ~RasterizationDescFlags::SmoothLines;
+		}
 	}
 
 	VulkanRasterizerState::VulkanRasterizerState(const RasterizationDesc& desc)
@@ -187,6 +191,7 @@ namespace RenderCore { namespace Metal_Vulkan { namespace Internal
 			_lineExt.lineRasterizationMode = VK_LINE_RASTERIZATION_MODE_RECTANGULAR_SMOOTH_EXT;		// also VK_LINE_RASTERIZATION_MODE_BRESENHAM_EXT
 			_lineExt.stippledLineEnable = false;
 		}
+		_flags = desc._flags;
 	}
 
 	VulkanRasterizerState::VulkanRasterizerState(const VulkanRasterizerState& copyFrom)

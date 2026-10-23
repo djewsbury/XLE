@@ -147,7 +147,7 @@ namespace RenderCore { namespace Metal_Vulkan
 		if (ps) shaderStages[shaderStageCount++] = BuildShaderStage(ps.get(), VK_SHADER_STAGE_FRAGMENT_BIT, psEntryPoint);
 		assert(shaderStageCount != 0);
 
-		VkDynamicState dynamicStateEnables[4];
+		VkDynamicState dynamicStateEnables[5];
 		VkPipelineDynamicStateCreateInfo dynamicState = {};
 		memset(dynamicStateEnables, 0, sizeof(dynamicStateEnables));
 		dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -159,6 +159,8 @@ namespace RenderCore { namespace Metal_Vulkan
 
 		if (_depthStencilState.depthBoundsTestEnable)
 			dynamicStateEnables[dynamicState.dynamicStateCount++] = VK_DYNAMIC_STATE_DEPTH_BOUNDS;
+		if (_rasterizerState._flags & RasterizationDescFlags::DynamicLineWeight)
+			dynamicStateEnables[dynamicState.dynamicStateCount++] = VK_DYNAMIC_STATE_LINE_WIDTH;
 
 		VkPipelineVertexInputStateCreateInfo vi = {};
 		vi.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;

@@ -178,7 +178,7 @@ namespace RenderCore
 
     namespace RasterizationDescFlags
     {
-        enum Flag { ConservativeRaster = 1u<<0u, SmoothLines = 1u<<1u };
+        enum Flag { ConservativeRaster = 1u<<0u, SmoothLines = 1u<<1u, DynamicLineWeight = 1u<<2u };
         using BitField = unsigned;
     }
 
