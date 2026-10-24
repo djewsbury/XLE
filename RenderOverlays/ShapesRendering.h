@@ -64,7 +64,7 @@ namespace RenderOverlays
     void        OutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB outlineColour, float outlineWidth = 1.f);
     void        FillAndOutlineRectangle(IOverlayContext& context, const Rect& rect, ColorB fillColour, ColorB outlineColour, float outlineWidth = 1.f);
 
-    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect, unsigned softnessRadius = 32);
+    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect, ColorB color = ColorB::Black, unsigned softnessRadius = 32);
 
     void        DashLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);
     void        SolidLine(IOverlayContext& context, IteratorRange<const Float2*> linePts, ColorB colour, float width);

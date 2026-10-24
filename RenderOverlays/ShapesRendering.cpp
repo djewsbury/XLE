@@ -508,7 +508,7 @@ namespace RenderOverlays
             res->_fillRaisedRect, {});
     }
 
-    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect, unsigned softnessRadius)
+    void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect, ColorB color, unsigned softnessRadius)
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
@@ -521,7 +521,7 @@ namespace RenderOverlays
             context,
             AsPixelCoords(Coord2(rect._topLeft - Coord2{radiusX, radiusY})),
             AsPixelCoords(Coord2(rect._bottomRight + Coord2{radiusX, radiusY})),
-            ColorB::Black, ColorB::Zero,
+            color, ColorB::Zero,
             Float2(    - radiusX / float(rect.Width()),     - radiusY / float(rect.Height())),
             Float2(1.f + radiusX / float(rect.Width()), 1.f + radiusY / float(rect.Height())),
             Float2(radiusX, radiusY), Float2(radiusX, radiusY),

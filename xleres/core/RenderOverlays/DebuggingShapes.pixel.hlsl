@@ -15,7 +15,7 @@ float4 HorizTweakerBarShader(
 {
 	float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
 	float4 result = 0.0.xxxx;
-	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
+	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(texCoord0);
 	RenderHorizTweakerBarShader(
 		0.0.xx, 1.0.xx, texCoord1.x,
 		coords, CalculateAspectRatio(coords),
@@ -31,7 +31,7 @@ float4 TagShader(
 	float2 texCoord1	: TEXCOORD1) : SV_Target0
 {
 	float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
-	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
+	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(texCoord0);
 	return RenderTag(0.0.xx, 1.0.xx, coords, CalculateAspectRatio(coords));
 }
 
@@ -41,7 +41,7 @@ float4 SmallGridBackground(
 	float2 texCoord1 : TEXCOORD1) : SV_Target0
 {
 	float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
-	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
+	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(texCoord0);
 
 		// outline rectangle
 	if (texCoord0.x <= GetUDDS(coords).x || texCoord0.x >= (1.f-GetUDDS(coords).x) || texCoord0.y <= GetVDDS(coords).y || texCoord0.y >= (1.f-GetVDDS(coords).y)) {
@@ -83,7 +83,7 @@ float4 GridBackgroundShader(
 	float2 texCoord0 : TEXCOORD0) : SV_Target0
 {
 	float2 outputDimensions = 1.0f / SysUniform_ReciprocalViewportDimensions().xy;
-	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(position, texCoord0, outputDimensions);
+	DebuggingShapesCoords coords = DebuggingShapesCoords_Make(texCoord0);
 
 	if (texCoord0.x >= (1.f-GetUDDS(coords).x) || texCoord0.y <= GetVDDS(coords).y || texCoord0.y >= (1.f-GetVDDS(coords).y)) {
 		return float4(0.0.xxx, 1.f);
