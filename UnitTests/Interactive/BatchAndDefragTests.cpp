@@ -104,7 +104,7 @@ namespace UnitTests
 				Float3* gl = gridLines;
 				for (unsigned y=1; y<_gridHeight; ++y) { *gl++ = Float3{translation[0], y*scale+translation[1], 0}; *gl++ = Float3{_gridWidth*scale+translation[0], y*scale+translation[1], 0}; }
 				for (unsigned x=1; x<_gridWidth; ++x) { *gl++ = Float3{x*scale+translation[0], translation[1], 0}; *gl++ = Float3{x*scale+translation[0], _gridHeight*scale+translation[1], 0}; }
-				overlayContext->DrawLines(ProjectionMode::P2D, gridLines, gridLineCount, {64, 64, 64, 128}, 1.f);
+				overlayContext->DrawLines(ProjectionMode::P2D, gridLines, gridLineCount, {64, 64, 64, 128});
 
 				char buffer[64];
 				for (unsigned y=0; y<_gridHeight; ++y)

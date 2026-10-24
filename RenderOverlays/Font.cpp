@@ -759,12 +759,19 @@ namespace RenderOverlays
 					#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
 						xIterator += float(glyph._lsbDelta - glyph._rsbDelta) / 64.f;
 					#endif
+					// we need twice letter spacing, for before the space and after it. Because we iterate word-by-word, the we haven't yet added a spacing before the whitespace
+					xIterator += 2 * xScale * ctrlBlock._letterSpacing;
 					continue;
 				}
 
 				// whole word does fit, let's commit it
 				for (auto inst=starti; inst!=i; ++inst) {
 					auto& glyph = glyphProps[inst->_glyphIdx];
+
+					// Letter spacing (similar to the CSS letter-spacing property): added between glyphs on the same line,
+					// but not after the last glyph on a line. If the span ends mid-line and text remains, the spacing is
+					// carried into the next span via the iterator.
+					if (inst != starti) xIterator += xScale * ctrlBlock._letterSpacing;
 
 					/*
 					The freetype library suggests 2 different ways to use the lsb & rsb delta values. This method is

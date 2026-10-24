@@ -521,11 +521,10 @@ namespace RenderOverlays
 			RenderCore::IThreadContext& threadContext,
 			WorkingSetType& workingVertices,
 			FontRenderingManager& textureMan,
-			const Font& font, DrawTextFlags::BitField flags,
+			const Font& font,
 			Float2& iterator, float xAtLineStart, float maxX, float maxY,
 			StringSection<CharType>& text,
-			float scale,
-			ColorB color, ColorB& colorOverride)
+			const FontRenderingParams& params, ColorB& colorOverride)
 	{
 		using namespace RenderCore;
 		assert(!text.IsEmpty());
@@ -545,7 +544,7 @@ namespace RenderOverlays
 		unsigned instanceCount = 0;
 
 		float x = iterator[0], y = iterator[1];
-		float xScale = scale, yScale = scale;
+		float xScale = params._scale, yScale = params._scale;
 		if (!CheckMaxXY || (y + yScale * font.GetFontProperties()._lineHeight) <= maxY) {
 			int prevGlyph = 0;
 			float yAtLineStart = y;
@@ -591,10 +590,9 @@ namespace RenderOverlays
 				int curGlyph;
 				Float2 v = font.GetKerning(prevGlyph, ch, &curGlyph);
 				x += xScale * v[0];
-				y += yScale * v[1];
 				prevGlyph = curGlyph;
 
-				instances[instanceCount++] = { ch, Float2{x, y}, colorOverride.a?colorOverride:color, lineIdx };
+				instances[instanceCount++] = { ch, Float2{x, y + yScale * v[1]}, colorOverride.a?colorOverride:params._color, lineIdx };
 			}
 		} else {
 			text._start = text._end;		// end iteration
@@ -642,6 +640,9 @@ namespace RenderOverlays
 				prev_rsb_delta = bitmap._rsbDelta;
 				*/
 
+				// Letter spacing (similar to the CSS letter-spacing property): added between glyphs on the same line, but not after the last glyph on a line.
+				if (&inst != instances) xIterator += xScale * params._letterSpacing;
+
 				if (inst._lineIdx != lineIdx) {
 					lineIdx = inst._lineIdx;
 					xIterator = 0;		// reset because we just had a line break
@@ -653,7 +654,7 @@ namespace RenderOverlays
 				#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
 					xIterator += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
 				#endif
-				if (flags & DrawTextFlags::Outline) {
+				if (params._flags & DrawTextFlags::Outline) {
 					xIterator += 2 * xScale;
 				}
 			}
@@ -668,13 +669,13 @@ namespace RenderOverlays
 		}
 
 		auto estimatedQuadCount = instanceCount - firstRenderInstance;
-		if (flags & DrawTextFlags::Shadow) estimatedQuadCount += text.size();
-		if (flags & DrawTextFlags::Outline) estimatedQuadCount += 8 * text.size();
+		if (params._flags & DrawTextFlags::Shadow) estimatedQuadCount += text.size();
+		if (params._flags & DrawTextFlags::Outline) estimatedQuadCount += 8 * text.size();
 
 		workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
 		
-		auto shadowColor = ColorB{0, 0, 0, color.a};
-		if (flags & DrawTextFlags::Outline) {
+		auto shadowColor = ColorB{0, 0, 0, params._color.a};
+		if (params._flags & DrawTextFlags::Outline) {
 			for (auto* inst:MakeIteratorRange(&sortedInstances[firstRenderInstance], &sortedInstances[instanceCount])) {
 				auto& bitmap = *bitmaps[inst->_glyphIdx];
 				if (!bitmap._width || !bitmap._height) continue;
@@ -743,7 +744,7 @@ namespace RenderOverlays
 			}
 		}
 
-		if (flags & DrawTextFlags::Shadow) {
+		if (params._flags & DrawTextFlags::Shadow) {
 			for (auto* inst:MakeIteratorRange(&sortedInstances[firstRenderInstance], &sortedInstances[instanceCount])) {
 				auto& bitmap = *bitmaps[inst->_glyphIdx];
 				if (!bitmap._width || !bitmap._height) continue;
@@ -798,23 +799,22 @@ namespace RenderOverlays
 			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			FontRenderingManager& textureMan,
-			const Font& font, DrawTextFlags::BitField flags,
+			const Font& font,
 			float x, float y, float xAtLineStart, float maxX, float maxY,
 			StringSection<CharType> text,
-			float scale, float depth,
-			ColorB color)
+			const FontRenderingParams& params)
 	{
 		// Draw the string in sections -- split up so we don't blow out the stack for very long strings
 		// color override complicates implementation a little bit
 		Float2 iterator { x, y };
 		ColorB colorOverride = 0x0;
 		while (!text.IsEmpty()) {
-			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true };
+			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), params._depth, true };
 			bool success = DrawTemplate_Section<CharType, WorkingSetType, CheckMaxXY, SnapCoords>(
 				threadContext, workingSet,
-				textureMan, font, flags,
+				textureMan, font,
 				iterator, xAtLineStart, maxX, maxY,
-				text, scale, color, colorOverride);
+				text, params, colorOverride);
 			if (!success) return {0,0};
 			workingSet.Complete();
 		}
@@ -826,10 +826,10 @@ namespace RenderOverlays
 			RenderCore::IThreadContext& threadContext,
 			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			FontRenderingManager& textureMan,
-			const Font& font, DrawTextFlags::BitField flags,
+			const Font& font,
 			StringSection<CharType> text,
 			const Float3x4& localToWorld, RenderCore::Assets::RenderStateSet stateSet,
-			ColorB color)
+			const FontRenderingParams& params)
 	{
 		// Draw the string in sections -- split up so we don't blow out the stack for very long strings
 		// color override complicates implementation a little bit
@@ -839,9 +839,9 @@ namespace RenderOverlays
 			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), localToWorld, stateSet };
 			bool success = DrawTemplate_Section<CharType, WorkingSetType, false, false>(
 				threadContext, workingSet,
-				textureMan, font, flags,
+				textureMan, font,
 				iterator, 0.f, 0.f, 0.f,
-				text, 1.f, color, colorOverride);
+				text, params, colorOverride);
 			if (!success) return {0,0};
 			workingSet.Complete();
 		}
@@ -851,25 +851,24 @@ namespace RenderOverlays
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
-						const Font& font, DrawTextFlags::BitField flags,
-						float x, float y, float maxX, float maxY,
+						const Font& font,
+						RectFloat r,
 						StringSection<> text,
-						float scale, float depth,
-						ColorB col)
+						const FontRenderingParams& params)
 	{
-		assert(!(flags & DrawTextFlags::Snap));		// we could support this by using the SnapCoords template parameter to DrawTemplate<>
-		if (maxX || maxY) {
+		assert(!(params._flags & DrawTextFlags::Snap));		// we could support this by using the SnapCoords template parameter to DrawTemplate<>
+		if (r._bottomRight[0] || r._bottomRight[1]) {
 			// checking maximum extents
 			if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-				return DrawTemplate<utf8, WorkingVertexSetFontResource, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, x, maxX, maxY, text, scale, depth, col);
+				return DrawTemplate<utf8, WorkingVertexSetFontResource, true, false>(threadContext, immediateDrawables, textureMan, font, r._topLeft[0], r._topLeft[1], r._topLeft[0], r._bottomRight[0], r._bottomRight[1], text, params);
 			} else {
-				return DrawTemplate<utf8, WorkingVertexSetPCT, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, x, maxX, maxY, text, scale, depth, col);
+				return DrawTemplate<utf8, WorkingVertexSetPCT, true, false>(threadContext, immediateDrawables, textureMan, font, r._topLeft[0], r._topLeft[1], r._topLeft[0], r._bottomRight[0], r._bottomRight[1], text, params);
 			}
 		} else {
 			if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-				return DrawTemplate<utf8, WorkingVertexSetFontResource, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, x, maxX, maxY, text, scale, depth, col);
+				return DrawTemplate<utf8, WorkingVertexSetFontResource, false, false>(threadContext, immediateDrawables, textureMan, font, r._topLeft[0], r._topLeft[1], r._topLeft[0], r._bottomRight[0], r._bottomRight[1], text, params);
 			} else {
-				return DrawTemplate<utf8, WorkingVertexSetPCT, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, x, maxX, maxY, text, scale, depth, col);
+				return DrawTemplate<utf8, WorkingVertexSetPCT, false, false>(threadContext, immediateDrawables, textureMan, font, r._topLeft[0], r._topLeft[1], r._topLeft[0], r._bottomRight[0], r._bottomRight[1], text, params);
 			}
 		}
 	}
@@ -877,25 +876,24 @@ namespace RenderOverlays
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
-						const Font& font, DrawTextFlags::BitField flags,
-						float x, float y, float maxX, float maxY,
+						const Font& font,
+						RectFloat r,
 						StringSection<ucs4> text,
-						float scale, float depth,
-						ColorB col)
+						const FontRenderingParams& params)
 	{
-		assert(!(flags & DrawTextFlags::Snap));
-		if (maxX || maxY) {
+		assert(!(params._flags & DrawTextFlags::Snap));
+		if (r._bottomRight[0] || r._bottomRight[1]) {
 			// checking maximum extents
 			if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-				return DrawTemplate<ucs4, WorkingVertexSetFontResource, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, x, maxX, maxY, text, scale, depth, col);
+				return DrawTemplate<ucs4, WorkingVertexSetFontResource, true, false>(threadContext, immediateDrawables, textureMan, font, r._topLeft[0], r._topLeft[1], r._topLeft[0], r._bottomRight[0], r._bottomRight[1], text, params);
 			} else {
-				return DrawTemplate<ucs4, WorkingVertexSetPCT, true, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, x, maxX, maxY, text, scale, depth, col);
+				return DrawTemplate<ucs4, WorkingVertexSetPCT, true, false>(threadContext, immediateDrawables, textureMan, font, r._topLeft[0], r._topLeft[1], r._topLeft[0], r._bottomRight[0], r._bottomRight[1], text, params);
 			}
 		} else {
 			if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-				return DrawTemplate<ucs4, WorkingVertexSetFontResource, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, x, maxX, maxY, text, scale, depth, col);
+				return DrawTemplate<ucs4, WorkingVertexSetFontResource, false, false>(threadContext, immediateDrawables, textureMan, font, r._topLeft[0], r._topLeft[1], r._topLeft[0], r._bottomRight[0], r._bottomRight[1], text, params);
 			} else {
-				return DrawTemplate<ucs4, WorkingVertexSetPCT, false, false>(threadContext, immediateDrawables, textureMan, font, flags, x, y, x, maxX, maxY, text, scale, depth, col);
+				return DrawTemplate<ucs4, WorkingVertexSetPCT, false, false>(threadContext, immediateDrawables, textureMan, font, r._topLeft[0], r._topLeft[1], r._topLeft[0], r._bottomRight[0], r._bottomRight[1], text, params);
 			}
 		}
 	}
@@ -903,14 +901,14 @@ namespace RenderOverlays
 	void 		Draw(	RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
-						const Font& font, DrawTextFlags::BitField flags,
+						const Font& font,
 						StringSection<> text,
 						const Float3x4& localToWorld, RenderCore::Assets::RenderStateSet stateSet,
-						ColorB col)
+						const FontRenderingParams& params)
 	{
-		assert(!(flags & DrawTextFlags::Snap));
+		assert(!(params._flags & DrawTextFlags::Snap));
 		if (expect_evaluation(textureMan.GetMode() == FontRenderingManager::Mode::LinearBuffer, true)) {
-			DrawTemplate<utf8, WorkingVertexSetFontResource3D>(threadContext, immediateDrawables, textureMan, font, flags, text, localToWorld, stateSet, col);
+			DrawTemplate<utf8, WorkingVertexSetFontResource3D>(threadContext, immediateDrawables, textureMan, font, text, localToWorld, stateSet, params);
 		} else {
 			assert(0);		// not implemented
 		}
@@ -926,7 +924,7 @@ namespace RenderOverlays
 			StringSection<CharType> text,
 			IteratorRange<const uint32_t*> colors,
 			IteratorRange<const uint8_t*> fontSelectors,
-			float scale, float depth,
+			const FontRenderingParams& params,
 			ColorB shadowColor)
 	{
 		using namespace RenderCore;
@@ -946,7 +944,7 @@ namespace RenderOverlays
 		VLA_UNSAFE_FORCE(Instance, instances, std::min(maxInstancePerCall, text.size()));
 		////////
 
-		float xScale = scale, yScale = scale;
+		float xScale = params._scale, yScale = params._scale;
 		WorkingVertexSetFontResource workingVertices;
 		bool begun = false;
 		float xAtLineStart = x, yAtLineStart = y;
@@ -991,10 +989,9 @@ namespace RenderOverlays
 					if (prevFont != font) prevGlyph = 0;		// we could just attempt to use the kerning as if the prev font was the same font?
 					Float2 v = font->GetKerning(prevGlyph, ch, &curGlyph);
 					x += xScale * v[0];
-					y += yScale * v[1];
 					prevGlyph = curGlyph; prevFont = font;
 
-					instances[instanceCount++] = { {ch, font}, Float2{x, y}, color, lineIdx };
+					instances[instanceCount++] = { {ch, font}, Float2{x, y + yScale * v[1]}, color, lineIdx };
 				}
 			}
 
@@ -1058,6 +1055,7 @@ namespace RenderOverlays
 					#if XLE_FONT_AUTOHINT_FRACTIONAL_WIDTHS
 						xIterator += float(bitmap._lsbDelta - bitmap._rsbDelta) / 64.f;
 					#endif
+					xIterator += xScale * params._letterSpacing;
 				}
 			}
 
@@ -1067,7 +1065,7 @@ namespace RenderOverlays
 
 			auto estimatedQuadCount = instanceCount - firstRenderInstance;
 			if (!begun)
-				workingVertices = WorkingVertexSetFontResource{immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), depth, true};
+				workingVertices = WorkingVertexSetFontResource{immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), params._depth, true};
 			begun = true;
 			workingVertices.ReserveQuads((unsigned)estimatedQuadCount);
 
@@ -1094,17 +1092,17 @@ namespace RenderOverlays
 			RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 			FontRenderingManager& textureMan,
 			FontPtrAndFlags fontTable[256],
-			float x, float y, float maxX, float maxY,
+			RectFloat r,
 			StringSection<> text,
 			IteratorRange<const uint32_t*> colors,
 			IteratorRange<const uint8_t*> fontSelectors,
-			float scale, float depth,
+			const FontRenderingParams& params,
 			ColorB shadowColor)
 	{
 		DrawWithTableTemplate<utf8>(
 			threadContext, immediateDrawables, textureMan, fontTable,
-			x, y, maxX, maxY,
-			text, colors, fontSelectors, scale, depth, shadowColor);
+			r._topLeft[0], r._topLeft[1], r._bottomRight[0], r._bottomRight[1],
+			text, colors, fontSelectors, params, shadowColor);
 	}
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////

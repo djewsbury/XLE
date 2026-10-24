@@ -43,16 +43,16 @@ namespace RenderOverlays
     struct Rect ///////////////////////////////////////////////////////////////////////
     {
         Coord2      _topLeft, _bottomRight;
-        inline Rect(const Coord2& topLeft, const Coord2& bottomRight) : _topLeft(topLeft), _bottomRight(bottomRight) {}
+        Rect(const Coord2& topLeft, const Coord2& bottomRight) : _topLeft(topLeft), _bottomRight(bottomRight) {}
         Rect(Coord left, Coord top, Coord right, Coord bottom) : _topLeft(left, top), _bottomRight(right, bottom) {}
         Rect() {}
 
-        inline Coord       Width() const     { return _bottomRight[0] - _topLeft[0]; }
-        inline Coord       Height() const    { return _bottomRight[1] - _topLeft[1]; }
+        Coord Width() const     { return _bottomRight[0] - _topLeft[0]; }
+        Coord Height() const    { return _bottomRight[1] - _topLeft[1]; }
 
-        static inline Rect Invalid() { return Rect { {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}, {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}}; }
-        static inline Rect Zero() { return Rect { 0, 0, 0, 0 }; }
-        static inline Rect Max() { return Rect { {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}, {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}}; }
+        static Rect Invalid() { return Rect { {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}, {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}}; }
+        static Rect Zero() { return Rect { 0, 0, 0, 0 }; }
+        static Rect Max() { return Rect { {std::numeric_limits<Coord>::min(), std::numeric_limits<Coord>::min()}, {std::numeric_limits<Coord>::max(), std::numeric_limits<Coord>::max()}}; }
 
         inline Rect& operator-=(const Coord2& rhs) { _topLeft -= rhs; _bottomRight -= rhs; return *this; }
         inline Rect& operator+=(const Coord2& rhs) { _topLeft += rhs; _bottomRight += rhs; return *this; }
@@ -103,6 +103,24 @@ namespace RenderOverlays
     inline Rect operator+(const Rect& lhs, const Coord2& rhs) { return { lhs._topLeft + rhs, lhs._bottomRight + rhs }; }
     inline bool operator==(const Rect& lhs, const Rect& rhs) { return lhs._topLeft == rhs._topLeft && lhs._bottomRight == rhs._bottomRight; }
     inline bool operator!=(const Rect& lhs, const Rect& rhs) { return lhs._topLeft != rhs._topLeft || lhs._bottomRight != rhs._bottomRight; }
+
+    struct RectFloat ///////////////////////////////////////////////////////////////////////
+    {
+        Float2      _topLeft, _bottomRight;
+        RectFloat(const Float2& topLeft, const Float2& bottomRight) : _topLeft(topLeft), _bottomRight(bottomRight) {}
+        RectFloat(float left, float top, float right, float bottom) : _topLeft(left, top), _bottomRight(right, bottom) {}
+        RectFloat() {}
+
+        inline float       Width() const     { return _bottomRight[0] - _topLeft[0]; }
+        inline float       Height() const    { return _bottomRight[1] - _topLeft[1]; }
+
+        static inline RectFloat Invalid() { return RectFloat { {std::numeric_limits<float>::max(), std::numeric_limits<float>::max()}, {std::numeric_limits<float>::min(), std::numeric_limits<float>::min()}}; }
+        static inline RectFloat Zero() { return RectFloat { 0, 0, 0, 0 }; }
+        static inline RectFloat Max() { return RectFloat { {std::numeric_limits<float>::min(), std::numeric_limits<float>::min()}, {std::numeric_limits<float>::max(), std::numeric_limits<float>::max()}}; }
+
+        inline RectFloat& operator-=(const Float2& rhs) { _topLeft -= rhs; _bottomRight -= rhs; return *this; }
+        inline RectFloat& operator+=(const Float2& rhs) { _topLeft += rhs; _bottomRight += rhs; return *this; }
+    };
 
     ///////////////////////////////////////////////////////////////////////////////////
 

@@ -283,7 +283,7 @@ namespace UnitTests
 
 				for (unsigned c=0; c<_cutawayPoints.size(); ++c) {
 					auto pt0 = _cutawayPoints[c], pt1 = _cutawayPoints[(c+1)%unsigned(_cutawayPoints.size())];
-					overlayContext->DrawLine(RenderOverlays::ProjectionMode::P3D, pt0, RenderOverlays::ColorB { 255, 255, 255 }, pt1, RenderOverlays::ColorB { 255, 255, 255 }, 1.0f);
+					overlayContext->DrawLine(RenderOverlays::ProjectionMode::P3D, pt0, RenderOverlays::ColorB { 255, 255, 255 }, pt1, RenderOverlays::ColorB { 255, 255, 255 });
 				}
 
 				auto frustumTester = MakeArbitraryColumnTester(MakeIteratorRange(_cutawayPoints), _axisDirection, _axisMin, _axisMax);

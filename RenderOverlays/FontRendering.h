@@ -20,31 +20,44 @@ namespace RenderOverlays
 	class FontTexture2D;
 	class FontRenderingManager;
 
-	Float2		Draw(   RenderCore::IThreadContext& threadContext,
-						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
-						FontRenderingManager& textureMan,
-						const Font& font, DrawTextFlags::BitField flags,
-						float x, float y, float maxX, float maxY,
-						StringSection<> text,
-						float scale, float depth,
-						ColorB col);
+	struct FontRenderingParams
+	{
+		float _scale = 1.f;
+		float _depth = 0.f;
+		float _letterSpacing = 0.f;
+		DrawTextFlags::BitField _flags = 0;
+		ColorB _color = ColorB::White;
+
+		const FontRenderingParams& Scale(float newValue) const { const_cast<FontRenderingParams*>(this)->_scale = newValue; return *this; }
+		const FontRenderingParams& Depth(float newValue) const { const_cast<FontRenderingParams*>(this)->_depth = newValue; return *this; }
+		const FontRenderingParams& LetterSpacing(float newValue) const { const_cast<FontRenderingParams*>(this)->_letterSpacing = newValue; return *this; }
+		const FontRenderingParams& Flags(DrawTextFlags::BitField newValue) const { const_cast<FontRenderingParams*>(this)->_flags = newValue; return *this; }
+		const FontRenderingParams& Color(ColorB newValue) const { const_cast<FontRenderingParams*>(this)->_color = newValue; return *this; }
+	};
 
 	Float2		Draw(   RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
-						const Font& font, DrawTextFlags::BitField flags,
-						float x, float y, float maxX, float maxY,
+						const Font& font,
+						RectFloat rect,
+						StringSection<> text,
+						const FontRenderingParams& params = {});
+
+	Float2		Draw(   RenderCore::IThreadContext& threadContext,
+						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
+						FontRenderingManager& textureMan,
+						const Font& font,
+						RectFloat rect,
 						StringSection<ucs4> text,
-						float scale, float depth,
-						ColorB col);
+						const FontRenderingParams& params = {});
 
 	void 		Draw(	RenderCore::IThreadContext& threadContext,
 						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
-						const Font& font, DrawTextFlags::BitField flags,
+						const Font& font,
 						StringSection<> text,
 						const Float3x4& localToWorld, RenderCore::Assets::RenderStateSet stateSet,
-						ColorB col);
+						const FontRenderingParams& params = {});
 
 	using FontPtrAndFlags = std::pair<Font*, DrawTextFlags::BitField>;
 	void		DrawWithTable(
@@ -52,12 +65,12 @@ namespace RenderOverlays
 						RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 						FontRenderingManager& textureMan,
 						FontPtrAndFlags fontTable[256],
-						float x, float y, float maxX, float maxY,
+						RectFloat rect,
 						StringSection<> text,
 						IteratorRange<const uint32_t*> colors,
 						IteratorRange<const uint8_t*> fontSelectors,
-						float scale, float depth,
-						ColorB shadowColor);
+						const FontRenderingParams& params = {},
+						ColorB shadowColor = ColorB::Black);
 
 	bool 		Draw(		RenderCore::IThreadContext& threadContext,
 							RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,

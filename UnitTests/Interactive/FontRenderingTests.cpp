@@ -101,13 +101,12 @@ namespace UnitTests
 					const auto chrCount = 64;
 					ucs4 chrs[chrCount];
 					for (auto& c:chrs) c = std::uniform_int_distribution<>(33, 126)(frameRng);
-					DrawTextFlags::BitField flags = 0;
 					RenderOverlays::Draw(
 						parserContext.GetThreadContext(), *testHelper.GetOverlayApparatus()->_immediateDrawables,
-						*_renderingManager, *font, flags,
-						rect._topLeft[0], rect._topLeft[1], 0.f, 0.f, // rect._bottomRight[0], rect._bottomRight[1],
+						*_renderingManager, *font,
+						{ (float)rect._topLeft[0], (float)rect._topLeft[1], 0.f, 0.f }, // rect._bottomRight[0], rect._bottomRight[1],
 						MakeStringSection(chrs, &chrs[chrCount]),
-						1.0f, 1.0f, ColorB::White);
+						FontRenderingParams{}.Depth(1.0f));
 				}
 			}
 

@@ -178,6 +178,7 @@ namespace RenderOverlays
 		Float2 _iterator { 0.f, 0.f };			// note y coord is the base line -- not the top of the gylphs
 		ColorB _colorOverride { 0x0 };
 		unsigned _additionalLineSpacing = 0;
+		float _letterSpacing = 0.f;
 	};
 
 	/// Calculate spans for the given text, until we can't fit any more into the rectangle provided

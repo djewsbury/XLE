@@ -899,12 +899,10 @@ namespace RenderOverlays
 			context.GetThreadContext(),
 			context.GetImmediateDrawables(),
 			*context.GetFontRenderingManager(),
-			font, flags,
-			alignedPosition[0], alignedPosition[1],
-			q.max[0], q.max[1],
+			font,
+			{ alignedPosition[0], alignedPosition[1], q.max[0], q.max[1] },
 			text,
-			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
-			col);
+			FontRenderingParams{}.Flags(flags).Color(col).Depth(LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f)));
 	}
 
 	void DrawTextHelper(
@@ -925,15 +923,15 @@ namespace RenderOverlays
 				context.GetThreadContext(),
 				context.GetImmediateDrawables(),
 				*context.GetFontRenderingManager(),
-				font, flags,
-				text, adjLocalToWorld, stateSet, col);
+				font,
+				text, adjLocalToWorld, stateSet, FontRenderingParams{}.Flags(flags).Color(col));
 		} else {
 			Draw(
 				context.GetThreadContext(),
 				context.GetImmediateDrawables(),
 				*context.GetFontRenderingManager(),
-				font, flags,
-				text, localToWorld, stateSet, col);
+				font,
+				text, localToWorld, stateSet, FontRenderingParams{}.Flags(flags).Color(col));
 		}
 	}
 
@@ -960,10 +958,9 @@ namespace RenderOverlays
 			context.GetImmediateDrawables(),
 			*context.GetFontRenderingManager(),
 			fontTable,
-			alignedPosition[0], alignedPosition[1],
-			0.f, 0.f,
+			{ alignedPosition[0], alignedPosition[1], 0.f, 0.f },
 			text, colors, fontSelectors,
-			1.f, LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f),
+			FontRenderingParams{}.Depth(LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f)),
 			shadowColor);
 	}
 
