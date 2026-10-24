@@ -94,6 +94,7 @@ namespace RenderCore
 		uint64_t p1 = 
 				uint64_t(FloatBits(_depthBiasClamp))
 			|	(uint64_t(FloatBits(_depthBiasSlopeFactor)) << 32ull);
+		p1 += uint64_t(FloatBits(_lineWeight));
 		return HashCombine(p0, p1);
 	}
 

@@ -185,7 +185,7 @@ namespace RenderOverlays
 		_immediateDrawables->QueueEncoderState(state);
 	}
 
-	static RenderCore::Techniques::ImmediateDrawableMaterial AsMaterial(const OverlayState& state)
+	static RenderCore::Techniques::ImmediateDrawableMaterial AsMaterial(const OverlayState& state, Topology topology)
 	{
 		RenderCore::Techniques::ImmediateDrawableMaterial result;
 		result._stateSet._forwardBlendSrc = Blend::SrcAlpha;
@@ -193,6 +193,12 @@ namespace RenderOverlays
 		result._stateSet._forwardBlendOp = BlendOp::Add;
 		result._stateSet._flag = RenderCore::Assets::RenderStateSet::Flag::ForwardBlend | RenderCore::Assets::RenderStateSet::Flag::WriteMask;
 		result._stateSet._writeMask = 1<<1;		// repurposed -- bit 0 is depth write; bit 1 is depth read
+
+		if (topology == Topology::LineList || topology == Topology::LineStrip || topology == Topology::LineListWithAdjacency || topology == Topology::LineStripWithAdjacency) {
+			result._stateSet.SetSmoothLines(true);
+			result._stateSet.SetLineWeight(state._lineWeight);
+		}
+
 		result._hash = result._stateSet.GetHash();
 		return result;
 	}
@@ -201,18 +207,13 @@ namespace RenderOverlays
 	{
 		if (!drawCall._vertexCount) return {}; // (skip draw calls with zero vertices)
 
-		auto mat = AsMaterial(_currentState);
+		auto mat = AsMaterial(_currentState, drawCall._topology);
 		RenderCore::Techniques::RetainedUniformsStream uniforms;
 		if (drawCall._textureResource) {
 			mat._uniformStreamInterface = _texturedUSI.get();
 			uniforms._resourceViews.push_back(drawCall._textureResource);
 			mat._hash = _texturedUSI->GetHash() + mat._hash;
 			uniforms._hashForCombining = drawCall._textureResource->GetResource()->GetGUID();
-		}
-
-		if (drawCall._topology == Topology::LineList || drawCall._topology == Topology::LineStrip || drawCall._topology == Topology::LineListWithAdjacency || drawCall._topology == Topology::LineStripWithAdjacency) {
-			mat._stateSet.SetSmoothLines(true);
-			mat._stateSet.SetLineWeight(_currentState._lineWeight);
 		}
 
 		return _immediateDrawables->QueueDraw(
