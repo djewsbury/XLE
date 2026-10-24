@@ -21,7 +21,7 @@ cbuffer RoundedRectSettings
 ShapeResult RoundedRectShape_Calculate(
     DebuggingShapesCoords coords : DebuggingShapesCoords,
     ShapeDesc shapeDesc : ShapeDesc,
-    float aspectRatio : AspectRatio) : ShadeResult
+    float aspectRatio : AspectRatio) : ShapeResult
 {
     float2 texCoord = GetShapeRelativeCoords(coords);
     float2 minCoords = shapeDesc._minCoords, maxCoords = shapeDesc._maxCoords;
@@ -148,9 +148,6 @@ ShapeResult RectShape_Calculate(DebuggingShapesCoords coords : DebuggingShapesCo
     pixelsAway = (pixelsAway-borderSize)/(0.25f*borderSize);
     float border = saturate(smoothstep(1, 0, min(pixelsAway.x, pixelsAway.y)));
     return MakeShapeResult(fill, border);
-
-
-    // return MakeShapeResult(float(fill), float(border));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
