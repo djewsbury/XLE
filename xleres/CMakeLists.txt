@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 3.15)
 
 add_custom_command(
 	OUTPUT ${XLE_BINARY_OUTPUT_DIR_${CMAKE_BUILD_TYPE}}/base.pak
-	COMMAND Archiver "-i \"${CMAKE_CURRENT_SOURCE_DIR}/core\" -o \"${XLE_BINARY_OUTPUT_DIR_${CMAKE_BUILD_TYPE}}/base.pak\""
+	COMMAND Archiver "-i" "${CMAKE_CURRENT_SOURCE_DIR}/core" "-o" "${XLE_BINARY_OUTPUT_DIR_${CMAKE_BUILD_TYPE}}/base.pak"
 	COMMENT "Building base.pak"
 	DEPENDS $<TARGET_FILE:Archiver>
 	VERBATIM
