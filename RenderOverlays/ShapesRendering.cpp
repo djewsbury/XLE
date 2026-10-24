@@ -183,10 +183,24 @@ namespace RenderOverlays
         }
     };
 
-    void StallForShapeRenderingResources()
+    static StandardResources* s_standardResources = nullptr;
+
+    void ShapesRendering_StallForResources()
     {
         // Awkward way to just stall for the basic cached box here -- really need to push this resource management to the client
-        ConsoleRig::ActualizeCachedBox<StandardResources>();
+        s_standardResources = &ConsoleRig::ActualizeCachedBox<StandardResources>();
+    }
+
+    void ShapesRendering_OnFrameBarrier()
+    {
+        s_standardResources = ConsoleRig::TryActualizeCachedBox<StandardResources>();
+    }
+
+    DEBUG_ONLY(static std::optional<std::thread::id> s_boundThread);
+    void ShapesRendering_BindToThread()
+    {
+        assert(!s_boundThread || *s_boundThread == std::this_thread::get_id());
+        DEBUG_ONLY(s_boundThread = std::this_thread::get_id());
     }
 
     namespace Internal
@@ -258,8 +272,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         RenderCore::Techniques::RetainedUniformsStream uniforms;
         uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
@@ -272,7 +286,7 @@ namespace RenderOverlays
             ColorB::Zero, colour,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(1.f, 1.f),
-            res->_outlineEllipse, std::move(uniforms));
+            s_standardResources->_outlineEllipse, std::move(uniforms));
     }
 
     void FillEllipse(IOverlayContext& context, const Rect& rect, ColorB colour)
@@ -280,8 +294,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         const float borderWidthPix = 1.f;
         RenderCore::Techniques::RetainedUniformsStream uniforms;
@@ -295,7 +309,7 @@ namespace RenderOverlays
             colour, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(1.f, 1.f),
-            res->_fillEllipse, std::move(uniforms));
+            s_standardResources->_fillEllipse, std::move(uniforms));
     }
 
     void OutlineRoundedRectangle(
@@ -307,8 +321,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         RenderCore::Techniques::RetainedUniformsStream uniforms;
         uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
@@ -322,7 +336,7 @@ namespace RenderOverlays
             ColorB::Zero, colour,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2(0.f, 0.f), Float2(1.f, 1.f),
-            res->_outlineRoundedRect, std::move(uniforms));
+            s_standardResources->_outlineRoundedRect, std::move(uniforms));
     }
 
     void FillRoundedRectangle(
@@ -334,8 +348,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         RenderCore::Techniques::RetainedUniformsStream uniforms;
         uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
@@ -349,7 +363,7 @@ namespace RenderOverlays
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f), 
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            res->_fillRoundedRect, std::move(uniforms));
+            s_standardResources->_fillRoundedRect, std::move(uniforms));
     }
 
     void FillAndOutlineRoundedRectangle(
@@ -362,8 +376,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         RenderCore::Techniques::RetainedUniformsStream uniforms;
         uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
@@ -377,7 +391,7 @@ namespace RenderOverlays
             fillColor, outlineColour,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            res->_fillAndOutlineRoundedRect, std::move(uniforms));
+            s_standardResources->_fillAndOutlineRoundedRect, std::move(uniforms));
     }
 
     void FillRaisedRoundedRectangle(
@@ -389,8 +403,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         RenderCore::Techniques::RetainedUniformsStream uniforms;
         uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
@@ -404,7 +418,7 @@ namespace RenderOverlays
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            res->_fillRaisedRoundedRect, std::move(uniforms));
+            s_standardResources->_fillRaisedRoundedRect, std::move(uniforms));
     }
 
     void FillDepressedRoundedRectangle(
@@ -416,8 +430,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         RenderCore::Techniques::RetainedUniformsStream uniforms;
         uniforms._immediateData.push_back(RenderCore::MakeSharedPkt(Internal::CB_RoundedRectSettings { roundedProportion, roundingMaxPixels, cornerFlags }));
@@ -431,7 +445,7 @@ namespace RenderOverlays
             fillColor, ColorB::Zero,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            res->_fillReverseRaisedRoundedRect, std::move(uniforms));
+            s_standardResources->_fillReverseRaisedRoundedRect, std::move(uniforms));
     }
 
     void FillRectangle(IOverlayContext& context, const Rect& rect, ColorB colour)
@@ -475,8 +489,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         RenderCore::Techniques::RetainedUniformsStream uniforms;
         uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(Internal::CB_ShapesFramework { outlineWidth }));
@@ -489,15 +503,15 @@ namespace RenderOverlays
             fillColour, outlineColour,
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            res->_fillAndOutlineRect, std::move(uniforms));
+            s_standardResources->_fillAndOutlineRect, std::move(uniforms));
     }
 
     void FillRaisedRectangle(
         IOverlayContext& context, const Rect& rect,
         ColorB fillColor)
     {
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         Internal::DrawPCCTTQuad(
             context,
@@ -505,7 +519,7 @@ namespace RenderOverlays
             fillColor, fillColor, 
             Float2(0.f, 0.f), Float2(1.f, 1.f),
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            res->_fillRaisedRect, {});
+            s_standardResources->_fillRaisedRect, {});
     }
 
     void        SoftShadowRectangle(IOverlayContext& context, const Rect& rect, ColorB color, unsigned softnessRadius)
@@ -513,8 +527,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         const int radiusX = softnessRadius, radiusY = softnessRadius;
         Internal::DrawPCCTTQuad(
@@ -525,7 +539,7 @@ namespace RenderOverlays
             Float2(    - radiusX / float(rect.Width()),     - radiusY / float(rect.Height())),
             Float2(1.f + radiusX / float(rect.Width()), 1.f + radiusY / float(rect.Height())),
             Float2(radiusX, radiusY), Float2(radiusX, radiusY),
-            res->_softShadowRect, {});
+            s_standardResources->_softShadowRect, {});
     }
 
     void        ColorAdjustRectangle(
@@ -536,8 +550,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         RenderCore::Techniques::RetainedUniformsStream uniforms;
         uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
@@ -551,7 +565,7 @@ namespace RenderOverlays
             modulation, ColorB::Zero,
             texCoordMin, texCoordMax,
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            res->_fillColorAdjust, std::move(uniforms));
+            s_standardResources->_fillColorAdjust, std::move(uniforms));
     }
 
     void        ColorAdjustAndOutlineRoundedRectangle(
@@ -565,8 +579,8 @@ namespace RenderOverlays
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
         RenderCore::Techniques::RetainedUniformsStream uniforms;
         uniforms._immediateData.emplace_back(RenderCore::MakeSharedPkt(colorAdjust));
@@ -583,7 +597,7 @@ namespace RenderOverlays
             modulation, outlineColour,
             texCoordMin, texCoordMax,
             Float2{0.f, 0.f}, Float2{1.f, 1.f},
-            res->_colorAdjustAndOutlineRoundedRect, std::move(uniforms));
+            s_standardResources->_colorAdjustAndOutlineRoundedRect, std::move(uniforms));
     }
 
     void WriteInLineVertices(IteratorRange<Internal::Vertex_PCT*> data, IteratorRange<const Float2*> linePts, ColorB colour, float width)
@@ -822,10 +836,10 @@ namespace RenderOverlays
     {
         if (linePts.size() < 2) return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_dashLine;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = s_standardResources->_dashLine;
         mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
         mat._hash = ~mat._hash;
 
@@ -839,10 +853,10 @@ namespace RenderOverlays
     {
         if (linePts.size() < 2) return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
-        RenderCore::Techniques::ImmediateDrawableMaterial mat = res->_solidNoBorder;
+        RenderCore::Techniques::ImmediateDrawableMaterial mat = s_standardResources->_solidNoBorder;
         mat._stateSet.SetDoubleSided(true);     // disable backface culling because winding depends on line direction
         mat._hash = ~mat._hash;
 
@@ -856,10 +870,10 @@ namespace RenderOverlays
     {
         if (linePts.size() < 2) return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
-        auto data = context.DrawGeometry(WriteInLineInsetVertexCount(unsigned(linePts.size())), Internal::Vertex_PCT::inputElements2D, res->_dashLine, {}).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(WriteInLineInsetVertexCount(unsigned(linePts.size())), Internal::Vertex_PCT::inputElements2D, s_standardResources->_dashLine, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVerticesInset(data, linePts, colour, width);
@@ -869,10 +883,10 @@ namespace RenderOverlays
     {
         if (linePts.size() < 2) return;
 
-        auto* res = ConsoleRig::TryActualizeCachedBox<StandardResources>();
-        if (!res) return;
+        assert(s_boundThread && *s_boundThread == std::this_thread::get_id());
+        if (!s_standardResources) return;
 
-        auto data = context.DrawGeometry(WriteInLineInsetVertexCount(unsigned(linePts.size())), Internal::Vertex_PCT::inputElements2D, res->_solidNoBorder, {}).Cast<Internal::Vertex_PCT*>();
+        auto data = context.DrawGeometry(WriteInLineInsetVertexCount(unsigned(linePts.size())), Internal::Vertex_PCT::inputElements2D, s_standardResources->_solidNoBorder, {}).Cast<Internal::Vertex_PCT*>();
         if (data.empty()) return;
 
         WriteInLineVerticesInset(data, linePts, colour, width);

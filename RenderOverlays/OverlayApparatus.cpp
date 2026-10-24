@@ -34,11 +34,13 @@ namespace RenderOverlays
 		_immediateDrawables =  RenderCore::Techniques::CreateDrawableSubmitter(_overlayPipelineAccelerators);
 		_fontRenderingManager = std::make_shared<RenderOverlays::FontRenderingManager>(*_mainDrawingApparatus->_device);
 
+		ShapesRendering_BindToThread();
 		auto& subFrameEvents = _techniqueServices->GetSubFrameEvents();
 		_frameBarrierBinding = subFrameEvents._onFrameBarrier.Bind(
 			[im=std::weak_ptr<RenderCore::Techniques::IDrawableSubmitter>{_immediateDrawables}, fr=std::weak_ptr<RenderOverlays::FontRenderingManager>(_fontRenderingManager)]() {
 				if (auto l = im.lock(); l) l->OnFrameBarrier();
 				if (auto l2 = fr.lock(); l2) l2->OnFrameBarrier();
+				ShapesRendering_OnFrameBarrier();
 			});
 	}
 	
@@ -55,6 +57,7 @@ namespace RenderOverlays
 	{
 		apparatus._immediateDrawables->ExecuteDraws(parsingContext, apparatus._shapeRenderingDelegate->GetTechniqueDelegate(), rpi);
 	}
+
 	void ExecuteDraws(
 		RenderCore::Techniques::ParsingContext& parsingContext,
 		RenderCore::Techniques::RenderPassInstance& rpi,

@@ -90,7 +90,9 @@ namespace RenderOverlays
         float outlineWidth = 1.f, float roundedProportion = 1.f / 8.f, float roundingMaxPixels = 16.f,
         Corner::BitField cornerFlags = 0xf);
 
-    void StallForShapeRenderingResources();
+    void ShapesRendering_OnFrameBarrier();
+    void ShapesRendering_StallForResources();
+    void ShapesRendering_BindToThread();
 
 	///////////////////////////////////////////////////////////////////////////////////
     //          C O N F I G U R A T I O N   U T I L S
