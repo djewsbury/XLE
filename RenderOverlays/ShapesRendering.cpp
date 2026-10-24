@@ -889,18 +889,18 @@ namespace RenderOverlays
 	{
 		if (!context.GetFontRenderingManager()) { Log(Warning) << "IOverlayContext does not have attached font rendering manager" << std::endl; return Float2{0, 0}; }
 
-		Quad q;
-		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
-		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
+		RectFloat q;
+		q._topLeft = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
+		q._bottomRight = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
 		Float2 alignedPosition = AlignText(font, q, alignment, text);
 		if (!(flags & DrawTextFlags::Clip))
-			q.max = {0,0};
+			q._bottomRight = {0,0};
 		return Draw(
 			context.GetThreadContext(),
 			context.GetImmediateDrawables(),
 			*context.GetFontRenderingManager(),
 			font,
-			{ alignedPosition[0], alignedPosition[1], q.max[0], q.max[1] },
+			{ alignedPosition[0], alignedPosition[1], q._bottomRight[0], q._bottomRight[1] },
 			text,
 			FontRenderingParams{}.Flags(flags).Color(col).Depth(LinearInterpolate(std::get<0>(quad)[2], std::get<1>(quad)[2], 0.5f)));
 	}
@@ -916,7 +916,7 @@ namespace RenderOverlays
 
 		if (center) {
 			// integrate a little offset into the local-to-world
-			Float2 alignedPosition = AlignText(font, Quad{}, TextAlignment::Center, text);
+			Float2 alignedPosition = AlignText(font, RectFloat::Zero(), TextAlignment::Center, text);
 			auto adjLocalToWorld = localToWorld;
 			Combine_IntoRHS(Float3{alignedPosition, 0.f}, adjLocalToWorld);
 			Draw(
@@ -947,10 +947,10 @@ namespace RenderOverlays
 	{
 		if (!context.GetFontRenderingManager()) { Log(Warning) << "IOverlayContext does not have attached font rendering manager" << std::endl; return; }
 
-		Quad q;
-		q.min = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
-		q.max = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
-		Float2 alignedPosition = q.min;
+		RectFloat q;
+		q._topLeft = Float2(std::get<0>(quad)[0], std::get<0>(quad)[1]);
+		q._bottomRight = Float2(std::get<1>(quad)[0], std::get<1>(quad)[1]);
+		Float2 alignedPosition = q._topLeft;
 		if (fontTable[0].first)
 			alignedPosition = AlignText(*fontTable[0].first, q, alignment, text);
 		DrawWithTable(

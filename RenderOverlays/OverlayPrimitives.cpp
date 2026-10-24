@@ -112,6 +112,9 @@ namespace RenderOverlays
 		if (XlEqString(str, "BottomLeft")) return TextAlignment::BottomLeft;
 		if (XlEqString(str, "Bottom")) return TextAlignment::Bottom;
 		if (XlEqString(str, "BottomRight")) return TextAlignment::BottomRight;
+		if (XlEqString(str, "BaselineLeft")) return TextAlignment::BaselineLeft;
+		if (XlEqString(str, "BaselineCenter")) return TextAlignment::BaselineCenter;
+		if (XlEqString(str, "BaselineRight")) return TextAlignment::BaselineRight;
 		return {};
 	}
 

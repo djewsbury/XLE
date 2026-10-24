@@ -1161,54 +1161,66 @@ namespace RenderOverlays
 		return x;
 	}
 
-	static Float2 GetAlignPos(const Quad& q, const Float2& extent, TextAlignment align)
+	Float2 GetAlignPos(const RectFloat& q, const Float2& extent, float baseline, TextAlignment align)
 	{
 		Float2 pos;
-		pos[0] = q.min[0];
-		pos[1] = q.min[1];
+		pos[0] = q._topLeft[0];
+		pos[1] = q._topLeft[1];
 		switch (align) {
 		case TextAlignment::TopLeft:
-			pos[0] = q.min[0];
-			pos[1] = q.min[1];
+			pos[0] = q._topLeft[0];
+			pos[1] = q._topLeft[1];
 			break;
 		case TextAlignment::Top:
-			pos[0] = 0.5f * (q.min[0] + q.max[0] - extent[0]);
-			pos[1] = q.min[1];
+			pos[0] = 0.5f * (q._topLeft[0] + q._bottomRight[0] - extent[0]);
+			pos[1] = q._topLeft[1];
 			break;
 		case TextAlignment::TopRight:
-			pos[0] = q.max[0] - extent[0];
-			pos[1] = q.min[1];
+			pos[0] = q._bottomRight[0] - extent[0];
+			pos[1] = q._topLeft[1];
 			break;
 		case TextAlignment::Left:
-			pos[0] = q.min[0];
-			pos[1] = 0.5f * (q.min[1] + q.max[1] - extent[1]);
+			pos[0] = q._topLeft[0];
+			pos[1] = 0.5f * (q._topLeft[1] + q._bottomRight[1] - extent[1]);
 			break;
 		case TextAlignment::Center:
-			pos[0] = 0.5f * (q.min[0] + q.max[0] - extent[0]);
-			pos[1] = 0.5f * (q.min[1] + q.max[1] - extent[1]);
+			pos[0] = 0.5f * (q._topLeft[0] + q._bottomRight[0] - extent[0]);
+			pos[1] = 0.5f * (q._topLeft[1] + q._bottomRight[1] - extent[1]);
 			break;
 		case TextAlignment::Right:
-			pos[0] = q.max[0] - extent[0];
-			pos[1] = 0.5f * (q.min[1] + q.max[1] - extent[1]);
+			pos[0] = q._bottomRight[0] - extent[0];
+			pos[1] = 0.5f * (q._topLeft[1] + q._bottomRight[1] - extent[1]);
 			break;
 		case TextAlignment::BottomLeft:
-			pos[0] = q.min[0];
-			pos[1] = q.max[1] - extent[1];
+			pos[0] = q._topLeft[0];
+			pos[1] = q._bottomRight[1] - extent[1];
 			break;
 		case TextAlignment::Bottom:
-			pos[0] = 0.5f * (q.min[0] + q.max[0] - extent[0]);
-			pos[1] = q.max[1] - extent[1];
+			pos[0] = 0.5f * (q._topLeft[0] + q._bottomRight[0] - extent[0]);
+			pos[1] = q._bottomRight[1] - extent[1];
 			break;
 		case TextAlignment::BottomRight:
-			pos[0] = q.max[0] - extent[0];
-			pos[1] = q.max[1] - extent[1];
+			pos[0] = q._bottomRight[0] - extent[0];
+			pos[1] = q._bottomRight[1] - extent[1];
+			break;
+		case TextAlignment::BaselineLeft:
+			pos[0] = q._topLeft[0];
+			pos[1] = q._topLeft[1] - baseline;
+			break;
+		case TextAlignment::BaselineCenter:
+			pos[0] = 0.5f * (q._topLeft[0] + q._bottomRight[0] - extent[0]);
+			pos[1] = q._topLeft[1] - baseline;
+			break;
+		case TextAlignment::BaselineRight:
+			pos[0] = q._bottomRight[0] - extent[0];
+			pos[1] = q._topLeft[1] - baseline;
 			break;
 		}
 		return pos;
 	}
 
 	template<typename CharType>
-		static Float2 AlignText(const Quad& q, const Font& font, StringSection<CharType> text, float indent, TextAlignment align)
+		static Float2 AlignText(const RectFloat& q, const Font& font, StringSection<CharType> text, float indent, TextAlignment align)
 	{
 		auto fontProps = font.GetFontProperties();
 		Float2 extent{0,0};
@@ -1224,7 +1236,7 @@ namespace RenderOverlays
 			extent[1] = measurements.second * fontProps._lineHeight + fontProps._ascenderExcludingAccent;
 		}
 
-		Float2 pos = GetAlignPos(q, extent, align);
+		Float2 pos = GetAlignPos(q, extent, fontProps._ascender, align);
 		pos[0] += indent;
 
 		// reposition "pos" to be on the base line for the first line
@@ -1247,12 +1259,12 @@ namespace RenderOverlays
 		return pos;
 	}
 
-	Float2 AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<ucs4> text)
+	Float2 AlignText(const Font& font, const RectFloat& q, TextAlignment align, StringSection<ucs4> text)
 	{
 		return AlignText(q, font, text, 0, align);
 	}
 
-	Float2 AlignText(const Font& font, const Quad& q, TextAlignment align, StringSection<> text)
+	Float2 AlignText(const Font& font, const RectFloat& q, TextAlignment align, StringSection<> text)
 	{
 		return AlignText(q, font, text, 0, align);
 	}
@@ -1289,67 +1301,6 @@ namespace RenderOverlays
 	// --------------------------------------------------------------------------
 	// Quad
 	// --------------------------------------------------------------------------
-
-	inline float FloatBits(uint32_t i) { return *(float*)&i; }
-	static const float FP_INFINITY = FloatBits(0x7F800000);
-	static const float FP_NEG_INFINITY = FloatBits(0xFF800000);
-
-	Quad Quad::Empty()
-	{
-		Quad q;
-		q.min[0] = FP_INFINITY;
-		q.min[1] = FP_INFINITY;
-		q.max[0] = FP_NEG_INFINITY;
-		q.max[1] = FP_NEG_INFINITY;
-		return q;
-	}
-
-	Quad Quad::MinMax(float minX, float minY, float maxX, float maxY)
-	{
-		Quad q;
-		q.min[0] = minX;
-		q.min[1] = minY;
-		q.max[0] = maxX;
-		q.max[1] = maxY;
-		return q;
-	}
-
-
-	Quad Quad::MinMax(const Float2& min, const Float2& max)
-	{
-		Quad q;
-		q.min = min;
-		q.max = max;
-		return q;
-	}
-
-	Quad Quad::CenterExtent(const Float2& center, const Float2& extent)
-	{
-		Quad q;
-		q.min = center - extent;
-		q.max = center + extent;
-		return q;
-	}
-
-	bool Quad::operator == (const Quad& v) const
-	{
-		return min == v.min && max == v.max;
-	}
-
-	bool Quad::operator != (const Quad& v) const
-	{
-		return min != v.min || max != v.max;
-	}
-
-	Float2 Quad::Center() const
-	{
-		return Float2(0.5f * (min[0] + max[0]), 0.5f * (min[1] + max[1]));
-	}
-
-	Float2 Quad::Extent() const
-	{
-		return max - Center();
-	}
 
 	std::shared_ptr<Font> MakeDummyFont()
 	{

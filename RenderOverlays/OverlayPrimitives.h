@@ -128,7 +128,8 @@ namespace RenderOverlays
 	{
         TopLeft, Top, TopRight,
         Left, Center, Right,
-        BottomLeft, Bottom, BottomRight
+        BottomLeft, Bottom, BottomRight,
+        BaselineLeft, BaselineCenter, BaselineRight
     };
 
     std::optional<TextAlignment> AsTextAlignment(StringSection<char>);

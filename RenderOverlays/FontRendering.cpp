@@ -64,7 +64,7 @@ namespace RenderOverlays
 		static const int VertexSize = sizeof(Vertex);
 		static RenderCore::MiniInputElementDesc s_inputElements[];
 
-		void PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap);
+		void PushQuad(const RectFloat& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap);
 		void Complete();
 		void ReserveQuads(unsigned reservedQuads);
 
@@ -94,7 +94,7 @@ namespace RenderOverlays
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::FONTTABLE+1, RenderCore::Format::R32_UINT }
 	};
 
-	void WorkingVertexSetFontResource::PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap)
+	void WorkingVertexSetFontResource::PushQuad(const RectFloat& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap)
 	{
 		if (expect_evaluation((_currentIterator + 6) > _currentAllocation.end(), false)) {
 			auto reserveVertexCount = _currentAllocation.size() + 6 + (_currentAllocation.size() + 6)/2;
@@ -104,10 +104,10 @@ namespace RenderOverlays
 			assert((_currentIterator + 6) <= _currentAllocation.end());
 		}
 
-		float x0 = positions.min[0] + _offset[0];
-		float x1 = positions.max[0] + _offset[0];
-		float y0 = positions.min[1] + _offset[1];
-		float y1 = positions.max[1] + _offset[1];
+		float x0 = positions._topLeft[0] + _offset[0];
+		float x1 = positions._bottomRight[0] + _offset[0];
+		float y0 = positions._topLeft[1] + _offset[1];
+		float y1 = positions._bottomRight[1] + _offset[1];
 
 		Float3 p0(x0, y0, _depth);
 		Float3 p1(x1, y0, _depth);
@@ -208,7 +208,7 @@ namespace RenderOverlays
 	class WorkingVertexSetFontResource3D : public WorkingVertexSetFontResource
 	{
 	public:
-		void PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap)
+		void PushQuad(const RectFloat& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap)
 		{
 			if (expect_evaluation((_currentIterator + 6) > _currentAllocation.end(), false)) {
 				auto reserveVertexCount = _currentAllocation.size() + 6 + (_currentAllocation.size() + 6)/2;
@@ -218,10 +218,10 @@ namespace RenderOverlays
 				assert((_currentIterator + 6) <= _currentAllocation.end());
 			}
 
-			float x0 = positions.min[0];
-			float x1 = positions.max[0];
-			float y0 = positions.min[1];
-			float y1 = positions.max[1];
+			float x0 = positions._topLeft[0];
+			float x1 = positions._bottomRight[0];
+			float y0 = positions._topLeft[1];
+			float y1 = positions._bottomRight[1];
 			auto p0 = TransformPoint(_localToWorld, Float3{ x0, y0, 0.f });
 			auto p1 = TransformPoint(_localToWorld, Float3{ x1, y0, 0.f });
 			auto p2 = TransformPoint(_localToWorld, Float3{ x0, y1, 0.f });
@@ -277,7 +277,7 @@ namespace RenderOverlays
 		static const int VertexSize = sizeof(Vertex);
 		static RenderCore::MiniInputElementDesc s_inputElements[];
 
-		void PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap);
+		void PushQuad(const RectFloat& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap);
 		void Complete();
 		void ReserveQuads(unsigned reservedQuads);
 
@@ -306,7 +306,7 @@ namespace RenderOverlays
 		RenderCore::MiniInputElementDesc{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
 	};
 
-	void WorkingVertexSetPCT::PushQuad(const Quad& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap)
+	void WorkingVertexSetPCT::PushQuad(const RectFloat& positions, ColorB color, const FontRenderingManager::Bitmap& bitmap)
 	{
 		if (expect_evaluation((_currentIterator + 6) > _currentAllocation.end(), false)) {
 			auto reserveVertexCount = _currentAllocation.size() + 6 + (_currentAllocation.size() + 6)/2;
@@ -316,10 +316,10 @@ namespace RenderOverlays
 			assert((_currentIterator + 6) <= _currentAllocation.end());
 		}
 
-		float x0 = positions.min[0] + _offset[0];
-		float x1 = positions.max[0] + _offset[0];
-		float y0 = positions.min[1] + _offset[1];
-		float y1 = positions.max[1] + _offset[1];
+		float x0 = positions._topLeft[0] + _offset[0];
+		float x1 = positions._bottomRight[0] + _offset[0];
+		float y0 = positions._topLeft[1] + _offset[1];
+		float y1 = positions._bottomRight[1] + _offset[1];
 
 		Float3 p0(x0, y0, _depth);
 		Float3 p1(x1, y0, _depth);
@@ -506,11 +506,11 @@ namespace RenderOverlays
 				baseY = yScale * (int)(0.5f + baseY / yScale);
 			}
 
-			Quad pos = Quad::MinMax(
+			RectFloat pos {
 				baseX, baseY, 
-				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale};
 
-			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true))
+			if (expect_evaluation(!CheckMaxXY || (pos._bottomRight[0] <= maxX), true))
 				break;		// this one will render
 		}
 		return firstRenderInstance;
@@ -687,58 +687,58 @@ namespace RenderOverlays
 					baseY = yScale * (int)(0.5f + baseY / yScale);
 				}
 
-				Quad pos = Quad::MinMax(
+				RectFloat pos {
 					baseX, baseY,
-					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale };
 
-				if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true)) {
-					Quad shadowPos;
+				if (expect_evaluation(!CheckMaxXY || (pos._bottomRight[0] <= maxX), true)) {
+					RectFloat shadowPos;
 					shadowPos = pos;
-					shadowPos.min[0] -= xScale;
-					shadowPos.max[0] -= xScale;
-					shadowPos.min[1] -= yScale;
-					shadowPos.max[1] -= yScale;
+					shadowPos._topLeft[0] -= xScale;
+					shadowPos._bottomRight[0] -= xScale;
+					shadowPos._topLeft[1] -= yScale;
+					shadowPos._bottomRight[1] -= yScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, bitmap);
 
 					shadowPos = pos;
-					shadowPos.min[1] -= yScale;
-					shadowPos.max[1] -= yScale;
+					shadowPos._topLeft[1] -= yScale;
+					shadowPos._bottomRight[1] -= yScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, bitmap);
 
 					shadowPos = pos;
-					shadowPos.min[0] += xScale;
-					shadowPos.max[0] += xScale;
-					shadowPos.min[1] -= yScale;
-					shadowPos.max[1] -= yScale;
+					shadowPos._topLeft[0] += xScale;
+					shadowPos._bottomRight[0] += xScale;
+					shadowPos._topLeft[1] -= yScale;
+					shadowPos._bottomRight[1] -= yScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, bitmap);
 
 					shadowPos = pos;
-					shadowPos.min[0] -= xScale;
-					shadowPos.max[0] -= xScale;
+					shadowPos._topLeft[0] -= xScale;
+					shadowPos._bottomRight[0] -= xScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, bitmap);
 
 					shadowPos = pos;
-					shadowPos.min[0] += xScale;
-					shadowPos.max[0] += xScale;
+					shadowPos._topLeft[0] += xScale;
+					shadowPos._bottomRight[0] += xScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, bitmap);
 
 					shadowPos = pos;
-					shadowPos.min[0] -= xScale;
-					shadowPos.max[0] -= xScale;
-					shadowPos.min[1] += yScale;
-					shadowPos.max[1] += yScale;
+					shadowPos._topLeft[0] -= xScale;
+					shadowPos._bottomRight[0] -= xScale;
+					shadowPos._topLeft[1] += yScale;
+					shadowPos._bottomRight[1] += yScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, bitmap);
 
 					shadowPos = pos;
-					shadowPos.min[1] += yScale;
-					shadowPos.max[1] += yScale;
+					shadowPos._topLeft[1] += yScale;
+					shadowPos._bottomRight[1] += yScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, bitmap);
 
 					shadowPos = pos;
-					shadowPos.min[0] += xScale;
-					shadowPos.max[0] += xScale;
-					shadowPos.min[1] += yScale;
-					shadowPos.max[1] += yScale;
+					shadowPos._topLeft[0] += xScale;
+					shadowPos._bottomRight[0] += xScale;
+					shadowPos._topLeft[1] += yScale;
+					shadowPos._bottomRight[1] += yScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, bitmap);
 				}
 			}
@@ -756,16 +756,16 @@ namespace RenderOverlays
 					baseY = yScale * (int)(0.5f + baseY / yScale);
 				}
 
-				Quad pos = Quad::MinMax(
+				RectFloat pos {
 					baseX, baseY, 
-					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale };
 
-				if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true)) {
-					Quad shadowPos = pos;
-					shadowPos.min[0] += xScale;
-					shadowPos.max[0] += xScale;
-					shadowPos.min[1] += yScale;
-					shadowPos.max[1] += yScale;
+				if (expect_evaluation(!CheckMaxXY || (pos._bottomRight[0] <= maxX), true)) {
+					RectFloat shadowPos = pos;
+					shadowPos._topLeft[0] += xScale;
+					shadowPos._bottomRight[0] += xScale;
+					shadowPos._topLeft[1] += yScale;
+					shadowPos._bottomRight[1] += yScale;
 					workingVertices.PushQuad(shadowPos, shadowColor, bitmap);
 				}
 			}
@@ -782,11 +782,11 @@ namespace RenderOverlays
 				baseY = yScale * (int)(0.5f + baseY / yScale);
 			}
 
-			Quad pos = Quad::MinMax(
+			RectFloat pos {
 				baseX, baseY, 
-				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+				baseX + bitmap._width * xScale, baseY + bitmap._height * yScale };
 
-			if (expect_evaluation(!CheckMaxXY || (pos.max[0] <= maxX), true))
+			if (expect_evaluation(!CheckMaxXY || (pos._bottomRight[0] <= maxX), true))
 				workingVertices.PushQuad(pos, inst->_color, bitmap);
 		}
 
@@ -1076,9 +1076,9 @@ namespace RenderOverlays
 				float baseX = inst->_xy[0] + bitmap._bitmapOffsetX * xScale;
 				float baseY = inst->_xy[1] + bitmap._bitmapOffsetY * yScale;
 
-				Quad pos = Quad::MinMax(
+				RectFloat pos {
 					baseX, baseY, 
-					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale);
+					baseX + bitmap._width * xScale, baseY + bitmap._height * yScale };
 				workingVertices.PushQuad(pos, inst->_color, bitmap);
 			}
 		}
@@ -1136,9 +1136,9 @@ namespace RenderOverlays
 				float baseX = i->_xy[0] + bitmap._bitmapOffsetX;
 				float baseY = i->_xy[1] + bitmap._bitmapOffsetY;
 
-				Quad pos = Quad::MinMax(
+				RectFloat pos {
 					baseX, baseY, 
-					baseX + bitmap._width, baseY + bitmap._height);
+					baseX + bitmap._width, baseY + bitmap._height };
 
 				workingVertices.PushQuad(pos, i->_colorOverride.a?i->_colorOverride:color, bitmap);
 			}
@@ -1204,57 +1204,57 @@ namespace RenderOverlays
 				float baseX = i->_xy[0] + bitmap._bitmapOffsetX;
 				float baseY = i->_xy[1] + bitmap._bitmapOffsetY;
 
-				Quad pos = Quad::MinMax(
+				RectFloat pos {
 					baseX, baseY, 
-					baseX + bitmap._width, baseY + bitmap._height);
+					baseX + bitmap._width, baseY + bitmap._height };
 
-				Quad shadowPos;
+				RectFloat shadowPos;
 				shadowPos = pos;
-				shadowPos.min[0] -= xShift;
-				shadowPos.max[0] -= xShift;
-				shadowPos.min[1] -= yShift;
-				shadowPos.max[1] -= yShift;
+				shadowPos._topLeft[0] -= xShift;
+				shadowPos._bottomRight[0] -= xShift;
+				shadowPos._topLeft[1] -= yShift;
+				shadowPos._bottomRight[1] -= yShift;
 				workingVertices.PushQuad(shadowPos, color, bitmap);
 
 				shadowPos = pos;
-				shadowPos.min[1] -= yShift;
-				shadowPos.max[1] -= yShift;
+				shadowPos._topLeft[1] -= yShift;
+				shadowPos._bottomRight[1] -= yShift;
 				workingVertices.PushQuad(shadowPos, color, bitmap);
 
 				shadowPos = pos;
-				shadowPos.min[0] += xShift;
-				shadowPos.max[0] += xShift;
-				shadowPos.min[1] -= yShift;
-				shadowPos.max[1] -= yShift;
+				shadowPos._topLeft[0] += xShift;
+				shadowPos._bottomRight[0] += xShift;
+				shadowPos._topLeft[1] -= yShift;
+				shadowPos._bottomRight[1] -= yShift;
 				workingVertices.PushQuad(shadowPos, color, bitmap);
 
 				shadowPos = pos;
-				shadowPos.min[0] -= xShift;
-				shadowPos.max[0] -= xShift;
+				shadowPos._topLeft[0] -= xShift;
+				shadowPos._bottomRight[0] -= xShift;
 				workingVertices.PushQuad(shadowPos, color, bitmap);
 
 				shadowPos = pos;
-				shadowPos.min[0] += xShift;
-				shadowPos.max[0] += xShift;
+				shadowPos._topLeft[0] += xShift;
+				shadowPos._bottomRight[0] += xShift;
 				workingVertices.PushQuad(shadowPos, color, bitmap);
 
 				shadowPos = pos;
-				shadowPos.min[0] -= xShift;
-				shadowPos.max[0] -= xShift;
-				shadowPos.min[1] += yShift;
-				shadowPos.max[1] += yShift;
+				shadowPos._topLeft[0] -= xShift;
+				shadowPos._bottomRight[0] -= xShift;
+				shadowPos._topLeft[1] += yShift;
+				shadowPos._bottomRight[1] += yShift;
 				workingVertices.PushQuad(shadowPos, color, bitmap);
 
 				shadowPos = pos;
-				shadowPos.min[1] += yShift;
-				shadowPos.max[1] += yShift;
+				shadowPos._topLeft[1] += yShift;
+				shadowPos._bottomRight[1] += yShift;
 				workingVertices.PushQuad(shadowPos, color, bitmap);
 
 				shadowPos = pos;
-				shadowPos.min[0] += xShift;
-				shadowPos.max[0] += xShift;
-				shadowPos.min[1] += yShift;
-				shadowPos.max[1] += yShift;
+				shadowPos._topLeft[0] += xShift;
+				shadowPos._bottomRight[0] += xShift;
+				shadowPos._topLeft[1] += yShift;
+				shadowPos._bottomRight[1] += yShift;
 				workingVertices.PushQuad(shadowPos, color, bitmap);
 			}
 		}
