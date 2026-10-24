@@ -29,14 +29,16 @@ namespace RenderOverlays
 		}
 
 	template<typename CharType>
-		float StringWidth(const Font& font, StringSection<CharType> text, float spaceExtra, bool outline)
+		float StringWidth(const Font& font, StringSection<CharType> text, float letterSpacing, bool outline)
 	{
 		int prevGlyph = 0;
-		float x = 0.0f, prevMaxX = 0.0f;
+		float x = -letterSpacing, prevMaxX = 0.0f;		// start at -letterSpacing to offset the initial addition (std::max at the end compensates in the empty string case)
 		while (true) {
 			if (!text.IsEmpty())
 				text = FontRenderingControlStatement{}.TryParse(text);		// skip any control statements
 			if (text.IsEmpty()) break;
+
+			x += letterSpacing;
 
 			ucs4 ch = NextCharacter(text);
 			if (ch == '\n' || ch == '\r') {
@@ -53,22 +55,23 @@ namespace RenderOverlays
 			x += font.GetGlyphProperties(ch)._xAdvance;
 
 			if(outline) x += 2.0f;
-			if(ch == ' ') x += spaceExtra;
 		}
 
 		return std::max(x, prevMaxX);
 	}
 
 	template<typename CharType>
-		std::pair<float, unsigned> StringWidthAndNewLineCount(const Font& font, StringSection<CharType> text, float spaceExtra, bool outline)
+		std::pair<float, unsigned> StringWidthAndNewLineCount(const Font& font, StringSection<CharType> text, float letterSpacing, bool outline)
 	{
 		int prevGlyph = 0;
-		float x = 0.0f, prevMaxX = 0.0f;
+		float x = -letterSpacing, prevMaxX = 0.0f;
 		unsigned newLineCount = 0;
 		while (true) {
 			if (!text.IsEmpty())
 				text = FontRenderingControlStatement{}.TryParse(text);		// skip any control statements
 			if (text.IsEmpty()) break;
+
+			x += letterSpacing;
 
 			ucs4 ch = NextCharacter(text);
 			if (ch == '\n' || ch == '\r') {
@@ -86,7 +89,6 @@ namespace RenderOverlays
 			x += font.GetGlyphProperties(ch)._xAdvance;
 
 			if(outline) x += 2.0f;
-			if(ch == ' ') x += spaceExtra;
 		}
 
 		return {std::max(x, prevMaxX), newLineCount};
@@ -111,16 +113,18 @@ namespace RenderOverlays
 	}
 
 	template<typename CharType>
-		int CharCountFromWidth(const Font& font, StringSection<CharType> text, float width, float spaceExtra, bool outline)
+		int CharCountFromWidth(const Font& font, StringSection<CharType> text, float width, float letterSpacing, bool outline)
 	{
 		int prevGlyph = 0;
 		int charCount = 0;
 
-		float x = 0.0f;
+		float x = -letterSpacing;
 		while (true) {
 			if (!text.IsEmpty())
 				text = FontRenderingControlStatement{}.TryParse(text);		// skip any control statements
 			if (text.IsEmpty()) break;
+
+			x += letterSpacing;
 
 			ucs4 ch = NextCharacter(text);
 			if (ch == '\n') {
@@ -135,11 +139,7 @@ namespace RenderOverlays
 			x += font.GetGlyphProperties(ch)._xAdvance;
 
 			if(outline) x += 2.0f;
-			if(ch == ' ') x += spaceExtra;
-
-			if (width < x) {
-				return charCount;
-			}
+			if (width < x) return charCount;
 
 			++charCount;
 		}
@@ -161,7 +161,7 @@ namespace RenderOverlays
 	}
 
 	template<typename CharType>
-		float StringEllipsis(CharType* outText, size_t outTextSize, const Font& font, StringSection<CharType> inText, float width, float spaceExtra, bool outline)
+		float StringEllipsis(CharType* outText, size_t outTextSize, const Font& font, StringSection<CharType> inText, float width, float letterSpacing, bool outline)
 	{
 		if (width <= 0.0f || outTextSize <= 1) {
 			if (outTextSize != 0)
@@ -170,12 +170,13 @@ namespace RenderOverlays
 		}
 
 		int prevGlyph = 0;
-		float x = 0.0f;
+		float x = -letterSpacing;
 		auto text = inText;
 		while (true) {
 			if (!text.IsEmpty())
 				text = FontRenderingControlStatement{}.TryParse(text);		// skip any control statements
 			if (text.IsEmpty()) break;
+			x += letterSpacing;
 			auto i = text.begin();
 			ucs4 ch = NextCharacter(text);
 			assert(ch != '\n');		// new lines within this string not supported; separate lines before calling
@@ -186,7 +187,6 @@ namespace RenderOverlays
 			x += font.GetGlyphProperties(ch)._xAdvance;
 
 			if(outline) x += 2.0f;
-			if(ch == ' ') x += spaceExtra;
 
 			if (x > width) {
 				size_t count = size_t(i - inText.begin());
@@ -203,7 +203,7 @@ namespace RenderOverlays
 					CopyString(outText, outTextSize, {inText.begin(), inText.begin()+count});
 				}
 
-				return StringWidth(font, MakeStringSection(outText, &outText[count + 1]), spaceExtra, outline);
+				return StringWidth(font, MakeStringSection(outText, &outText[count + 1]), letterSpacing, outline);
 			}
 		}
 
@@ -222,10 +222,10 @@ namespace RenderOverlays
 				CopyString(outText, outTextSize, {inText.begin(), inText.begin()+count});
 			}
 
-			return StringWidth(font, MakeStringSectionNullTerm(outText), spaceExtra, outline);
+			return StringWidth(font, MakeStringSectionNullTerm(outText), letterSpacing, outline);
 		} else {
 			CopyString(outText, outTextSize, inText);
-			return x;
+			return std::max(0.f, x);
 		}
 	}
 
@@ -273,7 +273,7 @@ namespace RenderOverlays
 			const Font& font,
 			StringSection<CharType> inText,
 			StringSection<CharType> separatorList,
-			float width, float spaceExtra, bool outline)
+			float width, float letterSpacing, bool outline)
 	{
 		if (width <= 0.0f || outTextSize <= 1) {
 			if (outTextSize != 0)
@@ -285,7 +285,7 @@ namespace RenderOverlays
 		float leftx = 0.0f, rightx = 0.f;
 
 		// use 4 dots to estimate "..." + some kerning each side
-		auto ellipsisWidth = StringWidth(font, MakeStringSectionLiteral("...."), spaceExtra, outline);
+		auto ellipsisWidth = StringWidth(font, MakeStringSectionLiteral("...."), letterSpacing, outline);
 
 		auto text = inText;
 		unsigned direction = 0;		// this will prioritize keeping the last token
@@ -300,11 +300,13 @@ namespace RenderOverlays
 
 				auto start = text.begin();
 				auto i = start;
-				float additionalX = 0;
+				float additionalX = -letterSpacing;
 				while (true) {
 					if (i != text.end())
 						i = FontRenderingControlStatement{}.TryParse(MakeStringSection(i, text.end()))._start;		// skip any control statements
 					if (i == text.end()) break;
+
+					additionalX += letterSpacing;
 
 					StringSection<CharType> t { i, text.end() };
 					ucs4 ch = NextCharacter(t);
@@ -317,11 +319,11 @@ namespace RenderOverlays
 					additionalX += font.GetGlyphProperties(ch)._xAdvance;
 
 					if(outline) additionalX += 2.0f;
-					if(ch == ' ') additionalX += spaceExtra;
 
 					if (std::find(separatorList.begin(), separatorList.end(), (CharType)ch) != separatorList.end())
 						break;
 				}
+				additionalX = std::max(0.f, additionalX);
 
 				float finalEllipsisBuffer = 0.f;
 				size_t outBufferRequired = (i-inText.begin()) + (inText.end()-text.end());
@@ -345,11 +347,13 @@ namespace RenderOverlays
 
 				auto start = text.end();
 				auto i = start;
-				float additionalX = 0;
+				float additionalX = -letterSpacing;
 				while (true) {
 					if (i != text.begin())
 						i = SkipControlStatements_Reverse(MakeStringSection(text.begin(), i));
 					if (i == text.begin()) break;
+
+					additionalX += letterSpacing;
 
 					ucs4 ch;
 					if constexpr (std::is_same_v<CharType, utf8>) {
@@ -367,11 +371,11 @@ namespace RenderOverlays
 					additionalX += font.GetGlyphProperties(ch)._xAdvance;
 
 					if(outline) additionalX += 2.0f;
-					if(ch == ' ') additionalX += spaceExtra;
 
 					if (std::find(separatorList.begin(), separatorList.end(), (CharType)ch) != separatorList.end())
 						break;
 				}
+				additionalX = std::max(0.f, additionalX);
 
 				float finalEllipsisBuffer = 0.f;
 				size_t outBufferRequired = (text.begin()-inText.begin()) + (inText.end()-i);
@@ -399,7 +403,7 @@ namespace RenderOverlays
 
 		if (text.size() == inText.size()) {
 			// nothing was accepted -- fallback to just getting as much of the left most token as possible
-			return StringEllipsis(outText, outTextSize, font, inText, width, spaceExtra, outline);
+			return StringEllipsis(outText, outTextSize, font, inText, width, letterSpacing, outline);
 		}
 
 		// We didn't fit everything -- we need
@@ -425,7 +429,7 @@ namespace RenderOverlays
 		outTextIterator += inText.end() - text.end();
 		*outTextIterator = 0;
 
-		return StringWidth(font, MakeStringSectionNullTerm(outText), spaceExtra, outline);
+		return StringWidth(font, MakeStringSectionNullTerm(outText), letterSpacing, outline);
 	}
 
 	template<typename CharType>
@@ -435,7 +439,6 @@ namespace RenderOverlays
 			float maxWidth,
 			StringSection<CharType> whitespaceDividers,
 			StringSection<CharType> nonWhitespaceDividers,
-			float spaceExtra,
 			bool outline)
 	{
 		StringSplitByWidthResult<CharType> result;
@@ -466,7 +469,6 @@ namespace RenderOverlays
 				preWhitespaceWidth += font.GetGlyphProperties(ch)._xAdvance;
 
 				if(outline) preWhitespaceWidth += 2.0f;
-				if(ch == ' ') preWhitespaceWidth += spaceExtra;
 				text = t;
 			}
 
@@ -517,7 +519,6 @@ namespace RenderOverlays
 				nextTokenWidth += font.GetGlyphProperties(ch)._xAdvance;
 
 				if(outline) nextTokenWidth += 2.0f;
-				if(ch == ' ') nextTokenWidth += spaceExtra;
 				text = t;
 
 				if (isNonWhitespaceDivider) break;	// dividers are treated as single character tokens
@@ -1274,10 +1275,10 @@ namespace RenderOverlays
 	template float StringWidth(const Font&, StringSection<ucs2>, float, bool);
 	template float StringWidth(const Font&, StringSection<ucs4>, float, bool);
 
-	template int CharCountFromWidth(const Font&, StringSection<utf8> text, float width, float spaceExtra, bool outline);
-	template int CharCountFromWidth(const Font&, StringSection<char> text, float width, float spaceExtra, bool outline);
-	template int CharCountFromWidth(const Font&, StringSection<ucs2> text, float width, float spaceExtra, bool outline);
-	template int CharCountFromWidth(const Font&, StringSection<ucs4> text, float width, float spaceExtra, bool outline);
+	template int CharCountFromWidth(const Font&, StringSection<utf8> text, float width, float letterSpacing, bool outline);
+	template int CharCountFromWidth(const Font&, StringSection<char> text, float width, float letterSpacing, bool outline);
+	template int CharCountFromWidth(const Font&, StringSection<ucs2> text, float width, float letterSpacing, bool outline);
+	template int CharCountFromWidth(const Font&, StringSection<ucs4> text, float width, float letterSpacing, bool outline);
 
 	template float StringEllipsis(utf8*, size_t, const Font&, StringSection<utf8>, float, float, bool);
 	template float StringEllipsis(char*, size_t, const Font&, StringSection<char>, float, float, bool);
@@ -1289,10 +1290,10 @@ namespace RenderOverlays
 	template float StringEllipsisDoubleEnded(ucs2*, size_t, const Font&, StringSection<ucs2>, StringSection<ucs2>, float, float, bool);
 	template float StringEllipsisDoubleEnded(ucs4*, size_t, const Font&, StringSection<ucs4>, StringSection<ucs4>, float, float, bool);
 
-	template StringSplitByWidthResult<utf8> StringSplitByWidth(const Font&, StringSection<utf8>, float, StringSection<utf8>, StringSection<utf8>, float, bool);
-	template StringSplitByWidthResult<char> StringSplitByWidth(const Font&, StringSection<char>, float, StringSection<char>, StringSection<char>, float, bool);
-	template StringSplitByWidthResult<ucs2> StringSplitByWidth(const Font&, StringSection<ucs2>, float, StringSection<ucs2>, StringSection<ucs2>, float, bool);
-	template StringSplitByWidthResult<ucs4> StringSplitByWidth(const Font&, StringSection<ucs4>, float, StringSection<ucs4>, StringSection<ucs4>, float, bool);
+	template StringSplitByWidthResult<utf8> StringSplitByWidth(const Font&, StringSection<utf8>, float, StringSection<utf8>, StringSection<utf8>, bool);
+	template StringSplitByWidthResult<char> StringSplitByWidth(const Font&, StringSection<char>, float, StringSection<char>, StringSection<char>, bool);
+	template StringSplitByWidthResult<ucs2> StringSplitByWidth(const Font&, StringSection<ucs2>, float, StringSection<ucs2>, StringSection<ucs2>, bool);
+	template StringSplitByWidthResult<ucs4> StringSplitByWidth(const Font&, StringSection<ucs4>, float, StringSection<ucs4>, StringSection<ucs4>, bool);
 
 	template struct StringSplitByWidthResult<utf8>;
 	template struct StringSplitByWidthResult<ucs2>;

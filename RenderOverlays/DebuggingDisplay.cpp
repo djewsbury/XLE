@@ -744,7 +744,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
                 auto r = AllocateTableEntry(layoutCopy, staticData, i->second, i==fieldHeaders.begin(), (i+1)==fieldHeaders.end());
 
                 if (s != entry.end() && !s->second._label.empty() && IsGood(r)) {
-                    auto lineCount = StringSplitByWidth(*fonts->_tableValuesFont, MakeStringSection(s->second._label), FLT_MAX, {}, {}, 0.f, false)._sections.size();
+                    auto lineCount = StringSplitByWidth(*fonts->_tableValuesFont, MakeStringSection(s->second._label), FLT_MAX, {}, {})._sections.size();
                     heightUsed = std::max(heightUsed, Coord(lineCount * fonts->_tableValuesFont->GetFontProperties()._lineHeight));
                 }
             }

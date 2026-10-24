@@ -90,17 +90,17 @@ namespace RenderOverlays
 	template<typename CharType>
 		float StringWidth(		const Font& font,
 								StringSection<CharType> text,
-								float spaceExtra     = 0.0f,
+								float letterSpacing  = 0.0f,
 								bool outline         = false);
 
 	template<typename CharType>
-		std::pair<float, unsigned> StringWidthAndNewLineCount(const Font& font, StringSection<CharType> text, float spaceExtra=0.f, bool outline=false);
+		std::pair<float, unsigned> StringWidthAndNewLineCount(const Font& font, StringSection<CharType> text, float letterSpacing=0.f, bool outline=false);
 
 	template<typename CharType>
 		int CharCountFromWidth( const Font& font,
 								StringSection<CharType> text, 
 								float width, 
-								float spaceExtra     = 0.0f,
+								float letterSpacing  = 0.0f,
 								bool outline         = false);
 
 	template<typename CharType>
@@ -108,7 +108,7 @@ namespace RenderOverlays
 								const Font& font,
 								StringSection<CharType> inText,
 								float width,
-								float spaceExtra     = 0.0f,
+								float letterSpacing  = 0.0f,
 								bool outline         = false);
 
 	template<typename CharType>
@@ -118,7 +118,7 @@ namespace RenderOverlays
 			StringSection<CharType> inText,
 			StringSection<CharType> separatorList,
 			float width,
-			float spaceExtra     = 0.0f,
+			float letterSpacing  = 0.0f,
 			bool outline         = false);
 
 	template<typename CharType>
@@ -148,8 +148,7 @@ namespace RenderOverlays
 			float maxWidth,
 			StringSection<CharType> whitespaceDividers,		// when a line is split by whitespace, the whitespace is removed entirely
 			StringSection<CharType> nonWhitespaceDividers,
-			float spaceExtra     = 0.0f,
-			bool outline         = false);
+			bool outline = false);
 
 	struct FontSpan
 	{
