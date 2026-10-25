@@ -134,15 +134,105 @@ namespace XLEMath
         boundingBox.second[2]   = std::max(position[2], boundingBox.second[2]);
     }
 
+	inline void AddToBoundingBox(std::pair<Float3, Float3>& boundingBox, IteratorRange<const Float3*> positions)
+    {
+		for (auto p:positions) {
+			boundingBox.first[0]    = std::min(p[0], boundingBox.first[0]);
+			boundingBox.first[1]    = std::min(p[1], boundingBox.first[1]);
+			boundingBox.first[2]    = std::min(p[2], boundingBox.first[2]);
+			boundingBox.second[0]   = std::max(p[0], boundingBox.second[0]);
+			boundingBox.second[1]   = std::max(p[1], boundingBox.second[1]);
+			boundingBox.second[2]   = std::max(p[2], boundingBox.second[2]);
+		}
+    }
+
     inline std::pair<Float3, Float3>       InvalidBoundingBox()
     {
-        const Float3 mins(      std::numeric_limits<Float3::value_type>::max(),
-                                std::numeric_limits<Float3::value_type>::max(),
-                                std::numeric_limits<Float3::value_type>::max());
-        const Float3 maxs(      -std::numeric_limits<Float3::value_type>::max(),
-                                -std::numeric_limits<Float3::value_type>::max(),
-                                -std::numeric_limits<Float3::value_type>::max());
-        return std::make_pair(mins, maxs);
+		return {
+        	Float3(std::numeric_limits<Float3::value_type>::max(), std::numeric_limits<Float3::value_type>::max(), std::numeric_limits<Float3::value_type>::max()),
+			Float3(std::numeric_limits<Float3::value_type>::lowest(), std::numeric_limits<Float3::value_type>::lowest(), std::numeric_limits<Float3::value_type>::lowest()) };
+    }
+
+	inline std::pair<Float3, Float3> AddToBoundingBox(IteratorRange<const Float3*> positions)
+    {
+		if (expect_evaluation(positions.empty(), false)) return InvalidBoundingBox();
+		auto result = std::make_pair(positions[0], positions[0]);
+		AddToBoundingBox(result, MakeIteratorRange(positions.begin()+1, positions.end()));
+		return result;
+    }
+
+	inline void AddToBoundingBox(std::pair<Float2, Float2>& boundingBox, const Float2& position)
+    {
+        boundingBox.first[0]    = std::min(position[0], boundingBox.first[0]);
+        boundingBox.first[1]    = std::min(position[1], boundingBox.first[1]);
+        boundingBox.second[0]   = std::max(position[0], boundingBox.second[0]);
+        boundingBox.second[1]   = std::max(position[1], boundingBox.second[1]);
+    }
+
+	inline void AddToBoundingBox(std::pair<Float2, Float2>& boundingBox, IteratorRange<const Float2*> positions)
+    {
+		for (auto p:positions) {
+			boundingBox.first[0]    = std::min(p[0], boundingBox.first[0]);
+			boundingBox.first[1]    = std::min(p[1], boundingBox.first[1]);
+			boundingBox.second[0]   = std::max(p[0], boundingBox.second[0]);
+			boundingBox.second[1]   = std::max(p[1], boundingBox.second[1]);
+		}
+    }
+
+	inline std::pair<Float2, Float2>       InvalidBoundingBox2D()
+    {
+		return {
+        	Float2(std::numeric_limits<Float2::value_type>::max(), std::numeric_limits<Float2::value_type>::max()),
+			Float2(std::numeric_limits<Float2::value_type>::lowest(), std::numeric_limits<Float2::value_type>::lowest()) };
+    }
+
+	inline std::pair<Float2, Float2> AddToBoundingBox(IteratorRange<const Float2*> positions)
+    {
+		if (expect_evaluation(positions.empty(), false)) return InvalidBoundingBox2D();
+		auto result = std::make_pair(positions[0], positions[0]);
+		AddToBoundingBox(result, MakeIteratorRange(positions.begin()+1, positions.end()));
+		return result;
+    }
+
+	inline void AddToBoundingBox(std::pair<Float4, Float4>& boundingBox, const Float4& position)
+    {
+        boundingBox.first[0]    = std::min(position[0], boundingBox.first[0]);
+        boundingBox.first[1]    = std::min(position[1], boundingBox.first[1]);
+		boundingBox.first[2]    = std::min(position[2], boundingBox.first[2]);
+		boundingBox.first[3]    = std::min(position[3], boundingBox.first[3]);
+        boundingBox.second[0]   = std::max(position[0], boundingBox.second[0]);
+        boundingBox.second[1]   = std::max(position[1], boundingBox.second[1]);
+		boundingBox.second[2]   = std::max(position[2], boundingBox.second[2]);
+		boundingBox.second[3]   = std::max(position[3], boundingBox.second[3]);
+    }
+
+	inline void AddToBoundingBox(std::pair<Float4, Float4>& boundingBox, IteratorRange<const Float4*> positions)
+    {
+		for (auto p:positions) {
+			boundingBox.first[0]    = std::min(p[0], boundingBox.first[0]);
+			boundingBox.first[1]    = std::min(p[1], boundingBox.first[1]);
+			boundingBox.first[2]    = std::min(p[2], boundingBox.first[2]);
+			boundingBox.first[3]    = std::min(p[3], boundingBox.first[3]);
+			boundingBox.second[0]   = std::max(p[0], boundingBox.second[0]);
+			boundingBox.second[1]   = std::max(p[1], boundingBox.second[1]);
+			boundingBox.second[2]   = std::max(p[2], boundingBox.second[2]);
+			boundingBox.second[3]   = std::max(p[3], boundingBox.second[3]);
+		}
+    }
+
+	inline std::pair<Float4, Float4>       InvalidBoundingBox4D()
+    {
+		return {
+        	Float4(std::numeric_limits<Float4::value_type>::max(), std::numeric_limits<Float4::value_type>::max(), std::numeric_limits<Float4::value_type>::max(), std::numeric_limits<Float4::value_type>::max()),
+			Float4(std::numeric_limits<Float4::value_type>::lowest(), std::numeric_limits<Float4::value_type>::lowest(), std::numeric_limits<Float4::value_type>::lowest(), std::numeric_limits<Float4::value_type>::lowest()) };
+    }
+
+	inline std::pair<Float4, Float4> AddToBoundingBox(IteratorRange<const Float4*> positions)
+    {
+		if (expect_evaluation(positions.empty(), false)) return InvalidBoundingBox4D();
+		auto result = std::make_pair(positions[0], positions[0]);
+		AddToBoundingBox(result, MakeIteratorRange(positions.begin()+1, positions.end()));
+		return result;
     }
 
 	inline bool LineLineIntersectionExists(Float2 a1, Float2 b1, Float2 a2, Float2 b2)
@@ -491,6 +581,24 @@ namespace XLEMath
 		} else
 			cross = Cross_Accurate<Primitive>( pt2 - pt1, pt0 - pt1 );	// shortest segment is 2
 		return Magnitude_Accurate(cross) / Primitive(2);
+	}
+
+	template<typename Primitive>
+		static Primitive PolygonArea(IteratorRange<const Vector2T<Primitive>*> pts)
+	{
+		// Calculates area of a "simple polygon" -- ie, no self intersections or holes
+		// We're returning the unsigned area
+		// see https://en.wikipedia.org/wiki/Shoelace_formula
+		if (pts.empty()) return 0;
+		float totalSignedArea = 0;
+		auto lastIndex = pts.size()-1;
+		for (unsigned c=0; c<pts.size(); ++c) {
+			auto v1 = pts[lastIndex];
+			auto v2 = pts[c];
+			totalSignedArea += (v1[0] * v2[1]) - (v2[0] * v1[1]);
+			lastIndex = c;
+		}
+		return std::abs(totalSignedArea) / 2.f;
 	}
 
 	void ConvexPolygonToTriangles(

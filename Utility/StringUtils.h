@@ -180,6 +180,9 @@ namespace Utility
         constexpr const CharType* end() const       { return _end; }
 		constexpr size_t size() const				{ return Length(); }
 
+        constexpr CharType front() const        { assert(!IsEmpty()); return *_start; }
+        constexpr CharType back() const         { assert(!IsEmpty()); return *(_end-1); }
+
         const CharType& operator[](size_t index) const { assert(index < Length()); return _start[index]; }
 
         constexpr StringSection(const CharType* start, const CharType* end) : _start(start), _end(end) {}
