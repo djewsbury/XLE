@@ -7,6 +7,7 @@
 #include "AssetsCore.h"
 #include "TryGetAssetFromFuture.h"
 #include "InvokeAssetConstructor.h"
+#include "../OSServices/Log.h"
 #include "thousandeyes/futures/TimedWaitable.h"
 #include <memory>
 #include <tuple>
@@ -552,7 +553,14 @@ namespace Assets { namespace Internal
 		{
 			if (err)
 				return;
-			_continuation(std::move(FlexTimedWaitable<FutureTypes...>::_subFutures));
+			// we can't throw out of a dispatch function (it will crash). So we must suppress and report here
+			TRY {
+				_continuation(std::move(FlexTimedWaitable<FutureTypes...>::_subFutures));
+			} CATCH (const std::exception& e) {
+				Log(Warning) << "Suppressing exception in continuation dispatch function: " << e.what() << std::endl;
+			} CATCH(...) {
+				Log(Warning) << "Suppressing exception in continuation dispatch function: " << "<<unknown>>" << std::endl;
+			} CATCH_END
 		}
 
 		ContinuationFn _continuation;
