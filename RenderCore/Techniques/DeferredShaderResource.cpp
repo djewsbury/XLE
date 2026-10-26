@@ -411,6 +411,27 @@ namespace RenderCore { namespace Techniques
         } CATCH_END
     }
 
+    void DeferredShaderResource::ConstructToPromise(
+        std::promise<std::shared_ptr<DeferredShaderResource>>&& promise,
+        const ResourceDesc& desc, std::shared_ptr<BufferUploads::IDataPacket> data,
+        BindFlag::Enum usage, const TextureViewDesc& window,
+        std::string initializer, ::Assets::DependencyValidation depVal)
+    {
+        TRY {
+            auto futureUpload = RenderCore::Techniques::Services::GetBufferUploads().Begin(desc, std::move(data));
+            assert(futureUpload.IsValid());
+            ::Assets::WhenAll(std::move(futureUpload._future)).ThenConstructToPromise(
+                std::move(promise),
+                [initializer=std::move(initializer), depVal=std::move(depVal), usage, window](auto pkt) mutable {
+                    return std::make_shared<DeferredShaderResource>(
+                        pkt.CreateTextureView(usage, window),
+                        std::move(initializer), pkt.GetCompletionCommandList(), std::move(depVal));
+                });
+        } CATCH(...) {
+            promise.set_exception(std::current_exception());
+        } CATCH_END
+    }
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if 0

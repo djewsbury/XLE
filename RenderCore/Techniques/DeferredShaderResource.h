@@ -15,7 +15,7 @@
 
 namespace Utility { class ParameterBox; }
 namespace Assets { class DirectorySearchRules; class OperationContext; }
-namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; class IAsyncDataSource; using TransactionID = uint64_t; }}
+namespace RenderCore { namespace BufferUploads { using CommandListID = uint32_t; class IAsyncDataSource; using TransactionID = uint64_t; class IDataPacket; }}
 namespace RenderCore { namespace Assets { class TextureCompilationRequest; class TextureArtifact; }}
 
 namespace RenderCore { namespace Techniques 
@@ -79,6 +79,11 @@ namespace RenderCore { namespace Techniques
 			std::promise<std::shared_ptr<DeferredShaderResource>>&&,
             std::shared_ptr<::Assets::OperationContext>,
 			const Assets::TextureCompilationRequest& compileRequest);
+        static void ConstructToPromise(
+			std::promise<std::shared_ptr<DeferredShaderResource>>&&,
+			const ResourceDesc& desc, std::shared_ptr<BufferUploads::IDataPacket> data,
+            BindFlag::Enum usage = BindFlag::ShaderResource, const TextureViewDesc& window = TextureViewDesc{},
+            std::string initializer = {}, ::Assets::DependencyValidation depVal = {});
 
         using ProgressiveResultFn = std::function<void(std::shared_ptr<BufferUploads::IAsyncDataSource>)>;
         static void ConstructToPromise(
