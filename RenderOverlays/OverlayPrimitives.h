@@ -177,6 +177,12 @@ namespace RenderOverlays
         static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements3D;
     };
 
+    struct Vertex_T
+    {
+        Float2 _texCoord;
+        static IteratorRange<const RenderCore::MiniInputElementDesc*> s_inputElements;
+    };
+
 	///////////////////////////////////////////////////////////////////////////////////
     //          M I S C
 

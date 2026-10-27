@@ -86,6 +86,8 @@ float4 frameworkEntry(VSOUT vsout) : SV_Target0
 	#elif VSOUT_HAS_TEXCOORD
 		#if defined(FONT_RENDERER)
 			result.a *= InputTexture.Sample(PointClampSampler, VSOUT_GetTexCoord0(vsout)).r;
+		#elif defined(USE_CLAMPING_SAMPLER)
+			result *= InputTexture.Sample(ClampingSampler, VSOUT_GetTexCoord0(vsout));
 		#else
 			result *= InputTexture.Sample(DefaultSampler, VSOUT_GetTexCoord0(vsout));
 		#endif

@@ -393,6 +393,7 @@ namespace UnitTests
 		std::vector<std::pair<HexCellField, Int2>> result;
 
 		std::vector<Int2> workingEnabledCells(enabledCells.begin(), enabledCells.end());
+		std::sort(b2e(workingEnabledCells));
 		std::vector<Int2> searchQueue;
 		searchQueue.reserve(workingEnabledCells.size());
 		while (!workingEnabledCells.empty()) {
@@ -410,14 +411,12 @@ namespace UnitTests
 				searchQueue.pop_back();
 				Int2 adjacent[6];
 				GetAdjacentCells(adjacent, search);
-				for (auto a:adjacent) {
-					auto i = std::find(workingEnabledCells.begin(), workingEnabledCells.end(), a);
-					if (i != workingEnabledCells.end()) {
+				for (auto a:adjacent) 
+					if (auto i = std::lower_bound(b2e(workingEnabledCells), a); i != workingEnabledCells.end() && *i == a) {
 						searchQueue.push_back(*i);
 						island.push_back(*i);
 						workingEnabledCells.erase(i);
 					}
-				}
 			}
 
 			// We have all of the connected cells

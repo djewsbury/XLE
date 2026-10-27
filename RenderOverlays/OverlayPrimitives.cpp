@@ -101,6 +101,13 @@ namespace RenderOverlays
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PCCTT::s_inputElements2D = Vertex_PCCTT_inputElements2D;
 	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_PCCTT::s_inputElements3D = Vertex_PCCTT_inputElements3D;
 
+	static RenderCore::MiniInputElementDesc Vertex_T_inputElements[] =
+	{
+		{ RenderCore::Techniques::CommonSemantics::TEXCOORD, RenderCore::Format::R32G32_FLOAT }
+	};
+
+	IteratorRange<const RenderCore::MiniInputElementDesc*> Vertex_T::s_inputElements = Vertex_T_inputElements;
+
 	std::optional<TextAlignment> AsTextAlignment(StringSection<> str)
 	{
 		if (XlEqString(str, "TopLeft")) return TextAlignment::TopLeft;

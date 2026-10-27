@@ -125,6 +125,13 @@ uint InterleaveBits(uint2 xy)
 	return xy.x | (xy.y << 1u);
 }
 
+float CheapDither(float2 p)		// takes in a SV_Position, and gives a reasonable dither pattern
+{
+	float3 p3 = frac(float3(p.x, p.x, p.y) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return frac((p3.x + p3.y) * p3.z);
+}
+
 int CountTrue(bool3 input)
 {
 	return dot(float(true).xxx, input);
