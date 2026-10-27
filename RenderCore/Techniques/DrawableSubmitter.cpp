@@ -330,6 +330,52 @@ namespace RenderCore { namespace Techniques
 			return vertexStorage._data;
 		}
 
+		std::pair<IteratorRange<void*>, IteratorRange<void*>> QueueDrawWithIndices(
+			size_t vertexCount, size_t vStride, size_t indexCount, size_t iStride,
+			PipelineAccelerator& pipeline,
+			DescriptorSetAccelerator& prebuiltDescriptorSet,
+			const UniformsStreamInterface* uniformStreamInterface,
+			RetainedUniformsStream&& uniforms,
+			Topology topology) override
+		{
+			auto vertexDataSize = vertexCount * vStride, indexDataSize = indexCount * iStride;
+			assert(iStride == 1 || iStride == 2 || iStride == 4);
+
+			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(&DrawableWithVertexCount::IndexedExecuteFn);
+			auto* geo = _workingPkt.CreateTemporaryGeo();
+			DrawablesPacket::AllocateStorageResult vertexStorage, indexStorage;
+			if (vertexDataSize) {
+				vertexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Vertex, vertexDataSize);
+				geo->_vertexStreams[0]._type = DrawableGeo::StreamType::PacketStorage;
+				geo->_vertexStreams[0]._vbOffset = vertexStorage._startOffset;
+				geo->_vertexStreamCount = 1;
+			}
+			if (indexDataSize) {
+				indexStorage = _workingPkt.AllocateStorage(DrawablesPacket::Storage::Index, indexDataSize);
+				geo->_ibStreamType = DrawableGeo::StreamType::PacketStorage;
+				geo->_ibOffset = indexStorage._startOffset;
+				if (iStride == 4) geo->_ibFormat = Format::R32_UINT;
+				else if (iStride == 2) geo->_ibFormat = Format::R16_UINT;
+				else geo->_ibFormat = Format::R8_UINT;
+			} else
+				geo->_ibFormat = Format(0);
+			drawable->_geo = geo;
+			drawable->_pipeline = &pipeline;
+
+			drawable->_descriptorSet = &prebuiltDescriptorSet;
+			drawable->_vertexCount = (unsigned)indexCount;
+			drawable->_vertexStride = (unsigned)vStride;
+			drawable->_bytesAllocated = (unsigned)vertexDataSize;
+			drawable->_matHash = "do-not-combine"_h;
+			if (uniformStreamInterface) {
+				drawable->_looseUniformsInterface = ProtectLifetime(*uniformStreamInterface);
+				drawable->_uniforms = std::move(uniforms);
+			}
+			_lastQueuedDrawable = drawable;		// we must set this to ensure that we can call UpdateLastDrawCallVertexCount later
+			_lastQueuedDrawVertexCountOffset = 0;
+			return { vertexStorage._data, indexStorage._data };
+		}
+
 		void QueueEncoderState(const EncoderState& encoderState) override
 		{
 			_pendingEncoderState.MergeIn(encoderState);

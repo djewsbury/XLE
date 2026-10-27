@@ -125,6 +125,14 @@ namespace RenderCore { namespace Techniques
 			RetainedUniformsStream&& uniforms = {},
 			Topology topology = Topology::TriangleList) = 0;
 
+		virtual std::pair<IteratorRange<void*>, IteratorRange<void*>> QueueDrawWithIndices(
+			size_t vertexCount, size_t vertexStride, size_t indexCount, size_t indexStride,
+			PipelineAccelerator& pipelineAccelerator,
+			DescriptorSetAccelerator& prebuiltDescriptorSet,
+			const UniformsStreamInterface* uniformStreamInterface = nullptr,
+			RetainedUniformsStream&& uniforms = {},
+			Topology topology = Topology::TriangleList) = 0;
+
 		virtual void QueueEncoderState(const EncoderState&) = 0;
 		virtual IteratorRange<void*> UpdateLastDrawCallVertexCount(size_t newVertexCount) = 0;
 
