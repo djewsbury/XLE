@@ -66,6 +66,9 @@ float SRGBLuminance(float3 rgb)
     return dot(constants, rgb);
 }
 
+float3 rgb(uint r, uint g, uint b) { return SRGBToLinear_Formal(float3(r, g, b)/255.0); }
+float4 rgba(uint r, uint g, uint b, float a) { return float4(SRGBToLinear_Formal(float3(r, g, b)/255.0), a); }
+
 	///////////////////////////////////////////////////
 
 float3 HSL2RGB( float3 hsl )
