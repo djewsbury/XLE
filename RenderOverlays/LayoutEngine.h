@@ -226,6 +226,7 @@ namespace RenderOverlays
 
 		std::function<YGSize(float, YGMeasureMode, float, YGMeasureMode)> _measureDelegate;
 		std::function<void(YGNodeRef, Rect, Rect, int)> _postCalculateDelegate;
+		std::function<float(float, float)> _baselineDelegate;
 
 		std::optional<int> _zorderFixed;
 		int _zorderRel = 0;		// relative to parent node

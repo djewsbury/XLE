@@ -238,6 +238,13 @@ namespace RenderOverlays
 						return ((ImbuedNode*)YGNodeGetContext(node))->_measureDelegate(width, widthMode, height, heightMode);
 					}
 				);
+			if (n->_baselineDelegate)
+				YGNodeSetBaselineFunc(
+					n->YGNode(),
+					[](YGNodeConstRef node, float width, float height) -> float {
+						return ((ImbuedNode*)YGNodeGetContext(node))->_baselineDelegate(width, height);
+					}
+				);
 		}
 
 		LayedOutWidgets result;
