@@ -42,9 +42,8 @@ namespace Utility
     public:
 
         using PropertyNameHash = uint64_t;
-        class PropertyName
+        struct PropertyName
         {
-        public:
             PropertyNameHash _hash;
 
             PropertyName(StringSection<> name);
@@ -54,9 +53,8 @@ namespace Utility
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        class Property
+        struct Property
         {
-        public:
             using SetterFn      = std::function<bool(void*, IteratorRange<const void*>, ImpliedTyping::TypeDesc)>;
             using GetterFn      = std::function<bool(const void*, IteratorRange<void*>, ImpliedTyping::TypeDesc)>;
             using GetAsStringFn = std::function<std::string(const void*, bool)>;
@@ -85,6 +83,9 @@ namespace Utility
         bool Set(
             void* dstObject, PropertyName id,
             IteratorRange<const void*> src, ImpliedTyping::TypeDesc srcType) const;
+        bool Set(
+            void* dstObject, PropertyName id,
+            const ImpliedTyping::VariantNonRetained& var) const;
 
         template<typename ObjectType>
             std::optional<std::string> GetAsString(const ObjectType& srcObject, PropertyName id, bool strongTyping = false) const;
@@ -111,6 +112,9 @@ namespace Utility
             void Add(
                 StringSection<> name, 
                 MemberType ObjectType::*ptrToMember);
+
+        template<typename MemberType>
+            void Add(StringSection<> name, MemberType* ptrToMemberFlex);        // non-type-checked version. We're trusting is an offset to a member of the given type in the associated type
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -194,6 +198,14 @@ namespace Utility
     {
         assert(TypeHashCode<ObjectType> == _associatedType);
         return Set(&dstObject, id, MakeOpaqueIteratorRange(valueSrc), ImpliedTyping::TypeOf<std::decay_t<ValueType>>());
+    }
+
+    inline bool ClassAccessors::Set(
+        void* dstObject, PropertyName id,
+        const ImpliedTyping::VariantNonRetained& var) const
+    {
+        assert(!var._reversedEndian);
+        return Set(dstObject, id, var._data, var._type);
     }
 
     template<typename ObjectType>

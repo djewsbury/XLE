@@ -6,6 +6,7 @@
 
 #include "../Math/Vector.h"
 #include "../Utility/IteratorUtils.h"
+#include "../Utility/ImpliedTyping.h"
 #include <optional>
 
 namespace RenderCore { class MiniInputElementDesc; }
@@ -39,6 +40,8 @@ namespace RenderOverlays
 
     inline Coord2 AsCoord2(const Float2& input) { return Coord2(Coord(input[0]), Coord(input[1])); }
     inline Float2 AsFloat2(const Coord2& input) { return Float2(float(input[0]), float(input[1])); }
+
+    constexpr Utility::ImpliedTyping::TypeDesc InternalTypeOf(ColorB const*)      { return Utility::ImpliedTyping::TypeDesc{Utility::ImpliedTyping::TypeCat::UInt8, 4, Utility::ImpliedTyping::TypeHint::Color}; }
 
     struct Rect ///////////////////////////////////////////////////////////////////////
     {

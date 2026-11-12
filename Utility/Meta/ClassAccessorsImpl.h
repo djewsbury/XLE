@@ -268,6 +268,66 @@ namespace Utility
             };
         }
 
+    template<typename MemberType>
+        void ClassAccessors::Add(StringSection<> name, MemberType* ptrToMember)
+        {
+            auto id = PropertyName(name)._hash;
+            auto& p = PropertyForId(id);
+            p._name = name.AsString();
+            p._naturalType = ImpliedTyping::TypeOf<std::decay_t<MemberType>>();
+            p._getter = [ptrToMember=ptrdiff_t(ptrToMember)](const void* object, IteratorRange<void*> destination, ImpliedTyping::TypeDesc requestedType) {
+                const auto& member = *(const MemberType*)PtrAdd(object, ptrToMember);
+                if constexpr (!std::is_same_v<std::decay_t<MemberType>, std::string>) {
+                    return ImpliedTyping::Cast(
+                        destination, requestedType,
+                        MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>());
+                } else {
+                    if (requestedType._typeHint == ImpliedTyping::TypeHint::String && (requestedType._type == ImpliedTyping::TypeCat::UInt8 || requestedType._type == ImpliedTyping::TypeCat::Int8)) {
+                        XlCopyString((char*)destination.begin(), destination.size(), MakeStringSection(member));
+                        return true;
+                    } else {
+                        return ImpliedTyping::ConvertFullMatch(MakeStringSection(member), destination, requestedType);
+                    }
+                }
+            };
+            p._setter = [ptrToMember=ptrdiff_t(ptrToMember)](void* object, IteratorRange<const void*> src, ImpliedTyping::TypeDesc srcType) {
+                auto& member = *(MemberType*)PtrAdd(object, ptrToMember);
+                if constexpr (!std::is_same_v<std::decay_t<MemberType>, std::string>) {
+                    // member is not a string
+                    if (srcType._typeHint == ImpliedTyping::TypeHint::String && (srcType._type == ImpliedTyping::TypeCat::UInt8 || srcType._type == ImpliedTyping::TypeCat::Int8)) {
+                        return ImpliedTyping::ConvertFullMatch(
+                            MakeStringSection((const char*)src.begin(), (const char*)src.end()),
+                            MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>());
+                    } else {
+                        return ImpliedTyping::Cast(
+                            MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>(),
+                            src, srcType);
+                    }
+                } else {
+                    // member is a string
+                    if (srcType._typeHint == ImpliedTyping::TypeHint::String && (srcType._type == ImpliedTyping::TypeCat::UInt8 || srcType._type == ImpliedTyping::TypeCat::Int8)) {
+                        member = MakeStringSection((const char*)src.begin(), (const char*)src.end()).AsString();
+                        return true;
+                    } else {
+                        assert(srcType._typeHint != ImpliedTyping::TypeHint::String);       // no support for wide char type strings here
+                        member = ImpliedTyping::AsString(src, srcType);
+                        return true;
+                    }
+                }
+            };
+            p._getAsString = [ptrToMember=ptrdiff_t(ptrToMember)](const void* object, bool strongTyping) {
+                const auto& member = *(const MemberType*)PtrAdd(object, ptrToMember);
+                if constexpr (!std::is_same_v<std::decay_t<MemberType>, std::string>) {
+                    // member is not a string
+                    return ImpliedTyping::AsString(
+                        MakeOpaqueIteratorRange(member), ImpliedTyping::TypeOf<std::decay_t<MemberType>>(), strongTyping);
+                } else {
+                    // member is a string
+                    return member;
+                }
+            };
+        }
+
     template<typename MemberType, const char* EnumToString(MemberType), std::optional<MemberType> StringToEnum(StringSection<>), typename ObjectType>
         void AddStringToEnum(ClassAccessors& accessors, StringSection<> propName, MemberType ObjectType::*ptrToMember)
     {
