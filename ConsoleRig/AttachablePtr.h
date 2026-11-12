@@ -9,8 +9,6 @@
 #include "../Core/Prefix.h"
 #include "../Core/SelectConfiguration.h"
 #include <memory>
-#include <typeinfo>
-#include <typeindex>
 
 // #define ALLOW_IMPLICIT_CROSSMODULE 1
 

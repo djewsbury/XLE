@@ -7,18 +7,18 @@
 #include "../Utility/StringUtils.h"
 #include "../Utility/Threading/Mutex.h"
 #include "../Core/SelectConfiguration.h"
-#include "../Core/Exceptions.h"
 #include <vector>
-#include <stdexcept>
 
-#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
-	#include "../OSServices/WinAPI/IncludeWindows.h"
-	#include <psapi.h>
-#elif PLATFORMOS_TARGET == PLATFORMOS_OSX
-	#include <dlfcn.h>
-	#include <mach-o/dyld.h>
-#else
-	#include <dlfcn.h>
+#if ALLOW_IMPLICIT_CROSSMODULE
+	#if PLATFORMOS_TARGET == PLATFORMOS_WINDOWS
+		#include "../OSServices/WinAPI/IncludeWindows.h"
+		#include <psapi.h>
+	#elif PLATFORMOS_TARGET == PLATFORMOS_OSX
+		#include <dlfcn.h>
+		#include <mach-o/dyld.h>
+	#else
+		#include <dlfcn.h>
+	#endif
 #endif
 
 namespace ConsoleRig
@@ -250,11 +250,12 @@ namespace ConsoleRig
 			std::weak_ptr<void> _ptr;
 			CrossModule::RegisteredInfraModuleManagerId _owningInfraModuleManager = ~0u;
 		};
+		Threading::RecursiveMutex _cannonicalPtrsMutex;
 		std::vector<std::pair<Internal::TypeKey, CannonicalPtr>> _cannonicalPtrs;
 		std::vector<std::pair<RegisteredInfraModuleManagerId, Internal::InfraModuleManager*>> _moduleSpecificManagers;
 		RegisteredInfraModuleManagerId _nextInfraModuleManagerRegistration = 1u;
 
-		bool _iteratingModuleSpecificManagers = false;
+		std::atomic<bool> _iteratingModuleSpecificManagers = false;
 
 		#if ALLOW_IMPLICIT_CROSSMODULE
 			#if PLATFORMOS_TARGET == PLATFORMOS_OSX
@@ -272,6 +273,7 @@ namespace ConsoleRig
 
 	auto CrossModule::Get(Internal::TypeKey id) -> std::shared_ptr<void>
 	{
+		ScopedLock(_pimpl->_cannonicalPtrsMutex);
 		auto i = LowerBound(_pimpl->_cannonicalPtrs, id);
 		if (i != _pimpl->_cannonicalPtrs.end() && i->first == id)
 			return i->second._ptr.lock();
@@ -293,12 +295,15 @@ namespace ConsoleRig
 		// Note that there's not any threading protection during this set
 		// So if another thread is reading the value at the same time, it
 		// will be very messy
-		auto i = LowerBound(_pimpl->_cannonicalPtrs, id);
-		if (i != _pimpl->_cannonicalPtrs.end() && i->first == id) {
-			i->second._ptr = obj;
-			i->second._owningInfraModuleManager = owner;
-		} else
-			_pimpl->_cannonicalPtrs.insert(i, {id, Pimpl::CannonicalPtr{obj, owner}});
+		{
+			ScopedLock(_pimpl->_cannonicalPtrsMutex);
+			auto i = LowerBound(_pimpl->_cannonicalPtrs, id);
+			if (i != _pimpl->_cannonicalPtrs.end() && i->first == id) {
+				i->second._ptr = obj;
+				i->second._owningInfraModuleManager = owner;
+			} else
+				_pimpl->_cannonicalPtrs.insert(i, {id, Pimpl::CannonicalPtr{obj, owner}});
+		}
 		assert(!_pimpl->_iteratingModuleSpecificManagers);
 		_pimpl->_iteratingModuleSpecificManagers = true;
 		for (auto& moduleManager:_pimpl->_moduleSpecificManagers)
@@ -316,7 +321,8 @@ namespace ConsoleRig
 		_pimpl->_moduleSpecificManagers.push_back({res, ptr});
 
 		#if !ALLOW_IMPLICIT_CROSSMODULE
-			// try to push through our current know ptrs
+			// try to push through our current known ptrs
+			ScopedLock(_pimpl->_cannonicalPtrsMutex);
 			for (auto& cannon:_pimpl->_cannonicalPtrs)
 				if (auto l=cannon.second._ptr.lock())
 					ptr->PropagateChange(cannon.first, l);
@@ -338,6 +344,7 @@ namespace ConsoleRig
 			_pimpl->_moduleSpecificManagers.erase(i);
 		}
 
+		ScopedLock(_pimpl->_cannonicalPtrsMutex);
 		for (const auto&ptr:_pimpl->_cannonicalPtrs)
 			if (ptr.second._owningInfraModuleManager == id) {
 				Reset(ptr.first, nullptr, ~0u);
