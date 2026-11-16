@@ -470,17 +470,36 @@ namespace RenderOverlays
     {
         if (rect._bottomRight[0] <= rect._topLeft[0] || rect._bottomRight[1] <= rect._topLeft[1])
             return;
+
         assert(outlineWidth == 1.f);        // resizing border not currently supported
 
+        // Dancing around subpixel rules inside nvidia's driver to try to get a good result with all line modes
+        // In Vulkan, lines can be smooth or not smooth: 
+        // not smooth: (assuming strict lines), see 26.6.1 in spec
+        //      - a parallelogram is created by extending points either horizontally or vertically, based on the line orientation
+        //      - pixel centers within the parallelogram are activated
+        //      - pixel centers exactly on the edge follow polygon rasterization rules
+        // smooth: spec intentionally leaves it vague and up to the driver
+        //      - nvidia driver seems to be sampling each pixel at subpixel positions, and probably finding distance to closest point on line
+        //      - if we begin/end the line exactly on the pixel borders, we get spill over. But if we begin/end exactly on pixel centers we don't get full coverage
+        //
+        // For convenience, we want the same result regardless of the line mode... That's fine for for non-smooth lines, but we have to make some assumptions for
+        // smooth lines.
+        const float subpixel = 0.125f;
+
         Float3 lines[8];
-        lines[0] = AsPixelCoords(Float2(rect._topLeft[0],       rect._topLeft[1]));
-        lines[1] = AsPixelCoords(Float2(rect._bottomRight[0],   rect._topLeft[1]));
-        lines[2] = AsPixelCoords(Float2(rect._bottomRight[0],   rect._topLeft[1]));
-        lines[3] = AsPixelCoords(Float2(rect._bottomRight[0],   rect._bottomRight[1]));
-        lines[4] = AsPixelCoords(Float2(rect._bottomRight[0],   rect._bottomRight[1]));
-        lines[5] = AsPixelCoords(Float2(rect._topLeft[0],       rect._bottomRight[1]));
-        lines[6] = AsPixelCoords(Float2(rect._topLeft[0],       rect._bottomRight[1]));
-        lines[7] = AsPixelCoords(Float2(rect._topLeft[0],       rect._topLeft[1]));
+        lines[0] = AsPixelCoords(Float2(rect._topLeft[0] + subpixel,       rect._topLeft[1] + 0.5f));
+        lines[1] = AsPixelCoords(Float2(rect._bottomRight[0] - subpixel,   rect._topLeft[1] + 0.5f));
+
+        lines[2] = AsPixelCoords(Float2(rect._bottomRight[0] - 0.5f,   rect._topLeft[1] + 1.f + subpixel));
+        lines[3] = AsPixelCoords(Float2(rect._bottomRight[0] - 0.5f,   rect._bottomRight[1] - subpixel));
+
+        lines[4] = AsPixelCoords(Float2(rect._bottomRight[0] - 1.f - subpixel,      rect._bottomRight[1] - 0.5f));
+        lines[5] = AsPixelCoords(Float2(rect._topLeft[0] + subpixel,                rect._bottomRight[1] - 0.5f));
+
+        lines[6] = AsPixelCoords(Float2(rect._topLeft[0] + 0.5f,       rect._bottomRight[1] - 1.f - subpixel));
+        lines[7] = AsPixelCoords(Float2(rect._topLeft[0] + 0.5f,       rect._topLeft[1] + 1.f + subpixel));
+
         context.DrawLines(ProjectionMode::P2D, lines, dimof(lines), colour);
     }
 

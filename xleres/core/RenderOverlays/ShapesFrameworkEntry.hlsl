@@ -20,7 +20,7 @@ float4 ResolveShapeFramework_ShapeFillAndOutline(
 	float4 outline : Outline) : SV_Target0
 {
 	// Both outline and fill
-	shape._border *= outline.a; // when outline alpha is zero, we want that space to be considered "fill"
+	shape._border *= (outline.a > 0); // when outline alpha is zero, we want that space to be considered "fill"
 	float4 A = lerp(fill, outline, shape._border);
 	return float4(A.rgb, A.a * max(shape._fill, shape._border));
 }
