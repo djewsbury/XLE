@@ -423,9 +423,16 @@ namespace RenderCore { namespace Techniques
             ::Assets::WhenAll(std::move(futureUpload._future)).ThenConstructToPromise(
                 std::move(promise),
                 [initializer=std::move(initializer), depVal=std::move(depVal), usage, window](auto pkt) mutable {
-                    return std::make_shared<DeferredShaderResource>(
-                        pkt.CreateTextureView(usage, window),
-                        std::move(initializer), pkt.GetCompletionCommandList(), std::move(depVal));
+                    auto desc = pkt.GetContainingResource()->GetDesc();
+                    if (desc._type == ResourceDesc::Type::Texture && usage & BindFlag::TexelBuffer) {
+                        return std::make_shared<DeferredShaderResource>(
+                            pkt.CreateTextureView(usage, window),
+                            std::move(initializer), pkt.GetCompletionCommandList(), std::move(depVal));
+                    } else {
+                        return std::make_shared<DeferredShaderResource>(
+                            pkt.CreateBufferView(usage),
+                            std::move(initializer), pkt.GetCompletionCommandList(), std::move(depVal));
+                    }
                 });
         } CATCH(...) {
             promise.set_exception(std::current_exception());
