@@ -21,7 +21,7 @@ namespace RenderOverlays
 
         ColorB() = default;
         constexpr ColorB(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_ = 0xff);
-        constexpr ColorB(uint32_t rawColor);
+        constexpr explicit ColorB(uint32_t rawColor);
         constexpr unsigned AsUInt32() const;
         static constexpr ColorB FromNormalized(float r_, float g_, float b_, float a_ = 1.f);
         static constexpr ColorB FromNormalized(const Float4& v);

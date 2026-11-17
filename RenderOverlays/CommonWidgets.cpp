@@ -30,7 +30,7 @@ namespace RenderOverlays { namespace CommonWidgets
 			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
 
 		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
-			return *intForm;
+			return ColorB{*intForm};
 		} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
 			return ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
 		} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
@@ -198,6 +198,7 @@ namespace RenderOverlays { namespace CommonWidgets
 		if (state) {
 			FillRaisedRoundedRectangle(context.GetContext(), content, _staticData->_checkboxCheckedColor, _staticData->_checkboxRounding);
 
+			using ::LinearInterpolate;
 			Float2 ptB = Float2{ (content._topLeft[0] + content._bottomRight[0]) / 2, LinearInterpolate(content._topLeft[1], content._bottomRight[1], 0.75f) };
 			Float2 ptA = (content._topLeft + ptB) / 2;
 			Float2 ptC = Float2{ content._bottomRight[0], content._topLeft[1] };

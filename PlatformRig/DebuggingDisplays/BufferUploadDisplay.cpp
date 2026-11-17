@@ -659,7 +659,7 @@ namespace PlatformRig { namespace Overlays
 			SoftShadowRectangle(
 				context,
 				{outerRect._topLeft + Coord2(themeStaticData._shadowOffset0, themeStaticData._shadowOffset0), outerRect._bottomRight + Coord2(themeStaticData._shadowOffset1, themeStaticData._shadowOffset1)},
-				themeStaticData._shadowSoftnessRadius);
+				ColorB::Black, themeStaticData._shadowSoftnessRadius);
 			ColorAdjustRectangle(
 				context, outerRect,
 				blurryBackground->AsTextureCoords(outerRect._topLeft), blurryBackground->AsTextureCoords(outerRect._bottomRight),
@@ -1133,7 +1133,7 @@ namespace PlatformRig { namespace Overlays
             Rect outsideRect = layout.Allocate(Coord(metrics._heaps.size()*lineHeight + layout._paddingInternalBorder*2));
             Rect heapAllocationDisplay = Layout(outsideRect).AllocateFraction(100.f);
 
-            OutlineRectangle(context, outsideRect, 0xff000000);
+            OutlineRectangle(context, outsideRect, ColorB{0xff000000});
 
             std::vector<Float3> lines;
             std::vector<ColorB> lineColors;

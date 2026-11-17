@@ -180,7 +180,7 @@ namespace PlatformRig { namespace Overlays
 				YGNodeStyleSetPadding(*labelNode, YGEdgeLeft, float(angleWidth+extraPadding));
 				YGNodeStyleSetPadding(*labelNode, YGEdgeRight, float(angleWidth+extraPadding));
 
-				const ColorB headingBkColor = 0xff8ea3d2;
+				const ColorB headingBkColor = ColorB{0xff8ea3d2};
 
 				labelNode->_nodeAttachments._drawDelegate = [label=std::move(label), headingBkColor, angleWidth, extraPadding, font=_headingFont](DrawContext& draw, Rect frame, Rect content) {
 					Coord2 pts[] {
@@ -539,11 +539,11 @@ namespace PlatformRig { namespace Overlays
 
 			unsigned _sectionHeaderVertMargins = 12;
 			unsigned _sectionHeaderVertPadding = 8;
-			ColorB _sectionHeaderBkColor = 0xff8ea3d2;
+			ColorB _sectionHeaderBkColor = ColorB{0xff8ea3d2};
 
 			unsigned _keyValueGroupVertMargins = 4;
 
-			ColorB _expandingConnectorColor = 0xff47476b;
+			ColorB _expandingConnectorColor = ColorB{0xff47476b};
 
 			StaticData() = default;
 			template<typename Formatter>
@@ -830,6 +830,7 @@ namespace PlatformRig { namespace Overlays
 					SoftShadowRectangle(
 						context,
 						{outerRect._topLeft + Coord2(themeStaticData._shadowOffset0, themeStaticData._shadowOffset0), outerRect._bottomRight + Coord2(themeStaticData._shadowOffset1, themeStaticData._shadowOffset1)},
+						ColorB::Black,
 						themeStaticData._shadowSoftnessRadius);
 
 					static ColorB borderColor = ColorB(32, 96, 128, 192);

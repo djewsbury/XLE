@@ -559,7 +559,7 @@ namespace RenderOverlays
 					FontRenderingControlStatement ctrl;
 					text = ctrl.TryParse(text);
 					if (ctrl._type == FontRenderingControlStatement::Type::ColorOverride) {
-						colorOverride = ctrl._newColorOverride;
+						colorOverride = ColorB{ctrl._newColorOverride};
 						continue;
 					}
 				}
@@ -807,7 +807,7 @@ namespace RenderOverlays
 		// Draw the string in sections -- split up so we don't blow out the stack for very long strings
 		// color override complicates implementation a little bit
 		Float2 iterator { x, y };
-		ColorB colorOverride = 0x0;
+		ColorB colorOverride = ColorB{0x0};
 		while (!text.IsEmpty()) {
 			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), params._depth, true };
 			bool success = DrawTemplate_Section<CharType, WorkingSetType, CheckMaxXY, SnapCoords>(
@@ -834,7 +834,7 @@ namespace RenderOverlays
 		// Draw the string in sections -- split up so we don't blow out the stack for very long strings
 		// color override complicates implementation a little bit
 		Float2 iterator { 0.f, 0.f };
-		ColorB colorOverride = 0x0;
+		ColorB colorOverride = ColorB{0x0};
 		while (!text.IsEmpty()) {
 			WorkingSetType workingSet { immediateDrawables, textureMan.GetImmediateDrawableMaterial(), textureMan.GetImmediateDrawableUniforms(), localToWorld, stateSet };
 			bool success = DrawTemplate_Section<CharType, WorkingSetType, false, false>(
@@ -991,7 +991,7 @@ namespace RenderOverlays
 					x += xScale * v[0];
 					prevGlyph = curGlyph; prevFont = font;
 
-					instances[instanceCount++] = { {ch, font}, Float2{x, y + yScale * v[1]}, color, lineIdx };
+					instances[instanceCount++] = { {ch, font}, Float2{x, y + yScale * v[1]}, ColorB{color}, lineIdx };
 				}
 			}
 

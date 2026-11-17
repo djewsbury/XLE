@@ -34,6 +34,7 @@ namespace RenderOverlays
 		const DrawText& Alignment(TextAlignment alignment) const { _alignment = alignment; return *this; }
 		const DrawText& Flags(DrawTextFlags::BitField flags) const { _flags = flags; return *this; }
 		const DrawText& Color(ColorB color) const { _color = color; return *this; }
+        const DrawText& Color(unsigned color) const { _color = ColorB{color}; return *this; }
 		const DrawText& Font(Font& font) const { _font = &font; return *this; }
 	};
 

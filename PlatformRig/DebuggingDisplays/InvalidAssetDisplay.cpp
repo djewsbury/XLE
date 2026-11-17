@@ -146,10 +146,10 @@ namespace PlatformRig { namespace Overlays
 	struct OperationContextStaticData
 	{
 		RenderOverlays::ColorB _bright0 = RenderOverlays::ColorB::White;
-		RenderOverlays::ColorB _bright1 = 0xffafafaf;
-		RenderOverlays::ColorB _incomplete = 0xff000000;
-		RenderOverlays::ColorB _complete = 0xff668d84;
-		RenderOverlays::ColorB _message = 0xffafafaf;
+		RenderOverlays::ColorB _bright1 = RenderOverlays::ColorB{0xffafafaf};
+		RenderOverlays::ColorB _incomplete = RenderOverlays::ColorB{0xff000000};
+		RenderOverlays::ColorB _complete = RenderOverlays::ColorB{0xff668d84};
+		RenderOverlays::ColorB _message = RenderOverlays::ColorB{0xffafafaf};
 		RenderOverlays::ColorB _border = RenderOverlays::ColorB::White;
 		std::string _font = "Metropolitano:16";
 		unsigned _borderWeight = 3;

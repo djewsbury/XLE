@@ -631,7 +631,7 @@ namespace RenderOverlays
 					FontRenderingControlStatement ctrl;
 					text = ctrl.TryParse(text);
 					if (ctrl._type == FontRenderingControlStatement::Type::ColorOverride) {
-						ctrlBlock._colorOverride = ctrl._newColorOverride;
+						ctrlBlock._colorOverride = ColorB{ctrl._newColorOverride};
 						continue;
 					}
 				}

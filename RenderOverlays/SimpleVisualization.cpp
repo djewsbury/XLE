@@ -254,7 +254,7 @@ namespace RenderOverlays
 			DrawTextHelper(
 				*overlayContext,
 				std::make_tuple(Float3{0.f, 0.f, 0.f}, Float3{viewportDims[0], viewportDims[1], 0.f}),
-				**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Center, msg);
+				**font, 0, ColorB{0xffffffff}, RenderOverlays::TextAlignment::Center, msg);
 		}
 
 		auto rpi = RenderCore::Techniques::RenderPassToPresentationTargetWithOptionalInitialize(parsingContext);
@@ -316,7 +316,7 @@ namespace RenderOverlays
 					*overlayContext,
 					{ 	Float3{horzPadding + horzRectArea, yIterator, 0.f}, 
 						Float3{viewportDims[0] - horzPadding, yIterator + lineHeight, 0.f} },
-					**font, 0, 0xffffffff, RenderOverlays::TextAlignment::Left, s);
+					**font, 0, ColorB{0xffffffff}, RenderOverlays::TextAlignment::Left, s);
 			yIterator += lineHeight + paddingBetweenLines;
 		}
 

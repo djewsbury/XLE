@@ -51,8 +51,8 @@ namespace PlatformRig { namespace Overlays
 	{
 		int _lineWidth = 2;
 		int _bracketLength = 8;
-		RenderOverlays::ColorB _selectionHighlight = 0xff828690;
-		RenderOverlays::ColorB _lineColor = 0xffefe9d9;
+		RenderOverlays::ColorB _selectionHighlight = RenderOverlays::ColorB{0xff828690};
+		RenderOverlays::ColorB _lineColor = RenderOverlays::ColorB{0xffefe9d9};
 		int _labelPadding = 6;
 
 		ComboBarStaticData() = default;
@@ -210,6 +210,7 @@ namespace PlatformRig { namespace Overlays
 			SoftShadowRectangle(
 				context,
 				{outerRect._topLeft + Coord2(themeStaticData._shadowOffset0, themeStaticData._shadowOffset0), outerRect._bottomRight + Coord2(themeStaticData._shadowOffset1, themeStaticData._shadowOffset1)},
+				ColorB::Black,
 				themeStaticData._shadowSoftnessRadius);
 
 			ColorAdjustRectangle(

@@ -122,7 +122,7 @@ namespace PlatformRig { namespace Overlays
 					}
 					std::map<std::string, TableElement> entries;
                     entries["Name"] = r.second._initializer;
-                    if (r.second._state != ::Assets::AssetState::Ready) entries["Name"]._bkColour = 0xffff3f3f;
+                    if (r.second._state != ::Assets::AssetState::Ready) entries["Name"]._bkColour = ColorB{0xffff3f3f};
 					Layout sizingLayout = tableArea;
 					auto rect = sizingLayout.AllocateFullWidthFraction(1.f);
 					if (rect.Height() <= 0) break;

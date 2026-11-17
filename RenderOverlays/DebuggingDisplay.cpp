@@ -171,7 +171,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 			Throw(Formatters::FormatException("Expecting color value", fmttr.GetLocation()));
 
 		if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
-			return *intForm;
+			return ColorB{*intForm};
 		} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
 			return ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
 		} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
@@ -186,9 +186,9 @@ namespace RenderOverlays { namespace DebuggingDisplay
         unsigned _sectionHeight = 8;
         unsigned _sectionMargin = 2;
         unsigned _inactiveHalfWidth = 2;
-        ColorB _colorA = 0xffa3be8c;
-        ColorB _colorB = 0xffebcb8b;
-        ColorB _colorC = 0xffbf616a;
+        ColorB _colorA = ColorB{0xffa3be8c};
+        ColorB _colorB = ColorB{0xffebcb8b};
+        ColorB _colorC = ColorB{0xffbf616a};
 
         ScrollBarStaticData() = default;
         template<typename Formatter>
@@ -501,8 +501,8 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     struct TableStaticData
 	{
-        ColorB _frameColor = 0xffefe9d9;
-        ColorB _headerLabelColor = 0xffffffff;
+        ColorB _frameColor = ColorB{0xffefe9d9};
+        ColorB _headerLabelColor = ColorB{0xffffffff};
         int _headerLabelHorzPadding = 16;
         int _headerLabelLeftMargin = 16;
         int _frameLineWeight = 4;

@@ -746,7 +746,7 @@ namespace PlatformRig
         if (!_errorMsg.empty()) {
             DrawText{}
                 .Alignment(RenderOverlays::TextAlignment::Center)
-                .Color(0xffffbfbf)
+                .Color(ColorB{0xffffbfbf})
                 .Font(*res->_errorReportingFont)
                 .Draw(context, {outerRect._topLeft, outerRect._bottomRight}, _errorMsg);
         }

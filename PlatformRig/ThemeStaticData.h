@@ -16,10 +16,10 @@ namespace PlatformRig
 {
 	struct ThemeStaticData
 	{
-		RenderOverlays::ColorB _semiTransparentTint = 0xff2e3440;
-		RenderOverlays::ColorB _topBarBorderColor = 0xffffffff;
-		RenderOverlays::ColorB _headingBkgrnd = 0xffffffff;
-		RenderOverlays::ColorB _menuBkgrnd[6] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff };
+		RenderOverlays::ColorB _semiTransparentTint { 0xff2e3440 };
+		RenderOverlays::ColorB _topBarBorderColor { 0xffffffff };
+		RenderOverlays::ColorB _headingBkgrnd { 0xffffffff };
+		RenderOverlays::ColorB _menuBkgrnd[6] = { RenderOverlays::ColorB{0xffffffff}, RenderOverlays::ColorB{0xffffffff}, RenderOverlays::ColorB{0xffffffff}, RenderOverlays::ColorB{0xffffffff}, RenderOverlays::ColorB{0xffffffff}, RenderOverlays::ColorB{0xffffffff} };
 
 		unsigned _shadowOffset0 = 8;
 		unsigned _shadowOffset1 = 8;
@@ -63,7 +63,7 @@ namespace PlatformRig
 			switch (typeDesc._arrayCount) {
 			case 1:
 				if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>())
-					return *intForm;
+					return RenderOverlays::ColorB{*intForm};
 				break;
 			case 3:
 				if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>())
@@ -76,7 +76,7 @@ namespace PlatformRig
 			}
 		} else {
 			if (auto intForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<unsigned>()) {
-				return *intForm;
+				return RenderOverlays::ColorB{*intForm};
 			} else if (auto tripletForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt3>()) {
 				return RenderOverlays::ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
 			} else if (auto quadForm = ImpliedTyping::VariantNonRetained{typeDesc, value}.TryCastValue<UInt4>()) {
@@ -92,7 +92,7 @@ namespace PlatformRig
 			switch (value._type._arrayCount) {
 			case 1:
 				if (auto intForm = value.TryCastValue<unsigned>())
-					return *intForm;
+					return RenderOverlays::ColorB{*intForm};
 				break;
 			case 3:
 				if (auto tripletForm = value.TryCastValue<UInt3>())
@@ -105,7 +105,7 @@ namespace PlatformRig
 			}
 		} else {
 			if (auto intForm = value.TryCastValue<unsigned>()) {
-				return *intForm;
+				return RenderOverlays::ColorB{*intForm};
 			} else if (auto tripletForm = value.TryCastValue<UInt3>()) {
 				return RenderOverlays::ColorB{uint8_t((*tripletForm)[0]), uint8_t((*tripletForm)[1]), uint8_t((*tripletForm)[2])};
 			} else if (auto quadForm = value.TryCastValue<UInt4>()) {
