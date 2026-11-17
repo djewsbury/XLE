@@ -103,18 +103,18 @@ namespace Utility
                 ////   I N I T I A L I Z A T I O N   I N T E R F A C E   ////
 
         template<typename GetFn, typename SetFn>
-            void Add(
+            ClassAccessors& Add(
                 StringSection<> name, 
                 GetFn&& getter, SetFn&& setter, 
                 const std::optional<ImpliedTyping::TypeDesc>& naturalType = {});
 
         template<typename ObjectType, typename MemberType>
-            void Add(
+            ClassAccessors& Add(
                 StringSection<> name, 
                 MemberType ObjectType::*ptrToMember);
 
         template<typename MemberType>
-            void Add(StringSection<> name, MemberType* ptrToMemberFlex);        // non-type-checked version. We're trusting is an offset to a member of the given type in the associated type
+            ClassAccessors& Add(StringSection<> name, MemberType* ptrToMemberFlex);        // non-type-checked version. We're trusting is an offset to a member of the given type in the associated type
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

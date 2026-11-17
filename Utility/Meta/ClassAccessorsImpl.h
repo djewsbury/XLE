@@ -192,7 +192,7 @@ namespace Utility
     }
 
     template<typename GetFn, typename SetFn>
-        void ClassAccessors::Add(
+        ClassAccessors& ClassAccessors::Add(
             StringSection<> name,
             GetFn&& getter, SetFn&& setter,
             const std::optional<ImpliedTyping::TypeDesc>& naturalType)
@@ -204,10 +204,11 @@ namespace Utility
             p._getAsString = Internal::WrapGetAsStringFunction(getter);     // may invoke a copy of "getter" here
             p._getter = Internal::WrapGetFunction(std::move(getter));
             p._setter = Internal::WrapSetFunction(std::move(setter));
+            return *this;
         }
 
     template<typename ObjectType, typename MemberType>
-        void ClassAccessors::Add(
+        ClassAccessors& ClassAccessors::Add(
             StringSection<> name, 
             MemberType ObjectType::*ptrToMember)
         {
@@ -266,10 +267,11 @@ namespace Utility
                     return member;
                 }
             };
+            return *this;
         }
 
     template<typename MemberType>
-        void ClassAccessors::Add(StringSection<> name, MemberType* ptrToMember)
+        ClassAccessors& ClassAccessors::Add(StringSection<> name, MemberType* ptrToMember)
         {
             auto id = PropertyName(name)._hash;
             auto& p = PropertyForId(id);
@@ -326,6 +328,7 @@ namespace Utility
                     return member;
                 }
             };
+            return *this;
         }
 
     template<typename MemberType, const char* EnumToString(MemberType), std::optional<MemberType> StringToEnum(StringSection<>), typename ObjectType>
