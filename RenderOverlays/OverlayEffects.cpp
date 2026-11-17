@@ -398,6 +398,7 @@ namespace RenderOverlays
 			*rpi.GetNonFrameBufferAttachmentView(inputSRV),
 			true);
 
+		using ::LinearInterpolate;
 		const float mipFocus = LinearInterpolate(-3.f, std::max(0.f, float(srcMipCount)-3), blurStrength);
 
 		// now upsample operation

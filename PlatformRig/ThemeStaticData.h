@@ -30,6 +30,7 @@ namespace PlatformRig
 		template<typename Formatter>
 			ThemeStaticData(Formatter& fmttr)
 		{
+			using namespace Utility::Literals;
 			uint64_t keyname;
 			while (TryKeyedItem(fmttr, keyname)) {
 				switch (keyname) {

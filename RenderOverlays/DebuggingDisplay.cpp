@@ -265,6 +265,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         if (series._minValue >= series._maxValue) return;
 
         const auto& coloring = s_defaultBarChartColoring;
+        using ::LinearInterpolate;
 
         const unsigned gapBetweenBlocks = 2;
         if (unsigned(graphArea.Width() / horizontalAllocation) >= (gapBetweenBlocks+1)) {
@@ -348,6 +349,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     void DrawHistoryGraph(IOverlayContext& context, const Rect & rect, float values[], unsigned valuesCount, unsigned maxValuesCount, float& minValueHistory, float& maxValueHistory)
     {
+        using ::LinearInterpolate;
         context.DrawLine(
             ProjectionMode::P2D, 
             AsPixelCoords(Coord2(rect._topLeft[0],     rect._bottomRight[1])), HistoryGraphAxisColour,
@@ -828,6 +830,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
             Float3(1.f, 0.f, 1.f), Float3(1.f, 1.f, 1.f)
         };
 
+        using ::LinearInterpolate;
         for (unsigned c=0; c<dimof(bbpts); ++c) {
             result._worldSpacePts[c] = Float3(     
                 LinearInterpolate(std::get<0>(box)[0], std::get<1>(box)[0], bbpts[c][0]),
@@ -1080,6 +1083,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
         const unsigned buttonPadding = 4;
         const unsigned nameSize      = 250;
         const unsigned buttonsRectWidth = buttonCount * buttonSize + nameSize + (buttonCount+2) * buttonPadding;
+        using ::LinearInterpolate;
         Rect buttonsRect(
             Coord2(LinearInterpolate(layout._maximumSize._topLeft[0], layout._maximumSize._bottomRight[0], .5f) - buttonsRectWidth/2,    layout._maximumSize._topLeft[1] + layout._paddingInternalBorder ),
             Coord2(LinearInterpolate(layout._maximumSize._topLeft[0], layout._maximumSize._bottomRight[0], .5f) + buttonsRectWidth/2,    layout._maximumSize._topLeft[1] + layout._paddingInternalBorder + buttonSize + 2*buttonPadding));

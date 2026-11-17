@@ -127,6 +127,7 @@ namespace RenderOverlays
 
 	static unsigned MakeGridColor(float scaleAlpha)
 	{
+		using ::LinearInterpolate;
 		auto i = (unsigned)LinearInterpolate(0x8f, 0, scaleAlpha);
 		return (i<<24u) | 0x003f3f3f;
 	}

@@ -6,6 +6,7 @@
 
 #include "DebuggingDisplay.h"
 #include "../Assets/AssetsCore.h"
+#include "../Math/XLEMath.h"
 #include "../Utility/StringFormat.h"
 
 namespace std { template<typename T> class shared_future; }
@@ -231,6 +232,7 @@ namespace RenderOverlays { namespace CommonWidgets
 	template<typename Type>
 		void Styler::Bounded(DrawContext& drawContext, Rect valueBox, uint64_t interactable, StringSection<> name, Type value, Type leftSideValue, Type rightSideValue) const
 	{
+		using ::LinearInterpolate;
 		assert(drawContext._hoverings);
 		float alpha = (value - leftSideValue) / float(rightSideValue - leftSideValue);
 		alpha = std::max(0.f, std::min(1.0f, alpha));

@@ -210,6 +210,12 @@ namespace RenderOverlays
     constexpr bool operator==(const ColorB& lhs, const ColorB& rhs) { return lhs.AsUInt32() == rhs.AsUInt32(); }
     constexpr bool operator!=(const ColorB& lhs, const ColorB& rhs) { return lhs.AsUInt32() != rhs.AsUInt32(); }
 
+    constexpr ColorB LinearInterpolate(ColorB a, ColorB b, float t)
+	{
+		auto ch = [](uint8_t x, uint8_t y, float t) { return (uint8_t)std::clamp(std::lround(float(x) + (float(y) - float(x)) * t), 0l, 255l); };
+		return ColorB{ ch(a.r,b.r,t), ch(a.g,b.g,t), ch(a.b,b.b,t), ch(a.a,b.a,t) };
+	}
+
     constexpr float LinearToSRGB_Formal(float input)
     {
         return std::max(std::min(input*12.92f, 0.0031308f),1.055f*std::pow(input,0.41666f)-0.055f);

@@ -928,6 +928,7 @@ namespace RenderOverlays
 		Float2 alignedPosition = AlignText(font, q, alignment, text);
 		if (!(flags & DrawTextFlags::Clip))
 			q._bottomRight = {0,0};
+        using ::LinearInterpolate;
 		return Draw(
 			context.GetThreadContext(),
 			context.GetImmediateDrawables(),
@@ -986,6 +987,7 @@ namespace RenderOverlays
 		Float2 alignedPosition = q._topLeft;
 		if (fontTable[0].first)
 			alignedPosition = AlignText(*fontTable[0].first, q, alignment, text);
+        using ::LinearInterpolate;
 		DrawWithTable(
 			context.GetThreadContext(),
 			context.GetImmediateDrawables(),

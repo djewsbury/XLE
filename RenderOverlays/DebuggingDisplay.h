@@ -138,6 +138,7 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
             _minValue = std::min(_minValue, _maxValue*.75f);
 
+            using ::LinearInterpolate;
             if (historicalMin.has_value())
                 _minValue = std::min(LinearInterpolate(historicalMin.value(), _minValue, 0.15f), _minValue);
             historicalMin = _minValue;
