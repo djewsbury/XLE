@@ -1025,18 +1025,28 @@ namespace RenderOverlays { namespace DebuggingDisplay
 
     InteractableId  InteractableId_Make(StringSection<char> name)   { return Hash64(name.begin(), name.end()); }
 
+    static inline Rect BoundaryUnion(const Rect& lhs, const Rect& rhs)
+    {
+        return {
+            std::min(lhs._topLeft[0], rhs._topLeft[0]), std::min(lhs._topLeft[1], rhs._topLeft[1]),
+            std::max(lhs._bottomRight[0], rhs._bottomRight[0]), std::max(lhs._bottomRight[1], rhs._bottomRight[1]) };
+    }
+
     static InterfaceState BuildInterfaceState(Interactables& interactables, const PlatformRig::InputContext& viewInputContext, const Coord2& mousePosition, unsigned mouseButtonsHeld, InterfaceState::Capture capture)
     {
-        auto i = std::find_if(interactables._hotAreaLights.begin(), interactables._hotAreaLights.end(), [capturingId=capture._hotArea._id](const auto& c) { return c._id == capturingId; });
-        if (i != interactables._hotAreaLights.end()) {
-            capture._hotArea._rect = i->_rect;
-        } else {
-            auto i = std::find_if(interactables._hotAreas.begin(), interactables._hotAreas.end(), [capturingId=capture._hotArea._id](const auto& c) { return c._id == capturingId; });
-            if (i != interactables._hotAreas.end()) {
-                capture._hotArea._rect = i->_rect;
-            } else
-                capture = {};
+        capture._hotArea._rect = Rect::Invalid();
+        bool foundMatch = false;
+        for (auto& i:interactables._hotAreaLights) {
+            foundMatch |= i._id == capture._hotArea._id;
+            if (i._id == capture._hotArea._id && IsGood(i._rect))
+                capture._hotArea._rect = BoundaryUnion(capture._hotArea._rect, i._rect);
         }
+        for (auto& i:interactables._hotAreas) {
+            foundMatch |= i._id == capture._hotArea._id;
+            if (i._id == capture._hotArea._id && IsGood(i._rect))
+                capture._hotArea._rect = BoundaryUnion(capture._hotArea._rect, i._rect);
+        }
+        if (!foundMatch) capture = {};
 
         return InterfaceState(viewInputContext, mousePosition, mouseButtonsHeld, interactables.Intersect(mousePosition), capture);
     }
