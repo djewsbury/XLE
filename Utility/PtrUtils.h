@@ -214,6 +214,14 @@ namespace Utility
 			constexpr const typename VecType::value_type * AsPointer(const std::_Vector_const_iterator<VecType> & i)
                 { return i._Unwrapped(); }
 
+		template <typename Type, size_t N>
+			constexpr Type * AsPointer(const std::_Array_iterator<Type, N> & i)
+                { return i._Unwrapped(); }
+
+        template <typename Type, size_t N>
+			constexpr const Type * AsPointer(const std::_Array_const_iterator<Type, N> & i)
+                { return i._Unwrapped(); }
+
 		#if _MSC_VER >= 1700
 			template <typename StringType>
 				constexpr typename StringType::value_type * AsPointer(const std::_String_iterator<StringType>& i)
