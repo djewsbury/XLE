@@ -116,6 +116,15 @@ namespace RenderCore { namespace Techniques
 			const UniformsStreamInterface* uniformStreamInterface = nullptr,
 			RetainedUniformsStream&& uniforms = {},
 			Topology topology = Topology::TriangleList) = 0;
+
+		virtual void QueueDrawInstanced(
+			size_t vertexCount, size_t instanceCount,
+			DrawableGeo& customGeo,
+			PipelineAccelerator& pipelineAccelerator,
+			DescriptorSetAccelerator& prebuiltDescriptorSet,
+			const UniformsStreamInterface* uniformStreamInterface = nullptr,
+			RetainedUniformsStream&& uniforms = {},
+			Topology topology = Topology::TriangleList) = 0;
 			
 		virtual IteratorRange<void*> QueueDraw(
 			size_t vertexCount, size_t vertexStride,

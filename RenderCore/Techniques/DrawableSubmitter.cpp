@@ -68,6 +68,31 @@ namespace RenderCore { namespace Techniques
 		};
 	};
 
+	struct DrawableWithInstanceAndVertexCount : public Drawable 
+	{ 
+		unsigned _vertexCount = 0, _vertexStride = 0, _vertexStartLocation = 0, _bytesAllocated = 0;
+		unsigned _instanceCount = 0;
+		DEBUG_ONLY(bool _userGeo = false;)
+		RetainedUniformsStream _uniforms;
+		uint64_t _matHash = ~0ull;
+
+		static void ExecuteFn(ParsingContext&, const ExecuteDrawableContext& drawContext, const Drawable& drawable)
+		{
+			auto* customDrawable = (DrawableWithInstanceAndVertexCount*)&drawable;
+			if (drawContext.AtLeastOneBoundLooseUniform())
+				ApplyUniforms(drawContext, customDrawable->_uniforms);
+			drawContext.DrawInstances(customDrawable->_vertexCount, customDrawable->_instanceCount, customDrawable->_vertexStartLocation);
+		};
+
+		static void IndexedExecuteFn(ParsingContext&, const ExecuteDrawableContext& drawContext, const Drawable& drawable)
+		{
+			auto* customDrawable = (DrawableWithInstanceAndVertexCount*)&drawable;
+			if (drawContext.AtLeastOneBoundLooseUniform())
+				ApplyUniforms(drawContext, customDrawable->_uniforms);
+			drawContext.DrawIndexedInstances(customDrawable->_vertexCount, customDrawable->_instanceCount, customDrawable->_vertexStartLocation);
+		};
+	};
+
 	struct DrawableManyWithVertexCount : public Drawable 
 	{ 
 		unsigned _vertexCount = 0, _vertexStride = 0, _vertexStartLocation = 0, _bytesAllocated = 0;
@@ -277,12 +302,40 @@ namespace RenderCore { namespace Techniques
 			RetainedUniformsStream&& uniforms,
 			Topology topology) override
 		{
-			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(&DrawableWithVertexCount::ExecuteFn);
+			bool indexed = customGeo._ibFormat != Format(0);
+			auto* drawable = AllocateDrawable<DrawableWithVertexCount>(indexed ? &DrawableWithVertexCount::IndexedExecuteFn : &DrawableWithVertexCount::ExecuteFn);
 			drawable->_geo = &customGeo;
 			drawable->_pipeline = &pipeline;
 			drawable->_descriptorSet = &prebuiltDescriptorSet;
 			drawable->_vertexCount = (unsigned)vertexCount;
 			drawable->_vertexStride = drawable->_bytesAllocated = 0;
+			DEBUG_ONLY(drawable->_userGeo = true;)
+			drawable->_matHash = "do-not-combine"_h;
+			if (uniformStreamInterface) {
+				drawable->_looseUniformsInterface = ProtectLifetime(*uniformStreamInterface);
+				drawable->_uniforms = std::move(uniforms);
+			}
+			_lastQueuedDrawable = nullptr;		// this is always null, because we can't modify or extend a user geo
+			_lastQueuedDrawVertexCountOffset = 0;
+		}
+
+		void QueueDrawInstanced(
+			size_t vertexCount, size_t instanceCount,
+			DrawableGeo& customGeo,
+			PipelineAccelerator& pipeline,
+			DescriptorSetAccelerator& prebuiltDescriptorSet,
+			const UniformsStreamInterface* uniformStreamInterface,
+			RetainedUniformsStream&& uniforms,
+			Topology topology) override
+		{
+			bool indexed = customGeo._ibFormat != Format(0);
+			auto* drawable = AllocateDrawable<DrawableWithInstanceAndVertexCount>(indexed ? &DrawableWithInstanceAndVertexCount::IndexedExecuteFn : &DrawableWithInstanceAndVertexCount::ExecuteFn);
+			drawable->_geo = &customGeo;
+			drawable->_pipeline = &pipeline;
+			drawable->_descriptorSet = &prebuiltDescriptorSet;
+			drawable->_vertexCount = (unsigned)vertexCount;
+			drawable->_vertexStride = drawable->_bytesAllocated = 0;
+			drawable->_instanceCount = instanceCount;
 			DEBUG_ONLY(drawable->_userGeo = true;)
 			drawable->_matHash = "do-not-combine"_h;
 			if (uniformStreamInterface) {
