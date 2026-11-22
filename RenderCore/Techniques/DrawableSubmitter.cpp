@@ -495,19 +495,24 @@ namespace RenderCore { namespace Techniques
 			const FrameBufferDesc& fbDesc,
 			unsigned subpassIndex) override
 		{
-			assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
-			if (!_workingPkt._drawables.empty()) {
-				parserContext.GetUniformDelegateManager()->InvalidateUniforms();
-				auto& sequencerConfig = GetSequencerConfig(techniqueDelegate, fbDesc, subpassIndex);
-				Techniques::DrawOptions options;
-				options._pipelineAcceleratorsVisibility = _pipelineAcceleratorsVisibility;
-				Draw(
-					parserContext,
-					*_pipelineAcceleratorPool,
-					sequencerConfig,
-					_workingPkt,
-					options);
-			}
+			TRY {
+				assert(parserContext.GetViewport()._width * parserContext.GetViewport()._height);
+				if (!_workingPkt._drawables.empty()) {
+					parserContext.GetUniformDelegateManager()->InvalidateUniforms();
+					auto& sequencerConfig = GetSequencerConfig(techniqueDelegate, fbDesc, subpassIndex);
+					Techniques::DrawOptions options;
+					options._pipelineAcceleratorsVisibility = _pipelineAcceleratorsVisibility;
+					Draw(
+						parserContext,
+						*_pipelineAcceleratorPool,
+						sequencerConfig,
+						_workingPkt,
+						options);
+				}
+			} CATCH(...) {
+				AbandonDraws();
+				throw;
+			} CATCH_END
 
 			AbandonDraws();	// (this just clears out everything prepared)
 		}
