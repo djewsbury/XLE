@@ -424,7 +424,7 @@ namespace RenderCore { namespace Techniques
                 std::move(promise),
                 [initializer=std::move(initializer), depVal=std::move(depVal), usage, window](auto pkt) mutable {
                     auto desc = pkt.GetContainingResource()->GetDesc();
-                    if (desc._type == ResourceDesc::Type::Texture && usage & BindFlag::TexelBuffer) {
+                    if (desc._type == ResourceDesc::Type::Texture && !(usage & BindFlag::TexelBuffer)) {
                         return std::make_shared<DeferredShaderResource>(
                             pkt.CreateTextureView(usage, window),
                             std::move(initializer), pkt.GetCompletionCommandList(), std::move(depVal));
