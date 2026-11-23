@@ -24,6 +24,10 @@ template <class T, class... Types> constexpr T&& get( std::tuple<Types...>&& t )
 template <class T, class... Types> constexpr const T& get( const std::tuple<Types...>& t ) noexcept { return std::get<T, Types...>(t); }
 template <class T, class... Types> constexpr const T&& get( const std::tuple<Types...>&& t ) noexcept { return std::get<T, Types...>(std::move(t)); }
 
+template <class T1, class T2> constexpr auto mpair(T1&& first, T2&& second)
+	noexcept(std::is_nothrow_constructible_v<std::decay_t<T1>, T1> && std::is_nothrow_constructible_v<std::decay_t<T2>, T2>)
+	{ return std::make_pair(std::forward<T1>(first), std::forward<T2>(second)); }
+
 #define b2e(x) (x).begin(), (x).end()
 #define Lambda_EqMember(mem, x) [x](const auto& q) { return q.mem == x; }
 

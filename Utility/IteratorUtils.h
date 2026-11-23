@@ -329,6 +329,24 @@ namespace Utility
             return IteratorRange<Iterator>(begin, end);
         }
 
+    template<typename ArrayElement, int Count>
+        IteratorRange<ArrayElement*> mir(ArrayElement (&c)[Count])
+        {
+            return IteratorRange<ArrayElement*>(&c[0], &c[Count]);
+        }
+
+    template<typename Container>
+        IteratorRange<decltype(std::begin(std::declval<Container&>()))> mir(Container& c)
+        {
+            return IteratorRange<decltype(std::begin(std::declval<Container&>()))>(std::begin(c), std::end(c));
+        }
+
+    template<typename Iterator>
+        IteratorRange<Iterator> mir(Iterator begin, Iterator end)
+        {
+            return IteratorRange<Iterator>(begin, end);
+        }
+
 	template<typename Type>
 		IteratorRange<void*> MakeOpaqueIteratorRange(Type& object)
 		{
