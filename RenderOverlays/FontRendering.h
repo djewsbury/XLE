@@ -76,13 +76,19 @@ namespace RenderOverlays
 							RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 							FontRenderingManager& textureMan,
 							const Font& font, const FontSpan& span,
-							ColorB color, Float2 offset = Float2{0,0});
+							ColorB color);
+
+	bool 		Draw(		RenderCore::IThreadContext& threadContext,
+							RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
+							FontRenderingManager& textureMan,
+							const Font& font, const FontSpan& span,
+							ColorB color, const Float2x3& transform);
 
 	bool 		DrawOutline(	RenderCore::IThreadContext& threadContext,
 								RenderCore::Techniques::IDrawableSubmitter& immediateDrawables,
 								FontRenderingManager& textureMan,
 								const Font& font, const FontSpan& span,
-								ColorB color, Float2 offset = Float2{0,0}, float outlineWidth = 1.f);
+								ColorB color, const Float2x3& transform = Identity<Float2x3>(), float outlineWidth = 1.f);
 
 	///////////////////////////////////////////////////////////////////////////////////
 

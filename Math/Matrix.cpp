@@ -183,6 +183,25 @@ namespace XLEMath
             return result;
         }
 
+        template<> const Float2x3& Identity<Float2x3>()
+        {
+            const Float2x3::value_type one = Float2x3::value_type(1);
+            const Float2x3::value_type zero = Float2x3::value_type(0);
+            static Float2x3 result(
+                one, zero, zero,
+                zero, one, zero );
+            return result;
+        }
+
+        template<> const Float2x3& Zero<Float2x3>()
+        {
+            const Float2x3::value_type zero = Float2x3::value_type(0);
+            static Float2x3 result(
+                zero, zero, zero,
+                zero, zero, zero );
+            return result;
+        }
+
         Float3x4 MakeZero3x4() { Float3x4 result; result.zero(); return result; }
         
         template<> const Float3x4& Zero<Float3x4>()
