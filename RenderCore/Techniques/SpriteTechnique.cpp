@@ -64,7 +64,7 @@ namespace RenderCore { namespace Techniques
 
 		static std::vector<WorkingAttribute>::iterator Find(std::vector<WorkingAttribute>& v, std::pair<StringSection<>, unsigned> s)
 		{
-			return std::find_if(v.begin(), v.end(), [s](const auto& q) { return q._semanticIdx == s.second && XlEqString(s.first, q._semantic); });
+			return std::find_if(b2e(v), [s](const auto& q) { return q._semanticIdx == s.second && XlEqString(s.first, q._semantic); });
 		}
 
 		static WorkingAttribute MakeWorkingAttribute(const GraphLanguage::NodeGraphSignature::Parameter& p)
@@ -94,7 +94,7 @@ namespace RenderCore { namespace Techniques
 					break;
 				}
 
-				auto i = std::find_if(postActiveAttributes.begin(), postActiveAttributes.end(),
+				auto i = std::find_if(b2e(postActiveAttributes),
 					[&p](const auto& q) { return CompareSemantic(q, p); });
 				if (i != postActiveAttributes.end()) {
 					active = true;
@@ -102,14 +102,14 @@ namespace RenderCore { namespace Techniques
 				}
 			}
 			if (!active) {
-				result.insert(result.end(), postActiveAttributes.begin(), postActiveAttributes.end());
+				result.insert(result.end(), b2e(postActiveAttributes));
 				return false;
 			}
 
 			// All attributes in "postActiveAttributes" go into result, except if they are written to.
 			result.reserve(postActiveAttributes.size() + signature.GetParameters().size());
 			for (const auto& a:postActiveAttributes) {
-				auto i = std::find_if(signature.GetParameters().begin(), signature.GetParameters().end(),
+				auto i = std::find_if(b2e(signature.GetParameters()),
 					[&a](const auto& q) { return q._direction == ParameterDirection::Out && CompareSemantic(a, q); });
 				if (i == signature.GetParameters().end())
 					result.emplace_back(a);
@@ -117,7 +117,7 @@ namespace RenderCore { namespace Techniques
 			
 			for (const auto& p:signature.GetParameters()) {
 				if  (p._direction != ParameterDirection::In) continue;
-				auto i = std::find_if(result.begin(), result.end(),
+				auto i = std::find_if(b2e(result),
 					[&p](const auto& q) { return CompareSemantic(q, p); });
 				if (i == result.end()) {
 
@@ -151,7 +151,8 @@ namespace RenderCore { namespace Techniques
 		class FragmentWriter
 		{
 		public:
-			void WriteInputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type, bool gsInputParameter = false);
+			void WriteInputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type);
+			void WriteGSInputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type, unsigned primitiveCount);
 			void WriteOutputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type);
 
 			void WriteCall(StringSection<> callName, const GraphLanguage::NodeGraphSignature& sig);
@@ -165,7 +166,8 @@ namespace RenderCore { namespace Techniques
 
 			std::stringstream  _body;
 
-			struct WorkingAttributeWithName : public WorkingAttribute { std::string _name; bool _gsInputParameter; };
+			// _gsVertexCount is non-zero when the attribute is part of the GS input interface (ie, it will typically be part of a vertex structure with a "triangle" tag, or similar)
+			struct WorkingAttributeWithName : public WorkingAttribute { std::string _name; unsigned _gsVertexCount = 0; };
 			std::vector<WorkingAttributeWithName> _workingAttributes;
 			GraphLanguage::NodeGraphSignature _signature;
 			unsigned _nextWorkingAttributeIdx = 0;
@@ -175,18 +177,31 @@ namespace RenderCore { namespace Techniques
 			void WriteCallParameterInternal(std::ostream& temp, const GraphLanguage::NodeGraphSignature::Parameter& p);
 		};
 
-		void FragmentWriter::WriteInputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type, bool gsInputParameter)
+		void FragmentWriter::WriteInputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type)
 		{
 			assert(SplitSemanticAndIdx(semantic).first.size() == semantic.size());
-			auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
-				[semantic, semanticIdx](const auto& q) { return q._semantic == semantic && q._semanticIdx == semanticIdx; });
+			auto i = std::find_if(b2e(_workingAttributes), [semantic, semanticIdx](const auto& q) { return q._semantic == semantic && q._semanticIdx == semanticIdx; });
 			if (i != _workingAttributes.end())
 				Throw(std::runtime_error("Input attribute " + semantic.AsString() + " specified multiple times"));
 
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate(semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-			_signature.AddParameter({SerializableString{type.begin(), type.end()}, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
-			_workingAttributes.emplace_back(WorkingAttributeWithName{semantic, semanticIdx, type, newName, gsInputParameter});
+			_signature.AddParameter({SerializableString{b2e(type)}, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
+			_workingAttributes.emplace_back(WorkingAttributeWithName{semantic, semanticIdx, type, newName});
+		}
+
+		void FragmentWriter::WriteGSInputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type, unsigned primitiveCount)
+		{
+			assert(primitiveCount > 0);
+			assert(SplitSemanticAndIdx(semantic).first.size() == semantic.size());
+			auto i = std::find_if(b2e(_workingAttributes), [semantic, semanticIdx](const auto& q) { return q._semantic == semantic && q._semanticIdx == semanticIdx; });
+			if (i != _workingAttributes.end())
+				Throw(std::runtime_error("Input attribute " + semantic.AsString() + " specified multiple times"));
+
+			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
+			auto newName = Concatenate(semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
+			_signature.AddParameter({SerializableString{b2e(type)}, newName, GraphLanguage::ParameterDirection::In, semanticAndIdx});
+			_workingAttributes.emplace_back(WorkingAttributeWithName{semantic, semanticIdx, type, newName, primitiveCount});
 		}
 
 		void FragmentWriter::WriteOutputParameter(StringSection<> semantic, unsigned semanticIdx, StringSection<> type)
@@ -195,24 +210,25 @@ namespace RenderCore { namespace Techniques
 
 			auto semanticAndIdx = SemanticAndIdx(semantic, semanticIdx);
 			auto newName = Concatenate("out_", semantic, "_gen_", std::to_string(_nextWorkingAttributeIdx++));
-			_signature.AddParameter({SerializableString{type.begin(), type.end()}, newName, GraphLanguage::ParameterDirection::Out, semanticAndIdx});
+			_signature.AddParameter({SerializableString{b2e(type)}, newName, GraphLanguage::ParameterDirection::Out, semanticAndIdx});
 		}
 
 		static void WriteCastOrAssignExpression(
 			std::ostream& str,
 			FragmentWriter::WorkingAttributeWithName& attribute,
 			StringSection<> requiredType,
-			unsigned inputIdx = 0)
+			unsigned gsInputVertex)
 		{
-			if (attribute._type == requiredType) {
-				if (attribute._gsInputParameter) str << "input[" << inputIdx << "].";
+			if (attribute._type != requiredType) str << "Cast_" << attribute._type << "_to_" << requiredType << "(";
+
+			if (attribute._gsVertexCount == 0) {
 				str << attribute._name;
 			} else {
-				str << "Cast_" << attribute._type << "_to_" << requiredType << "(";
-				if (attribute._gsInputParameter) str << "input[" << inputIdx << "].";
-				str << attribute._name;
-				str << ")";
+				assert(gsInputVertex < attribute._gsVertexCount);
+				str << "input[" << gsInputVertex << "]." << attribute._name;
 			}
+
+			if (attribute._type != requiredType) str << ")";
 		}
 
 		static void WriteDefaultValueExpression(
@@ -224,11 +240,19 @@ namespace RenderCore { namespace Techniques
 
 		void FragmentWriter::WriteCallParameterInternal(std::ostream& temp, const GraphLanguage::NodeGraphSignature::Parameter& p)
 		{
+			unsigned gsInputVertexIdx = 0;
 			auto s = SplitSemanticAndIdx(p._semantic);
-			auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(), [s](const auto& q) { return s.second == q._semanticIdx && XlEqString(s.first, q._semantic); });
+			auto i = std::find_if(b2e(_workingAttributes), [s](const auto& q) { return s.second == q._semanticIdx && XlEqString(s.first, q._semantic); });
+
+			// if we don't find it, look for semantic idx 0 input, reusing the requested semantic idx as a gs primitive idx
+			if (p._direction == GraphLanguage::ParameterDirection::In && i == _workingAttributes.end() && s.second != 0) {
+				i = std::find_if(b2e(_workingAttributes), [s](const auto& q) { return 0 == q._semanticIdx && XlEqString(s.first, q._semantic) && q._gsVertexCount > s.second; });
+				gsInputVertexIdx = s.second;
+			}
+
 			if (p._direction == GraphLanguage::ParameterDirection::In) {
 				if (i != _workingAttributes.end()) {
-					WriteCastOrAssignExpression(temp, *i, p._type);
+					WriteCastOrAssignExpression(temp, *i, p._type, gsInputVertexIdx);
 				} else {
 					WriteDefaultValueExpression(temp, p._type);
 				}
@@ -243,7 +267,7 @@ namespace RenderCore { namespace Techniques
 					_body << "\t" << p._type << " " << newName << ";" << std::endl;
 					*i = WorkingAttributeWithName{s.first, s.second, p._type, newName};
 				}
-				if (i->_gsInputParameter) temp << "input[0].";
+				if (i->_gsVertexCount > 0) temp << "input[" << gsInputVertexIdx << "].";
 				temp << i->_name;
 			}
 		}
@@ -264,7 +288,7 @@ namespace RenderCore { namespace Techniques
 			std::stringstream temp;
 			temp << "\t";
 
-			auto i = std::find_if(sig.GetParameters().begin(), sig.GetParameters().end(), [](const auto& p) { return p._direction == GraphLanguage::ParameterDirection::Out && XlEqString<char>(p._name, "result"); });
+			auto i = std::find_if(b2e(sig.GetParameters()), [](const auto& p) { return p._direction == GraphLanguage::ParameterDirection::Out && XlEqString<char>(p._name, "result"); });
 			if (i != sig.GetParameters().end()) {
 				WriteCallParameterInternal(temp, *i);
 				temp << " = ";
@@ -302,7 +326,7 @@ namespace RenderCore { namespace Techniques
 				if (p._direction != GraphLanguage::ParameterDirection::Out) continue;
 				str << "\t" << p._name << " = ";
 				auto s = SplitSemanticAndIdx(p._semantic);
-				auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(), [s](const auto& q) { return q._semanticIdx == s.second && XlEqString(s.first, q._semantic); });
+				auto i = std::find_if(b2e(_workingAttributes), [s](const auto& q) { return q._semanticIdx == s.second && XlEqString(s.first, q._semantic); });
 				if (i != _workingAttributes.end()) {
 					str << i->_name;
 				} else {
@@ -349,13 +373,12 @@ namespace RenderCore { namespace Techniques
 					// look for the working parameter that matches the semantic (consider cases where we have separate values for each vertex
 					auto s = SplitSemanticAndIdx(p._semantic);
 					assert(s.second == 0);		// funny things happen if this is not zero
-					auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
-						[s, vIdx](const auto& q) { return q._semanticIdx == vIdx && XlEqString(s.first, q._semantic); });
+					auto i = std::find_if(b2e(_workingAttributes), [s, vIdx](const auto& q) { return q._semanticIdx == vIdx && XlEqString(s.first, q._semantic); });
 					if (i == _workingAttributes.end() && vIdx != 0)
-						i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
-							[s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
+						i = std::find_if(b2e(_workingAttributes), [s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
+
 					if (i != _workingAttributes.end()) {
-						WriteCastOrAssignExpression(str, *i, p._type);
+						WriteCastOrAssignExpression(str, *i, p._type, vIdx);
 					} else {
 						WriteDefaultValueExpression(str, p._type);
 					}
@@ -399,12 +422,13 @@ namespace RenderCore { namespace Techniques
 					str << "\t" << "output" << vIdx << "." << p._name << " = ";
 					// look for the working parameter that matches the semantic (consider cases where we have separate values for each vertex
 					auto s = SplitSemanticAndIdx(p._semantic);
-					assert(s.second == 0);		// funny things happen if this is not zero
-					auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
-						[s, vIdx](const auto& q) { return q._semanticIdx == vIdx && XlEqString(s.first, q._semantic); });
+					// Funny things happen if this is not zero. We use the semantic for GS functions to represent which output vertex it should go to -- but if the pixel shader actually takes inputs 
+					// with higher semantic indices, we create ambiguity.
+					assert(s.second == 0);
+					auto i = std::find_if(b2e(_workingAttributes), [s, vIdx](const auto& q) { return q._semanticIdx == vIdx && XlEqString(s.first, q._semantic); });
 					if (i == _workingAttributes.end() && vIdx != 0)
-						i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
-							[s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
+						i = std::find_if(b2e(_workingAttributes), [s](const auto& q) { return q._semanticIdx == 0 && XlEqString(s.first, q._semantic); });
+
 					if (i != _workingAttributes.end()) {
 						WriteCastOrAssignExpression(str, *i, p._type, vIdx);
 					} else {
@@ -421,7 +445,7 @@ namespace RenderCore { namespace Techniques
 
 		bool FragmentWriter::HasAttributeFor(StringSection<> semantic, unsigned semanticIdx)
 		{
-			auto i = std::find_if(_workingAttributes.begin(), _workingAttributes.end(),
+			auto i = std::find_if(b2e(_workingAttributes),
 				[semantic, semanticIdx](const auto& q) { return semanticIdx == q._semanticIdx && XlEqString(semantic, q._semantic); });
 			return i != _workingAttributes.end();
 		}
@@ -461,7 +485,7 @@ namespace RenderCore { namespace Techniques
 		static void AddPSInputSystemAttributes(std::vector<WorkingAttribute>& result)
 		{
 			constexpr const char* svPositionAttribute = "SV_Position";
-			if (std::find_if(result.begin(), result.end(), [svPositionAttribute](const auto& q) { return q._semantic == svPositionAttribute && q._semanticIdx == 0; }) == result.end())
+			if (std::find_if(b2e(result), [svPositionAttribute](const auto& q) { return q._semantic == svPositionAttribute && q._semanticIdx == 0; }) == result.end())
 				result.emplace_back(Internal::WorkingAttribute{svPositionAttribute, 0, "float4"});
 		}
 
@@ -617,7 +641,7 @@ namespace RenderCore { namespace Techniques
 					if (p._direction != GraphLanguage::ParameterDirection::In) continue;
 					auto s = SplitSemanticAndIdx(p._semantic);
 					auto i = std::find_if(
-						outputs.begin(), outputs.end(),
+						b2e(outputs),
 						[s](const auto&q) { return q.second == s.second && XlEqString(q.first, s.first); });
 					overlap |= i!=outputs.end();
 				}
@@ -643,7 +667,7 @@ namespace RenderCore { namespace Techniques
 
 		static void RemoveActiveAttribute(std::vector<WorkingAttribute>& activeAttributes, StringSection<> semantic, unsigned semanticIdx)
 		{
-			auto i = std::remove_if(activeAttributes.begin(), activeAttributes.end(),
+			auto i = std::remove_if(b2e(activeAttributes),
 				[semantic, semanticIdx](const auto& q) { return q._semanticIdx == semanticIdx && XlEqString(semantic, q._semantic); });
 			activeAttributes.erase(i, activeAttributes.end());
 		}
@@ -662,7 +686,7 @@ namespace RenderCore { namespace Techniques
 
 				auto unprovidedAttributes = arranger.RebuildInputAttributes(true);
 				{
-					auto i = std::remove_if(unprovidedAttributes.begin(), unprovidedAttributes.end(), [&isProvidedFn](const auto& q) { return isProvidedFn(q._semantic, q._semanticIdx); });
+					auto i = std::remove_if(b2e(unprovidedAttributes), [&isProvidedFn](const auto& q) { return isProvidedFn(q._semantic, q._semanticIdx); });
 					unprovidedAttributes.erase(i, unprovidedAttributes.end());
 				}
 
@@ -693,7 +717,7 @@ namespace RenderCore { namespace Techniques
 							// if the function both outputs and inputs the parameter, it's not considered a generator, and so is not useful
 							// this is particularly input for some gs system patches which expand an attribute into four
 							// without this check we can get infinite loops
-							auto i = std::find_if(e._signature->GetParameters().begin(), e._signature->GetParameters().end(),
+							auto i = std::find_if(b2e(e._signature->GetParameters()),
 								[s](const auto& q) { return q._direction == GraphLanguage::ParameterDirection::In && CompareSemantic(Internal::SplitSemanticAndIdx(q._semantic), s); });
 							isUseful = i == e._signature->GetParameters().end();
 						}
@@ -722,7 +746,7 @@ namespace RenderCore { namespace Techniques
 				}
 
 				std::stable_sort(
-					prospectivePatches.begin(), prospectivePatches.end(),
+					b2e(prospectivePatches),
 					[](const auto& lhs, const auto& rhs) { 
 						if (lhs._matchedInputs > rhs._matchedInputs) return true;
 						if (lhs._matchedInputs < rhs._matchedInputs) return false;
@@ -941,7 +965,7 @@ void ExpandClipSpacePosition_RadRotNormal(
 
 	)--";
 
-constexpr const char* s_gsTriangleSystemPatches = R"--(
+	constexpr const char* s_gsTriangleSystemPatches = R"--(
 
 void WriteBarycentricCoords(
 	out float3 bary0 : BARYCENTRIC0,
@@ -986,7 +1010,7 @@ void WriteBarycentricCoords(
 					Internal::ConnectSystemPatches(
 						arranger, psSystemPatches,
 						[&iaAttributes, patches](StringSection<> semantic, unsigned semanticIdx) {
-							auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(semantic)+semanticIdx);
+							auto ia = std::find(b2e(iaAttributes), Hash64(semantic)+semanticIdx);
 							if (ia != iaAttributes.end()) return true;
 							return Internal::IsPSInputSystemAttributes(semantic, semanticIdx)
 								|| Internal::VSCanProvideAttribute(patches, semantic, semanticIdx)
@@ -1042,7 +1066,7 @@ void WriteBarycentricCoords(
 				Internal::ConnectSystemPatches(
 					arranger, vsSystemPatches,
 					[&iaAttributes](StringSection<> semantic, unsigned semanticIdx) {
-						auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(semantic)+semanticIdx);
+						auto ia = std::find(b2e(iaAttributes), Hash64(semantic)+semanticIdx);
 						if (ia != iaAttributes.end()) return true;
 						return Internal::IsVSInputSystemAttributes(semantic, semanticIdx);
 					});
@@ -1062,7 +1086,7 @@ void WriteBarycentricCoords(
 		{
 			Internal::FragmentWriter writerHelper;
 			for (const auto& a:vsEntryAttributes) {
-				auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(a._semantic)+a._semanticIdx);
+				auto ia = std::find(b2e(iaAttributes), Hash64(a._semantic)+a._semanticIdx);
 				if (ia != iaAttributes.end()) {
 					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
 				} else {
@@ -1088,10 +1112,9 @@ void WriteBarycentricCoords(
 		{
 			Internal::FragmentWriter writerHelper;
 			for (const auto& a:gsEntryAttributes) {
-				auto gsin = std::find_if(vsSignature.GetParameters().begin(), vsSignature.GetParameters().end(),
-					[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+				auto gsin = std::find_if(b2e(vsSignature.GetParameters()), [&a](const auto&q) { return Internal::CompareSemantic(a, q); });
 				if (gsin != vsSignature.GetParameters().end()) {
-					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type, true);
+					writerHelper.WriteGSInputParameter(a._semantic, a._semanticIdx, a._type, gsPrimitiveVertexCount);
 				} else {
 					Internal::TryWriteGSSystemInput(writerHelper, a._semantic, a._semanticIdx);
 				}
@@ -1120,7 +1143,7 @@ void WriteBarycentricCoords(
 		{
 			Internal::FragmentWriter writerHelper;
 			for (const auto& a:psEntryAttributes) {
-				auto gsin = std::find_if(gsSignature.GetParameters().begin(), gsSignature.GetParameters().end(),
+				auto gsin = std::find_if(b2e(gsSignature.GetParameters()),
 					[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
 				if (gsin != gsSignature.GetParameters().end()) {
 					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
@@ -1228,7 +1251,7 @@ void WriteBarycentricCoords(
 					Internal::ConnectSystemPatches(
 						arranger, psSystemPatches,
 						[&iaAttributes, patches](StringSection<> semantic, unsigned semanticIdx) {
-							auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(semantic)+semanticIdx);
+							auto ia = std::find(b2e(iaAttributes), Hash64(semantic)+semanticIdx);
 							if (ia != iaAttributes.end()) return true;
 							return Internal::IsPSInputSystemAttributes(semantic, semanticIdx)
 								|| Internal::VSCanProvideAttribute(patches, semantic, semanticIdx)
@@ -1277,7 +1300,7 @@ void WriteBarycentricCoords(
 				Internal::ConnectSystemPatches(
 					arranger, vsSystemPatches,
 					[&iaAttributes](StringSection<> semantic, unsigned semanticIdx) {
-						auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(semantic)+semanticIdx);
+						auto ia = std::find(b2e(iaAttributes), Hash64(semantic)+semanticIdx);
 						if (ia != iaAttributes.end()) return true;
 						return Internal::IsVSInputSystemAttributes(semantic, semanticIdx);
 					});
@@ -1298,7 +1321,7 @@ void WriteBarycentricCoords(
 		{
 			Internal::FragmentWriter writerHelper;
 			for (const auto& a:vsEntryAttributes) {
-				auto ia = std::find(iaAttributes.begin(), iaAttributes.end(), Hash64(a._semantic)+a._semanticIdx);
+				auto ia = std::find(b2e(iaAttributes), Hash64(a._semantic)+a._semanticIdx);
 				if (ia != iaAttributes.end()) {
 					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
 				} else {
@@ -1322,12 +1345,13 @@ void WriteBarycentricCoords(
 		}
 
 		{
+			const unsigned gsPrimitiveVertexCount = 3;		// always going through WriteGSFragment_TriangleOutput path here
+
 			Internal::FragmentWriter writerHelper;
 			for (const auto& a:gsEntryAttributes) {
-				auto gsin = std::find_if(vsSignature.GetParameters().begin(), vsSignature.GetParameters().end(),
-					[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+				auto gsin = std::find_if(b2e(vsSignature.GetParameters()), [&a](const auto&q) { return Internal::CompareSemantic(a, q); });
 				if (gsin != vsSignature.GetParameters().end()) {
-					writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type, true);
+					writerHelper.WriteGSInputParameter(a._semantic, a._semanticIdx, a._type, gsPrimitiveVertexCount);
 				} else {
 					Internal::TryWriteGSSystemInput(writerHelper, a._semantic, a._semanticIdx);
 				}
@@ -1358,15 +1382,13 @@ void WriteBarycentricCoords(
 			Internal::FragmentWriter writerHelper;
 			for (const auto& a:psEntryAttributes) {
 				if (!gsEnabled) {
-					auto vsin = std::find_if(vsSignature.GetParameters().begin(), vsSignature.GetParameters().end(),
-						[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+					auto vsin = std::find_if(b2e(vsSignature.GetParameters()), [&a](const auto&q) { return Internal::CompareSemantic(a, q); });
 					if (vsin != vsSignature.GetParameters().end()) {
 						writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
 						continue;
 					}
 				} else {
-					auto gsin = std::find_if(gsSignature.GetParameters().begin(), gsSignature.GetParameters().end(),
-						[&a](const auto&q) { return Internal::CompareSemantic(a, q); });
+					auto gsin = std::find_if(b2e(gsSignature.GetParameters()), [&a](const auto&q) { return Internal::CompareSemantic(a, q); });
 					if (gsin != gsSignature.GetParameters().end()) {
 						writerHelper.WriteInputParameter(a._semantic, a._semanticIdx, a._type);
 						continue;
@@ -1431,6 +1453,8 @@ void WriteBarycentricCoords(
 #if XLE_SPRITE_TECHNIQUE_LOG_SHADERS
 		std::cout << "----- VS ----" << std::endl;
 		std::cout << vs.str() << std::endl;
+		std::cout << "----- GS ----" << std::endl;
+		std::cout << gs.str() << std::endl;
 		std::cout << "----- PS ----" << std::endl;
 		std::cout << ps.str() << std::endl;
 #endif
