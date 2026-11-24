@@ -23,12 +23,12 @@ namespace Utility
 
         template<
             typename GetFn,
-            typename std::enable_if<FunctionTraits<GetFn>::arity == 1>::type* =nullptr>
+            typename std::enable_if<FunctionTraits<std::decay_t<GetFn>>::arity == 1>::type* =nullptr>
             ClassAccessors::Property::GetterFn WrapGetFunction(GetFn&& getFn)
         {
             return [capGetFn=std::move(getFn)](const void* object, IteratorRange<void*> destination, ImpliedTyping::TypeDesc requestedType) {
-                using ResultOfGetFnType = typename FunctionTraits<GetFn>::ReturnType;
-                using ExpectedObjectType = std::decay_t<std::tuple_element_t<0, typename FunctionTraits<GetFn>::ArgumentTuple>>;
+                using ResultOfGetFnType = typename FunctionTraits<std::decay_t<GetFn>>::ReturnType;
+                using ExpectedObjectType = std::decay_t<std::tuple_element_t<0, typename FunctionTraits<std::decay_t<GetFn>>::ArgumentTuple>>;
                 ResultOfGetFnType resultOfGetFn = capGetFn(*(const ExpectedObjectType*)object);
                 return ImpliedTyping::Cast(
                     destination, requestedType,
@@ -70,15 +70,15 @@ namespace Utility
 
         template<
             typename SetFn,
-            typename std::enable_if<FunctionTraits<SetFn>::arity == 2>::type* =nullptr>
+            typename std::enable_if<FunctionTraits<std::decay_t<SetFn>>::arity == 2>::type* =nullptr>
             ClassAccessors::Property::SetterFn WrapSetFunction(SetFn&& setFn)
         {
             return [capSetFn=std::move(setFn)](void* object, IteratorRange<const void*> src, ImpliedTyping::TypeDesc srcType) {
-                using ExpectedObjectType = std::decay_t<std::tuple_element_t<0, typename FunctionTraits<SetFn>::ArgumentTuple>>;
+                using ExpectedObjectType = std::decay_t<std::tuple_element_t<0, typename FunctionTraits<std::decay_t<SetFn>>::ArgumentTuple>>;
 
-                if constexpr (!std::is_same_v<std::tuple_element_t<1, typename FunctionTraits<SetFn>::ArgumentTuple>, StringSection<>>) {
+                if constexpr (!std::is_same_v<std::tuple_element_t<1, typename FunctionTraits<std::decay_t<SetFn>>::ArgumentTuple>, StringSection<>>) {
                     // Setter does not take a string as input
-                    using MidwayObjectType = std::decay_t<std::tuple_element_t<1, typename FunctionTraits<SetFn>::ArgumentTuple>>;
+                    using MidwayObjectType = std::decay_t<std::tuple_element_t<1, typename FunctionTraits<std::decay_t<SetFn>>::ArgumentTuple>>;
                     if (srcType._typeHint == ImpliedTyping::TypeHint::String && (srcType._type == ImpliedTyping::TypeCat::UInt8 || srcType._type == ImpliedTyping::TypeCat::Int8)) {
                         auto midwayObject = ImpliedTyping::ConvertFullMatch<MidwayObjectType>(MakeStringSection((const char*)src.begin(), (const char*)src.end()));
                         if (!midwayObject.has_value()) return false;
@@ -145,12 +145,12 @@ namespace Utility
 
         template<
             typename GetFn,
-            typename std::enable_if<FunctionTraits<GetFn>::arity == 1>::type* =nullptr>
+            typename std::enable_if<FunctionTraits<std::decay_t<GetFn>>::arity == 1>::type* =nullptr>
             ClassAccessors::Property::GetAsStringFn WrapGetAsStringFunction(GetFn&& getFn)
         {
             return [getFn](const void* object, bool strongTyping) {
-                using ResultOfGetFnType = typename FunctionTraits<GetFn>::ReturnType;
-                using ExpectedObjectType = std::decay_t<std::tuple_element_t<0, typename FunctionTraits<GetFn>::ArgumentTuple>>;
+                using ResultOfGetFnType = typename FunctionTraits<std::decay_t<GetFn>>::ReturnType;
+                using ExpectedObjectType = std::decay_t<std::tuple_element_t<0, typename FunctionTraits<std::decay_t<GetFn>>::ArgumentTuple>>;
                 ResultOfGetFnType resultOfGetFn = getFn(*(const ExpectedObjectType*)object);
                 return ImpliedTyping::AsString(
                     MakeOpaqueIteratorRange(resultOfGetFn), ImpliedTyping::TypeOf<std::decay_t<ResultOfGetFnType>>(), strongTyping);
