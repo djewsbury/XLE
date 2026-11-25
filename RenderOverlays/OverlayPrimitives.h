@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../Math/Vector.h"
+#include "../Math/Matrix.h"
 #include "../Utility/IteratorUtils.h"
 #include "../Utility/ImpliedTyping.h"
 #include <optional>
@@ -189,13 +190,17 @@ namespace RenderOverlays
 	///////////////////////////////////////////////////////////////////////////////////
     //          M I S C
 
-    Float3      AsPixelCoords(Coord2 input);
-    Float3      AsPixelCoords(Coord2 input, float depth);
-    Float3      AsPixelCoords(Float2 input);
-    Float3      AsPixelCoords(Float3 input);
-    std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect);
-    Float3      AsPixelCoords(Coord x, Coord y);
-    unsigned    HardwareColor(ColorB input);
+    extern float g_NDCDepthAtNearClip;
+    inline Float3      AsPixelCoords(Coord2 input)                             { return Float3(float(input[0]), float(input[1]), g_NDCDepthAtNearClip); }
+    inline Float3      AsPixelCoords(Coord2 input, float depth)                { return Float3(float(input[0]), float(input[1]), depth); }
+    inline Float3      AsPixelCoords(Coord x, Coord y)                         { return Float3(float(x), float(y), g_NDCDepthAtNearClip); }
+    inline Float3      AsPixelCoords(Float2 input)                             { return Expand(input, g_NDCDepthAtNearClip); }
+    inline Float3      AsPixelCoords(Float3 input)                             { return input; }
+    inline std::tuple<Float3, Float3> AsPixelCoords(const Rect& rect)          { return std::make_tuple(AsPixelCoords(rect._topLeft), AsPixelCoords(rect._bottomRight)); }
+    inline unsigned    HardwareColor(ColorB input)                             { return (uint32_t(input.a) << 24u) | (uint32_t(input.b) << 16u) | (uint32_t(input.g) << 8u) | uint32_t(input.r); }
+
+    inline Float3 TransformToPixelCoords(const Float2x3& transform, Float2 pt)             { return AsPixelCoords(transform * Float3(pt, 1.f)); }
+	inline Float3 TransformToPixelCoords(const Float2x3& transform, Coord x, Coord y)      { return AsPixelCoords(transform * Float3{x, y, 1.f}); }
 
     constexpr ColorB::ColorB(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_) : a(a_), r(r_), g(g_), b(b_) {}
     constexpr ColorB::ColorB(uint32_t rawColor) : a(rawColor >> 24u), r((rawColor >> 16u) & 0xffu), g((rawColor >> 8u) & 0xffu), b(rawColor & 0xffu) {}
