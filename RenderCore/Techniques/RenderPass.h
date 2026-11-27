@@ -223,6 +223,7 @@ namespace RenderCore { namespace Techniques
 
         void UpdateAttachments(const StitchResult& res);
         IteratorRange<const PreregisteredAttachment*> GetPreregisteredAttachments() const { return _workingAttachments; }
+        const PreregisteredAttachment* FindPreregisteredAttachment(uint64_t semantic) const;
         Format GetSystemAttachmentFormat(SystemAttachmentFormat) const;
 
         IteratorRange<const DoubleBufferAttachment*> GetDoubleBufferAttachments() const { return _doubleBufferAttachments; }

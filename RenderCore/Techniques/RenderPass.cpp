@@ -2751,6 +2751,13 @@ namespace RenderCore { namespace Techniques
         return Format::Unknown;
     }
 
+    const PreregisteredAttachment* FragmentStitchingContext::FindPreregisteredAttachment(uint64_t semantic) const
+    {
+        for (auto& attach:_workingAttachments)
+            if (attach._semantic == semantic) return &attach;
+        return nullptr;
+    }
+
     FragmentStitchingContext::FragmentStitchingContext(
         IteratorRange<const PreregisteredAttachment*> preregAttachments,
         IteratorRange<const Format*> systemFormats)

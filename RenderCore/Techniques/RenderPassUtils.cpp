@@ -68,14 +68,23 @@ namespace RenderCore { namespace Techniques
 		LoadStore loadOperation,
 		unsigned clearColor)
 	{
-		auto boundDepth = parserContext.GetAttachmentReservation().MapSemanticToResource(AttachmentSemantics::MultisampleDepth).get();
-		if (!boundDepth && loadOperation != LoadStore::Clear)
-			return RenderPassToPresentationTarget(parserContext, loadOperation, clearColor);
+		bool colorLDRInitialized = false, mainDepthInitialized = false;
+		bool hasColorLDR = false, hasMainDepth = false;
+		for (auto& p:parserContext.GetFragmentStitchingContext().GetPreregisteredAttachments())
+			if (p._semantic == RenderCore::Techniques::AttachmentSemantics::ColorLDR) {
+				hasColorLDR = true;
+				colorLDRInitialized = p._state != RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized;
+			} else if (p._semantic == RenderCore::Techniques::AttachmentSemantics::MultisampleDepth) {
+				hasMainDepth = true;
+				mainDepthInitialized = p._state != RenderCore::Techniques::PreregisteredAttachment::State::Uninitialized;
+			}
+		assert(hasColorLDR);		// color LDR is required -- we must have something to write to (we don't fall back to just depth buffer writing)
 
 		FrameBufferDescFragment frag;
 		SubpassDesc subpass;
-		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(loadOperation));
-		subpass.SetDepthStencil(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(loadOperation));
+		subpass.AppendOutput(frag.DefineAttachment(AttachmentSemantics::ColorLDR).InitialState(colorLDRInitialized ? loadOperation : LoadStore::Clear));
+		if (hasMainDepth)		// if we don't have main depth, fall back silently.
+			subpass.SetDepthStencil(frag.DefineAttachment(AttachmentSemantics::MultisampleDepth).InitialState(mainDepthInitialized ? loadOperation : LoadStore::Clear));
 		frag.AddSubpass(std::move(subpass));
 
 		auto clear = AsClearValueColor(clearColor);
