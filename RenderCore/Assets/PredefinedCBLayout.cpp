@@ -16,6 +16,7 @@
 #include "../../Utility/StringFormat.h"
 #include "../../Utility/MemoryUtils.h"
 #include "../../Utility/Conversion.h"
+#include "../../Utility/FastParseValue.h"
 #include "../../Utility/Streams/PreprocessorInterpreter.h"
 #include "../../Utility/Streams/ConditionalPreprocessingTokenizer.h"
 
@@ -188,6 +189,77 @@ namespace RenderCore { namespace Assets
         }
     }
 
+    static void ParseRGBFunction(float result[4], ConditionalProcessingTokenizer& streamIterator)
+    {
+        result[3] = 1.f;
+
+        auto nextToken = streamIterator.GetNextToken();
+        if (!XlEqString(nextToken._value, "(")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        auto parseEnd = FastParseValue(nextToken._value, result[0]);
+        if (parseEnd != nextToken._value.end()) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        if (!XlEqString(nextToken._value, ",")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        parseEnd = FastParseValue(nextToken._value, result[1]);
+        if (parseEnd != nextToken._value.end()) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        if (!XlEqString(nextToken._value, ",")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        parseEnd = FastParseValue(nextToken._value, result[2]);
+        if (parseEnd != nextToken._value.end()) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        if (!XlEqString(nextToken._value, ")")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+    }
+
+    static void ParseRGBAFunction(float result[4], ConditionalProcessingTokenizer& streamIterator)
+    {
+        auto nextToken = streamIterator.GetNextToken();
+        if (!XlEqString(nextToken._value, "(")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        auto parseEnd = FastParseValue(nextToken._value, result[0]);
+        if (parseEnd != nextToken._value.end()) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        if (!XlEqString(nextToken._value, ",")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        parseEnd = FastParseValue(nextToken._value, result[1]);
+        if (parseEnd != nextToken._value.end()) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        if (!XlEqString(nextToken._value, ",")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        parseEnd = FastParseValue(nextToken._value, result[2]);
+        if (parseEnd != nextToken._value.end()) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        if (!XlEqString(nextToken._value, ",")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        parseEnd = FastParseValue(nextToken._value, result[3]);
+        if (parseEnd != nextToken._value.end()) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+        nextToken = streamIterator.GetNextToken();
+        if (!XlEqString(nextToken._value, ")")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+    }
+
+    static constexpr float SRGBToLinear_Formal(float input)
+    {
+        if (input <= 0.04045f) {
+            return input / 12.92f;
+        } else
+            return std::pow((input+0.055f)/1.055f, 2.4f);
+    }
+
     PredefinedCBLayout::NameAndType ParseStatement(ConditionalProcessingTokenizer& streamIterator, ParameterBox& defaults)
     {
         auto type = streamIterator.GetNextToken();
@@ -240,38 +312,93 @@ namespace RenderCore { namespace Assets
             // We should read until we hit a ';'
             // (note that the whitespace between tokens will be removed by this method)
             auto startLocation = streamIterator.GetLocation();
-            std::string value;
-            for (;;) {
-                auto nextToken = streamIterator.GetNextToken();
-                if (nextToken._value.IsEmpty() || XlEqString(nextToken._value, ";"))
-                    break;
-                value.insert(value.end(), nextToken._value.begin(), nextToken._value.end());
-            }
-
+            auto valueToken = streamIterator.GetNextToken();
             uint8_t buffer0[256], buffer1[256];
-            auto defaultType = ImpliedTyping::ParseFullMatch(
-                MakeStringSection(value),
-                MakeIteratorRange(buffer0));
 
-            if (!(defaultType == result._type)) {
-                    //  The initialiser isn't exactly the same type as the
-                    //  defined variable. Let's try a casting operation.
-                    //  Sometimes we can get int defaults for floats variables, etc.
-                bool castSuccess = ImpliedTyping::Cast(
-                    MakeIteratorRange(buffer1), result._type,
-                    MakeIteratorRange(buffer0), defaultType);
+            // special case for interpreting rgb() and rgba() pseudo-functions
+            if (XlEqString(valueToken._value, "rgb") || XlEqString(valueToken._value, "rgba")) {
+
+                // expecting 3 or 4 
+                float working[4] {0.f, 0.f, 0.f, 1.f};
+                if (XlEqString(valueToken._value, "rgba")) ParseRGBAFunction(working, streamIterator);
+                else ParseRGBFunction(working, streamIterator);
+
+                // ensure semi colon terminator
+                auto nextToken = streamIterator.GetNextToken();
+                if (!XlEqString(nextToken._value, ";")) Throw(Formatters::FormatException("Couldn't pass color pseudo-function", nextToken._start));
+
+                // The color is always expressed in gamma-corrected SRGB values, from 0-255. Alpha is zero-one. This is to maintain compatibility with
+                // how editors interpret "rgb(...)" in text files
+                //
+                // the output may depend on the type we're writing to
+                // float3/float4 outputs receive a linear value between 0-1
+                // uint32_t outputs receive packed color format (still gamma corrected)
+                // others get standard casting rules
+
+                bool castSuccess = false;
+                if (result._type._type == ImpliedTyping::TypeCat::Float && (result._type._arrayCount == 3 || result._type._arrayCount == 4)) {
+                    working[0] = SRGBToLinear_Formal(working[0] / 255.f);
+                    working[1] = SRGBToLinear_Formal(working[1] / 255.f);
+                    working[2] = SRGBToLinear_Formal(working[2] / 255.f);
+                    castSuccess = ImpliedTyping::Cast(
+                        MakeIteratorRange(buffer1), result._type,
+                        MakeOpaqueIteratorRange(working), {ImpliedTyping::TypeCat::Float, 4});
+                } else if (result._type._type == ImpliedTyping::TypeCat::UInt32 && result._type._arrayCount <= 1) {
+                    uint32_t col = 
+                            (std::clamp(uint32_t(working[3] * 255.f + 0.5f), 0u, 255u) << 24u) 
+                        |   (std::clamp(uint32_t(working[2] + 0.5f), 0u, 255u) << 16u)
+                        |   (std::clamp(uint32_t(working[1] + 0.5f), 0u, 255u) << 8u)
+                        |   (std::clamp(uint32_t(working[0] + 0.5f), 0u, 255u));
+                    *(uint32_t*)buffer1 = col;
+                    castSuccess = true;
+                } else {
+                    castSuccess = ImpliedTyping::Cast(
+                        MakeIteratorRange(buffer1), result._type,
+                        MakeOpaqueIteratorRange(working), {ImpliedTyping::TypeCat::Float, 4});
+                }
+
                 if (castSuccess) {
-                    auto* end = &buffer1[std::min(dimof(buffer1), (size_t)defaultType.GetSize())];
+                    auto* end = &buffer1[std::min(dimof(buffer1), (size_t)result._type.GetSize())];
                     defaults.SetParameter((const utf8*)result._name.c_str(), MakeIteratorRange(buffer1, end), result._type);
                 } else {
                     Throw(Formatters::FormatException(
                         "Default initialiser can't be cast to same type as variable in PredefinedCBLayout: ",
                         startLocation));
                 }
+
             } else {
-                auto* end = &buffer0[std::min(dimof(buffer0), (size_t)defaultType.GetSize())];
-                defaults.SetParameter((const utf8*)result._name.c_str(), MakeIteratorRange(buffer0, end), defaultType);
+
+                auto nextToken = valueToken;
+                for (;;) {
+                    if (nextToken._value.IsEmpty() || XlEqString(nextToken._value, ";"))
+                        break;
+                    valueToken._value._end = nextToken._value._end; // extend "valueToken" to the end of the part we read
+                    nextToken = streamIterator.GetNextToken();
+                }
+
+                auto defaultType = ImpliedTyping::ParseFullMatch(valueToken._value, MakeIteratorRange(buffer0));
+
+                if (!(defaultType == result._type)) {
+                        //  The initialiser isn't exactly the same type as the
+                        //  defined variable. Let's try a casting operation.
+                        //  Sometimes we can get int defaults for floats variables, etc.
+                    bool castSuccess = ImpliedTyping::Cast(
+                        MakeIteratorRange(buffer1), result._type,
+                        MakeIteratorRange(buffer0), defaultType);
+                    if (castSuccess) {
+                        auto* end = &buffer1[std::min(dimof(buffer1), (size_t)result._type.GetSize())];
+                        defaults.SetParameter((const utf8*)result._name.c_str(), MakeIteratorRange(buffer1, end), result._type);
+                    } else {
+                        Throw(Formatters::FormatException(
+                            "Default initialiser can't be cast to same type as variable in PredefinedCBLayout: ",
+                            startLocation));
+                    }
+                } else {
+                    auto* end = &buffer0[std::min(dimof(buffer0), (size_t)defaultType.GetSize())];
+                    defaults.SetParameter((const utf8*)result._name.c_str(), MakeIteratorRange(buffer0, end), defaultType);
+                }
             }
+
         } else {
             auto token = streamIterator.GetNextToken();
             if (!XlEqString(token._value, ";"))
